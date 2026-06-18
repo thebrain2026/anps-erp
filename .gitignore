@@ -1,0 +1,10 @@
+.DS_Store
+__pycache__/
+*.pyc
+anps-erp-data/
+*.db
+*.db-shm
+*.db-wal
+.api_token
+backups/
+uploads/

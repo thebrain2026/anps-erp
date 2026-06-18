@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: anps-erp
+    env: docker
+    plan: starter
+    healthCheckPath: /api/health
+    autoDeploy: true
+    disk:
+      name: anps-erp-data
+      mountPath: /data
+      sizeGB: 5
+    envVars:
+      - key: ANPS_ERP_HOST
+        value: 0.0.0.0
+      - key: ANPS_ERP_PORT
+        value: 4174
+      - key: ANPS_ERP_DATA_DIR
+        value: /data
+      - key: ANPS_ERP_DB
+        value: /data/anps_erp.db
+      - key: ANPS_ERP_BACKUP_DIR
+        value: /data/backups
+      - key: ANPS_ERP_UPLOAD_DIR
+        value: /data/uploads
+      - key: ANPS_ERP_ALLOWED_ORIGINS
+        value: "*"
+      - key: ANPS_ERP_API_TOKEN
+        sync: false

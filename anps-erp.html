@@ -1,0 +1,2758 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nobel School OS</title>
+  <meta name="description" content="A modern school operating system dashboard prototype." />
+  <meta name="school-api-base" content="" />
+  <link rel="stylesheet" href="./new-school-os.css?v=20260618-separate-anps-backend" />
+</head>
+<body>
+  <div class="shell">
+    <aside class="rail" aria-label="Main navigation">
+      <a class="brand" href="#dashboard" aria-label="Nobel School OS home">
+        <img src="./assets/anps-logo.png" alt="ANPS logo" />
+        <span>
+          <strong>Alfred Nobel Public School</strong>
+          <small>School command center</small>
+        </span>
+      </a>
+
+      <nav class="nav">
+        <div class="session-control rail-session" aria-label="Financial session">
+          <span>Session</span>
+          <select id="sessionSelect"></select>
+          <input id="newSessionInput" placeholder="27-28" aria-label="New financial session" />
+          <button id="addSession" type="button" title="Add session" aria-label="Add financial session">+</button>
+        </div>
+        <button class="active" data-view="dashboard" type="button">Dashboard</button>
+        <div class="nav-group" id="frontOfficeNavGroup">
+          <button class="nav-group-title" id="frontOfficeToggle" type="button" aria-expanded="false">Front Office</button>
+          <div class="nav-sub">
+            <button data-view="admissionEnquiry" type="button">Admission Enquiry</button>
+            <button data-view="complaintRegister" type="button">Complaint Register</button>
+          </div>
+        </div>
+        <div class="nav-group" id="studentNavGroup">
+          <button class="nav-group-title" id="studentToggle" type="button" aria-expanded="false">Student Information</button>
+          <div class="nav-sub">
+            <button data-view="students" type="button">Student Details</button>
+            <button data-view="studentAdmission" type="button">Student Admission</button>
+            <button data-view="disableStudent" type="button">Disable Student</button>
+            <button data-view="bulkDeleteStudent" type="button">Bulk Delete</button>
+          </div>
+        </div>
+        <div class="nav-group" id="feesNavGroup">
+          <button class="nav-group-title" id="feesToggle" type="button" aria-expanded="false">Fees Collection</button>
+          <div class="nav-sub">
+            <button data-view="finance" type="button">Collect Fees</button>
+            <button data-view="feeBook" type="button">Fee Book</button>
+            <button data-view="dueFeesSearch" type="button">Search Due Fees</button>
+            <button data-view="feeMaster" type="button">Fee Master</button>
+            <button data-view="feeGroup" type="button">Fee Group</button>
+            <button data-view="addClassSection" type="button">Add Class/Section</button>
+            <button data-view="tuitionFineSetup" type="button">Tuition Fine Setup</button>
+            <button data-view="feeReminder" type="button">Fee Reminder</button>
+          </div>
+        </div>
+        <div class="nav-group" id="hrNavGroup">
+          <button class="nav-group-title" id="hrToggle" type="button" aria-expanded="false">Human Resources</button>
+          <div class="nav-sub">
+            <button data-view="staffDetails" type="button">Staff Details</button>
+            <button data-view="staffAttendance" type="button">Staff Attendance</button>
+            <button data-view="applyLeave" type="button">Apply Leave</button>
+            <button data-view="leaveType" type="button">Leave Type</button>
+            <button data-view="approveLeave" type="button">Approval Leave Request</button>
+            <button data-view="teachersRating" type="button">Teachers Rating</button>
+            <button data-view="department" type="button">HR Setup</button>
+            <button data-view="disabledStaff" type="button">Disabled Staff</button>
+          </div>
+        </div>
+        <div class="nav-group" id="communicationNavGroup">
+          <button class="nav-group-title" id="communicationToggle" type="button" aria-expanded="false">Communication</button>
+          <div class="nav-sub">
+            <button data-view="noticeBoard" type="button">Notice Board</button>
+            <button data-view="sendSms" type="button">Send SMS</button>
+          </div>
+        </div>
+        <div class="nav-group" id="homeworkNavGroup">
+          <button class="nav-group-title" id="homeworkToggle" type="button" aria-expanded="false">Homework</button>
+          <div class="nav-sub">
+            <button data-view="addHomework" type="button">Add Homework</button>
+            <button data-view="dailyAssignment" type="button">Daily Assignment</button>
+          </div>
+        </div>
+        <div class="nav-group" id="reportsNavGroup">
+          <button class="nav-group-title" id="reportsToggle" type="button" aria-expanded="false">Reports</button>
+          <div class="nav-sub">
+            <button data-view="reportStudentInformation" type="button">Student Information</button>
+            <button data-view="dailyCollectionReport" type="button">Daily Collection Report</button>
+            <button data-view="entireSchoolFeesReport" type="button">Entire School Fees</button>
+          </div>
+        </div>
+        <div class="nav-group" id="academicNavGroup">
+          <button class="nav-group-title" id="academicToggle" type="button" aria-expanded="false">Academic</button>
+          <div class="nav-sub">
+            <button data-view="classTimetable" type="button">Class Timetable</button>
+            <button data-view="teacherTimetable" type="button">Teachers Time Table</button>
+            <button data-view="syllabus" type="button">Syllabus</button>
+            <button data-view="teacherComplaint" type="button">Teacher Complaint</button>
+            <button data-view="holidayReport" type="button">Holiday Report</button>
+            <button data-view="annualCalendar" type="button">Annual Calendar</button>
+          </div>
+        </div>
+        <div class="nav-group" id="certificateNavGroup">
+          <button class="nav-group-title" id="certificateToggle" type="button" aria-expanded="false">Certificate</button>
+          <div class="nav-sub">
+            <button data-view="studentIdCard" type="button">Student ID Card</button>
+            <button data-view="teacherIdCard" type="button">Teachers ID Card</button>
+          </div>
+        </div>
+        <button data-view="complaintsDesk" type="button">Complaint Book</button>
+        <div class="nav-group" id="settingsNavGroup">
+          <button class="nav-group-title" id="settingsToggle" type="button" aria-expanded="false">Settings</button>
+          <div class="nav-sub">
+            <button data-view="userAccessSettings" type="button">User Access & Permissions</button>
+            <button data-view="studentUserLogin" type="button">Student User Login</button>
+          </div>
+        </div>
+        <div class="nav-group" id="securityNavGroup">
+          <button class="nav-group-title" id="securityToggle" type="button" aria-expanded="false">Security</button>
+          <div class="nav-sub">
+            <button data-view="securityMaintenance" type="button">Security Maintenance</button>
+          </div>
+        </div>
+        <div class="nav-group" id="transportNavGroup">
+          <button class="nav-group-title" id="transportToggle" type="button" aria-expanded="false">Transport</button>
+          <div class="nav-sub">
+            <button data-view="transportFeesMaster" type="button">Fees Master</button>
+            <button data-view="transportFineSetup" type="button">Fine Setup</button>
+            <button data-view="transportPickupPoint" type="button">Pickup Point</button>
+            <button data-view="transportRoute" type="button">Route</button>
+            <button data-view="transportVehicle" type="button">Vehicle</button>
+            <button data-view="transportAssignVehicle" type="button">Assign Vehicle</button>
+            <button data-view="transportRoutePickupPoint" type="button">Route Pickup Point</button>
+            <button data-view="studentTransportFees" type="button">Student Transport Fees</button>
+          </div>
+        </div>
+      </nav>
+
+      <section class="rail-card developer-credit" aria-label="Developer credit">
+        <strong>The Brain</strong>
+        <span>School ERP System</span>
+        <small>Innovation by Samrat Hazra</small>
+      </section>
+    </aside>
+
+    <main class="workspace">
+      <header class="topbar">
+        <button class="menu-button" id="menuButton" type="button" aria-label="Toggle navigation">
+          <span></span><span></span><span></span>
+        </button>
+        <div>
+          <p class="eyebrow">Campus view</p>
+          <h1 id="pageTitle">Dashboard</h1>
+        </div>
+        <label class="search">
+          <span>Search</span>
+          <input id="globalSearch" autocomplete="off" placeholder="Student, receipt, route..." />
+        </label>
+        <div class="topbar-system-strip" aria-label="System status">
+          <button class="primary-action topbar-new-admission" id="quickAction" type="button">New Admission</button>
+          <span class="topbar-role">Role: <strong id="topbarCurrentRole">Admin</strong></span>
+          <button class="topbar-save-status" id="topbarSaveStatus" type="button">Saved</button>
+          <button class="topbar-alert-status" id="topbarAlerts" type="button">Alerts: 0</button>
+          <button class="topbar-logout" id="topbarLogout" type="button">Logout</button>
+        </div>
+      </header>
+
+      <section class="view active" id="dashboard">
+        <section class="executive-band" aria-label="Executive summary">
+          <div class="executive-title">
+            <p class="eyebrow" id="academicYearText">Academic year 2026-27</p>
+            <h2 class="school-dashboard-title">Alfred Nobel Public School</h2>
+            <small id="sessionSummaryText">No finance data entered for this session yet.</small>
+          </div>
+          <div class="executive-actions">
+            <button class="primary-action" data-view-jump="students" type="button">Student Registry</button>
+            <button class="ghost-action" data-view-jump="finance" type="button">Fee Counter</button>
+          </div>
+        </section>
+
+        <div class="kpi-grid">
+          <article class="kpi-card">
+            <span>Total Students</span>
+            <strong id="studentCount">0</strong>
+            <small>Admissions entered in this session</small>
+          </article>
+          <article class="kpi-card">
+            <span>Attendance</span>
+            <strong>0%</strong>
+            <small>No attendance entered yet</small>
+          </article>
+          <article class="kpi-card">
+            <span>Fees Collected</span>
+            <strong id="kpiFeesCollected">Rs. 0</strong>
+            <small id="kpiFeesNote">0% of selected session</small>
+          </article>
+          <article class="kpi-card warning">
+            <span>Open Follow-ups</span>
+            <strong id="kpiFollowUps">0</strong>
+            <small id="kpiFollowUpsNote">0 high priority</small>
+          </article>
+        </div>
+
+        <div class="operations-grid">
+          <section class="panel chart-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Attendance</p>
+                <h2>Class-wise presence</h2>
+              </div>
+              <button class="mini" type="button">Export</button>
+            </div>
+            <div class="bars" id="attendanceBars" aria-label="Attendance chart"></div>
+          </section>
+
+          <section class="panel command-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Work queue</p>
+                <h2>Priority actions</h2>
+              </div>
+            </div>
+            <div class="task-list" id="taskList"></div>
+          </section>
+        </div>
+
+        <div class="operations-grid lower-grid">
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Campus operations</p>
+                <h2>Live module status</h2>
+              </div>
+            </div>
+            <div class="module-status" id="moduleStatus"></div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Finance desk</p>
+                <h2>Due follow-up</h2>
+              </div>
+              <button class="mini" data-view-jump="finance" type="button">Open</button>
+            </div>
+            <div class="table-wrap compact-table">
+              <table>
+                <thead>
+                  <tr><th>Student</th><th>Class</th><th>Due</th><th>Status</th></tr>
+                </thead>
+                <tbody id="dueTable"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="admissionEnquiry">
+        <div class="front-office-layout">
+          <section class="panel front-office-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Front Office</p>
+                <h2>Admission Enquiry</h2>
+                <small>Admission enquiry korte asha guardian/student-er details ekhane save korun.</small>
+              </div>
+            </div>
+            <form id="admissionEnquiryForm" class="front-office-form">
+              <label>Date <input name="date" type="date" required /></label>
+              <label>Student Name <input name="studentName" placeholder="Student name" required /></label>
+              <label>Guardian Name <input name="guardianName" placeholder="Guardian name" required /></label>
+              <label>Mobile No. <input name="mobile" placeholder="Mobile number" required /></label>
+              <label>Class Interested <select name="className" required></select></label>
+              <label>Village / Town <input name="villageTown" placeholder="Village or town" /></label>
+              <label>Source <select name="source"><option>Walk-in</option><option>Phone Call</option><option>Reference</option><option>Online</option><option>Other</option></select></label>
+              <label>Status <select name="status"><option>New</option><option>Follow-up</option><option>Visited</option><option>Admitted</option><option>Closed</option></select></label>
+              <label class="front-office-full">Remarks <textarea name="remarks" rows="3" placeholder="Follow-up note"></textarea></label>
+              <button class="primary-action" type="submit">Save Enquiry</button>
+            </form>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><div><p class="eyebrow">Saved enquiry</p><h2>Enquiry Details</h2><small id="admissionEnquirySummary">0 enquiries saved.</small></div></div>
+            <div class="table-wrap"><table><thead><tr><th>Date</th><th>Student</th><th>Guardian</th><th>Mobile</th><th>Class</th><th>Status</th><th>Action</th></tr></thead><tbody id="admissionEnquiryRows"></tbody></table></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="complaintRegister">
+        <div class="front-office-layout">
+          <section class="panel front-office-panel complaint-panel">
+            <div class="panel-head"><div><p class="eyebrow">Front Office</p><h2>Complaint Register</h2><small>Front office-e je complaint asbe ekhane register korun.</small></div></div>
+            <form id="complaintRegisterForm" class="front-office-form">
+              <label>Date <input name="date" type="date" required /></label>
+              <label>Complaint For <select name="forType" required><option>Student</option><option>Teacher</option><option>General</option></select></label>
+              <label>Name / Reference <input name="personName" placeholder="Student/Teacher/Guardian name" required /></label>
+              <label>Mobile No. <input name="mobile" placeholder="Mobile number" /></label>
+              <label>Category <select name="category"><option>Academic</option><option>Fees</option><option>Transport</option><option>Discipline</option><option>Staff</option><option>Other</option></select></label>
+              <label>Priority <select name="priority"><option>Normal</option><option>High</option><option>Urgent</option></select></label>
+              <label>Status <select name="status"><option>Open</option><option>In Progress</option><option>Resolved</option><option>Closed</option></select></label>
+              <label>Received By <input name="receivedBy" placeholder="Front office staff" /></label>
+              <label class="front-office-full">Complaint Details <textarea name="details" rows="3" placeholder="Complaint details" required></textarea></label>
+              <button class="primary-action" type="submit">Save Complaint</button>
+            </form>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="complaintsDesk">
+        <div class="front-office-layout">
+          <section class="panel complaint-desk-panel">
+            <div class="panel-head"><div><p class="eyebrow">Complaint Desk</p><h2>Complaint Book</h2><small id="complaintsDeskSummary">0 complaints saved.</small></div></div>
+            <div class="complaint-filter-row">
+              <label>Type <select id="complaintTypeFilter"><option value="All">All</option><option>Student</option><option>Teacher</option><option>General</option></select></label>
+              <label>Status <select id="complaintStatusFilter"><option value="All">All</option><option>Open</option><option>In Progress</option><option>Resolved</option><option>Closed</option></select></label>
+            </div>
+            <div class="table-wrap"><table><thead><tr><th>Date</th><th>For</th><th>Name</th><th>Category</th><th>Priority</th><th>Details</th><th>Status</th><th>Source</th><th>Action</th></tr></thead><tbody id="complaintsDeskRows"></tbody></table></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="students">
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Student registry</p>
+              <h2>Student Details</h2>
+            </div>
+            <div class="student-header-actions">
+              <button class="icon-action excel-action" id="exportStudentsExcel" type="button" title="Export Excel" aria-label="Export student details to Excel">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3h10l6 6v12H4V3Zm9 1.8V10h5.2L13 4.8ZM7 12l2.1 3L7 18h2.1l1.1-1.8 1.1 1.8h2.2l-2.2-3 2.1-3h-2.1l-1 1.7L9.2 12H7Z"/></svg>
+              </button>
+              <button class="icon-action excel-action import" id="importStudentsExcelBtn" type="button" title="Import Excel" aria-label="Import student details from Excel">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3h10l6 6v12H4V3Zm9 1.8V10h5.2L13 4.8ZM11 18h2v-4.2l1.5 1.5 1.2-1.2L12 10.4l-3.7 3.7 1.2 1.2 1.5-1.5V18Z"/></svg>
+              </button>
+              <input class="hidden-file-input" id="importStudentsExcel" type="file" accept=".csv,text/csv" />
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr><th>Admission No.</th><th>Student Name</th><th>Class</th><th>Guardian</th><th>Mobile</th><th>Action</th></tr>
+              </thead>
+              <tbody id="studentTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="studentAdmission">
+        <div class="operations-grid">
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Student information</p>
+                <h2>Student Admission</h2>
+              </div>
+              <button class="primary-action" id="openAdmissionFromPage" type="button">Open Admission Form</button>
+            </div>
+            <div class="module-status">
+              <article><div><strong>New Applications</strong><small>No applications entered yet</small></div><span class="status-pill stable">Empty</span></article>
+              <article><div><strong>Documents Pending</strong><small>No pending documents entered yet</small></div><span class="status-pill stable">Empty</span></article>
+              <article><div><strong>Interaction Slots</strong><small>No parent meetings entered yet</small></div><span class="status-pill stable">Empty</span></article>
+              <article><div><strong>Admission IDs</strong><small>Auto-generate after form approval</small></div><span class="status-pill stable">Active</span></article>
+            </div>
+          </section>
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Recent admissions</p>
+                <h2>Application queue</h2>
+              </div>
+            </div>
+            <div class="table-wrap compact-table">
+              <table>
+                <thead><tr><th>Applicant</th><th>Class</th><th>Stage</th><th>Status</th></tr></thead>
+                <tbody>
+                  <tr><td colspan="4">No admission applications entered yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="disableStudent">
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Student information</p>
+              <h2>Disable Student</h2>
+            </div>
+            <button class="ghost-action" id="disableSelectedStudent" type="button">Disable Selected</button>
+          </div>
+          <div class="fee-filter-bar">
+            <label>Class
+              <select><option>All Classes</option><option>V B</option><option>IX IGCSE</option><option>XII IB</option></select>
+            </label>
+            <label>Reason
+              <select><option>Transfer</option><option>Inactive</option><option>Duplicate Entry</option><option>Long Absence</option></select>
+            </label>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Select</th><th>Student</th><th>Class</th><th>Admission No.</th><th>Reason</th><th>Status</th><th>Disabled On</th><th>Action</th></tr></thead>
+              <tbody id="disabledStudentRows">
+                <tr><td colspan="8">No students available to disable.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="bulkDeleteStudent">
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Student information</p>
+              <h2>Bulk Delete</h2>
+            </div>
+            <button class="ghost-action" id="bulkDeletePreview" type="button">Preview Delete List</button>
+          </div>
+          <div class="receipt danger-note">
+            Bulk delete requires admin approval, backup, and audit log before removing student records.
+          </div>
+          <div class="fee-filter-bar">
+            <label>Session
+              <select><option>2026-27</option><option>2025-26</option><option>Archived</option></select>
+            </label>
+            <label>Class
+              <select><option>All Classes</option><option>Nursery</option><option>I Amber</option><option>XII IB</option></select>
+            </label>
+            <label>Delete Type
+              <select><option>Duplicate Records</option><option>Rejected Applications</option><option>Imported Test Data</option></select>
+            </label>
+          </div>
+          <div class="module-status">
+            <article><div><strong>Duplicate Records</strong><small>No duplicate admission numbers found</small></div><span class="status-pill stable">Empty</span></article>
+            <article><div><strong>Rejected Applications</strong><small>No rejected applications entered yet</small></div><span class="status-pill stable">Empty</span></article>
+            <article><div><strong>Imported Records</strong><small>No imported rows available</small></div><span class="status-pill stable">Empty</span></article>
+            <article><div><strong>Audit Backup</strong><small>Backup required before final delete</small></div><span class="status-pill stable">Required</span></article>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="finance">
+        <div class="finance-grid">
+          <section class="panel pay-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Accounts</p>
+                <h2>Collection History</h2>
+              </div>
+            </div>
+            <div class="student-fee-card hidden-collection-module" id="selectedStudentFeeCard" aria-hidden="true">
+              <div>
+                <span>Admission No.</span>
+                <strong id="feeStudentAdmission">-</strong>
+              </div>
+              <div>
+                <span>Student Name</span>
+                <strong id="feeStudentName">-</strong>
+              </div>
+              <div>
+                <span>Class</span>
+                <strong id="feeStudentClass">-</strong>
+              </div>
+              <div>
+                <span>Guardian</span>
+                <strong id="feeStudentGuardian">-</strong>
+              </div>
+            </div>
+            <div class="table-wrap compact-table fee-breakdown-wrap hidden-collection-module" aria-hidden="true">
+              <table>
+                <thead>
+                  <tr><th>Fee</th><th>Period</th><th>Total</th><th>Paid</th><th>Due</th><th>Status</th></tr>
+                </thead>
+                <tbody id="studentFeeBreakdown"></tbody>
+              </table>
+            </div>
+            <form id="feeForm" class="collection-module hidden-collection-module" aria-hidden="true">
+              <div class="collection-row">
+                <label for="feeDate">Date</label>
+                <input id="feeDate" name="date" type="text" placeholder="DD-MM-YYYY" />
+              </div>
+              <div class="collection-row">
+                <label for="feeReceiptNo">Receipt No.</label>
+                <input id="feeReceiptNo" name="receiptNo" readonly />
+              </div>
+              <div class="collection-row">
+                <label for="feeAdmissionNo">Admission No.</label>
+                <input id="feeAdmissionNo" name="id" />
+              </div>
+              <div class="collection-row">
+                <label for="feeStudentNameBox">Student Name</label>
+                <input id="feeStudentNameBox" name="studentName" readonly />
+              </div>
+              <div class="collection-row fee-amount-row">
+                <label for="feeAmountDisplay">Fees Amount</label>
+                <input id="feeAmountDisplay" name="feeAmountDisplay" type="number" readonly />
+              </div>
+              <div class="collection-row split-payment-row">
+                <label>Payment Received</label>
+                <div class="split-payment-box">
+                  <label for="feeBankAmount">
+                    <span>Bank Payment</span>
+                    <input id="feeBankAmount" name="bankAmount" type="number" min="0" placeholder="0" />
+                  </label>
+                  <label for="feeCashAmount">
+                    <span>Cash Payment</span>
+                    <input id="feeCashAmount" name="cashAmount" type="number" min="0" placeholder="0" />
+                  </label>
+                  <input id="feeAmount" name="amount" type="hidden" />
+                </div>
+              </div>
+              <div class="collection-row fine-payment-row">
+                <label for="feeFineAmount">Fine</label>
+                <input id="feeFineAmount" name="fineAmount" type="number" min="0" placeholder="0" />
+              </div>
+              <button class="primary-action" type="submit">Generate Receipt</button>
+            </form>
+            <div class="receipt hidden-collection-module" id="receiptBox" aria-hidden="true">Receipt preview will appear here.</div>
+            <section class="collection-history">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Collection history</p>
+                  <h2>Payment History</h2>
+                </div>
+                <button class="ghost-action" id="printLedger" type="button">Print Ledger</button>
+              </div>
+              <div class="table-wrap compact-table">
+                <div class="collection-history-filter">
+                  <label>From Date
+                    <input id="collectionHistoryFromDate" type="text" placeholder="DD or DD-MM-YYYY" />
+                  </label>
+                  <label>To Date
+                    <input id="collectionHistoryToDate" type="text" placeholder="DD or DD-MM-YYYY" />
+                  </label>
+                  <label class="collection-by-filter">Collected By
+                    <select id="collectionHistoryCollectedBy">
+                      <option value="">All</option>
+                    </select>
+                  </label>
+                  <button class="primary-action" id="applyCollectionHistoryDateRange" type="button">Apply</button>
+                  <button class="ghost-action" id="clearCollectionHistoryDateRange" type="button">Clear</button>
+                </div>
+                <div class="payment-quick-total" id="paymentQuickTotal">
+                  <div><span>Showing Rows</span><strong id="quickSelectedCount">0</strong></div>
+                  <div><span>Bank</span><strong id="quickBankTotal">Rs. 0</strong></div>
+                  <div><span>Cash</span><strong id="quickCashTotal">Rs. 0</strong></div>
+                  <div><span>Fine</span><strong id="quickFineTotal">Rs. 0</strong></div>
+                  <div><span>Total</span><strong id="quickGrandTotal">Rs. 0</strong></div>
+                  <button class="ghost-action" id="clearPaymentQuickTotal" type="button">Clear</button>
+                </div>
+                <table>
+                  <thead><tr><th>Date</th><th>Receipt No.</th><th>Admission No.</th><th>Fee Head</th><th>Bank Payment</th><th>Cash Payment</th><th>Fine</th><th>Total Amount</th><th>Remarks</th><th>Collected By</th><th>Action</th></tr></thead>
+                  <tbody id="ledgerPaymentRows"></tbody>
+                </table>
+              </div>
+            </section>
+          </section>
+
+        </div>
+      </section>
+
+      <section class="view" id="feeBook">
+        <div class="fee-ledger-layout">
+          <section class="panel ledger-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Student-wise ledger</p>
+                <h2>Fee Book</h2>
+              </div>
+              <div class="ledger-head-actions">
+                <button class="ghost-action" id="feeBookMonthlyReportBtn" type="button">Monthly Report</button>
+                <label class="ledger-search">Search Student
+                  <select id="feeBookStudentSelect"></select>
+                </label>
+              </div>
+            </div>
+            <div class="ledger-profile-card">
+              <div class="ledger-photo" id="ledgerPhoto">ST</div>
+              <div class="ledger-info-grid">
+                <div><span>Admission No.</span><strong id="ledgerAdmission">-</strong></div>
+                <div><span>Student Name</span><strong id="ledgerName">-</strong></div>
+                <div><span>Class</span><strong id="ledgerClass">-</strong></div>
+                <div><span>Mobile</span><strong id="ledgerMobile">-</strong></div>
+                <div><span>Guardian Name</span><strong id="ledgerGuardian">-</strong></div>
+                <div><span>Guardian Mobile</span><strong id="ledgerGuardianMobile">-</strong></div>
+              </div>
+            </div>
+            <div class="ledger-summary">
+              <article><span>Total Fee</span><strong id="ledgerTotal">Rs. 0</strong></article>
+              <article><span>Paid</span><strong id="ledgerPaid">Rs. 0</strong></article>
+              <article><span>Discount</span><strong id="ledgerDiscount">Rs. 0</strong></article>
+              <article><span>Due</span><strong id="ledgerDue">Rs. 0</strong></article>
+            </div>
+            <div class="table-wrap compact-table fee-breakdown-wrap">
+              <table>
+                <thead><tr><th>Fee Head</th><th>Period</th><th>Date</th><th>Total</th><th>Paid</th><th>Fine</th><th>Discount</th><th>Due</th><th>Status</th><th>Action</th></tr></thead>
+                <tbody id="ledgerFeeRows"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="dueFeesSearch">
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Fees collection</p>
+              <h2>Search Due Fees</h2>
+            </div>
+            <button class="primary-action" data-view-jump="finance" type="button">Collect Selected</button>
+          </div>
+          <div class="fee-filter-bar">
+            <label>Class
+              <select><option>All Classes</option><option>I Amber</option><option>V B</option><option>IX IGCSE</option></select>
+            </label>
+            <label>Status
+              <select><option>All Due</option><option>Overdue</option><option>Promise</option></select>
+            </label>
+            <label>Month
+              <select id="dueFeesMonthFilter">
+                <option value="">All Months</option>
+                <option>Apr</option>
+                <option>May</option>
+                <option>Jun</option>
+                <option>Jul</option>
+                <option>Aug</option>
+                <option>Sep</option>
+                <option>Oct</option>
+                <option>Nov</option>
+                <option>Dec</option>
+                <option>Jan</option>
+                <option>Feb</option>
+                <option>Mar</option>
+              </select>
+            </label>
+            <label>Search Student
+              <input id="dueFeesStudentSearch" placeholder="Admission last no., name, last name or village" />
+            </label>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Admission No.</th><th>Student</th><th>Fee Head</th><th>Period</th><th>Due Amount</th><th>Status</th><th>Action</th></tr></thead>
+              <tbody id="dueFeesSearchRows">
+                <tr><td colspan="7">No due fees entered yet.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="feeMaster">
+        <div class="class-fee-setup">
+          <section class="panel class-fee-panel">
+            <div class="panel-head">
+              <div>
+                <h2>Class Fee Setup</h2>
+                <small>Class and student type wise admission, annual, form and tuition fees add korun.</small>
+              </div>
+            </div>
+            <form class="fee-master-form" id="feeMasterForm">
+              <label>Class
+                <select name="className" required>
+                  <option value="">Select class</option>
+                  <option>Nursery</option>
+                  <option>Class I</option>
+                  <option>Class II</option>
+                  <option>Class III</option>
+                  <option>Class IV</option>
+                  <option>Class V</option>
+                  <option>Class VI</option>
+                  <option>Class VII</option>
+                  <option>Class VIII</option>
+                  <option>Class IX</option>
+                  <option>Class X</option>
+                  <option>Class XI</option>
+                  <option>Class XII</option>
+                </select>
+              </label>
+              <label>Student Type
+                <select name="studentType" required>
+                  <option>New Student</option>
+                  <option>Old Student</option>
+                  <option>Promoted Student</option>
+                  <option>Transfer Student</option>
+                </select>
+              </label>
+              <label>Admission Fee
+                <input name="admissionFee" type="number" min="0" placeholder="12000" />
+              </label>
+              <label>Annual Fee
+                <input name="annualFee" type="number" min="0" placeholder="6500" />
+              </label>
+              <label>Form Fee
+                <input name="formFee" type="number" min="0" placeholder="500" />
+              </label>
+              <label>Monthly Tuition Fee
+                <input name="monthlyTuitionFee" type="number" min="0" placeholder="3000" />
+              </label>
+              <label>Day Boarding Fees
+                <input name="dayBoardingFee" type="number" min="0" placeholder="1500" />
+              </label>
+              <label>Tiffin/Lunch/Other Service Fees
+                <input name="tiffinLunchOtherServiceFee" type="number" min="0" placeholder="500" />
+              </label>
+              <label>Robotics Fee
+                <input name="aiRoboticsFee" type="number" min="0" placeholder="0" />
+              </label>
+              <div class="fee-master-dynamic-fields" id="feeMasterDynamicFields"></div>
+              <button class="primary-action" type="submit">Save Fee Structure</button>
+            </form>
+            <div class="table-wrap class-fee-table">
+              <table>
+                <thead><tr id="feeMasterHeaderRow"><th>Class</th><th>Student Type</th><th>Admission Fee</th><th>Annual Fee</th><th>Form Fee</th><th>Monthly Tuition Fee</th><th>Day Boarding</th><th>Tiffin/Lunch/Other</th><th>Robotics</th><th>Total</th><th>Action</th></tr></thead>
+                <tbody id="feeMasterTable"></tbody>
+              </table>
+            </div>
+            <small id="feeMasterSummary">No class fee structure saved yet.</small>
+          </section>
+        </div>
+      </section>
+      <section class="view" id="feeGroup">
+        <div class="fee-admin-grid">
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Fees setup</p>
+                <h2>Fee Group</h2>
+              </div>
+            </div>
+            <div class="cards fee-cards" id="feeGroupCards"></div>
+          </section>
+          <section class="panel fee-side-panel">
+            <p class="eyebrow">Add fee group</p>
+            <h2>Fee type setup</h2>
+            <form class="fee-master-form" id="feeGroupForm">
+              <label>Fee Name
+                <input name="groupName" placeholder="Admission Fee" required />
+              </label>
+              <label>Category
+                <select name="category" required>
+	                  <option>One Time</option>
+	                  <option>Monthly</option>
+	                  <option>Recurring</option>
+                  <option>Optional</option>
+                  <option>Penalty</option>
+                </select>
+              </label>
+              <label>Description
+                <input name="description" placeholder="Taken during new admission" required />
+              </label>
+              <button class="primary-action" type="submit">Add Fee Group</button>
+            </form>
+            <small id="feeGroupSummary">Admission Fee, Annual Fee, Tuition Fee and other fee groups.</small>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="addClassSection">
+        <div class="panel class-section-options-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Fees Collection</p>
+              <h2>Add Class / Section / Subject</h2>
+              <small>Jeta proyojon, oi option click kore setup korun.</small>
+            </div>
+          </div>
+          <div class="class-section-option-strip">
+            <button class="primary-action" id="showClassSetupBtn" type="button">Add Class</button>
+            <button class="ghost-action" id="showSectionSetupBtn" type="button">Add Section</button>
+            <button class="ghost-action" id="showSubjectSetupBtn" type="button">Add Subject</button>
+            <button class="ghost-action" id="showSubjectAssignBtn" type="button">Assign Subject</button>
+          </div>
+        </div>
+        <div class="class-section-setup-layout">
+          <section class="panel class-section-setup-panel" id="classSetupPanel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Fees Collection</p>
+                <h2>Add Class</h2>
+                <small>Admission, fee setup and timetable-e use korar jonno class add korun.</small>
+              </div>
+              <small id="classSetupSummary">0 custom classes</small>
+            </div>
+            <form id="classSetupForm" class="class-section-setup-form">
+              <label>Class Name
+                <input name="className" placeholder="V / Class V / Nursery" required />
+              </label>
+              <button class="primary-action" type="submit">Add Class</button>
+            </form>
+            <div class="table-wrap class-section-setup-table">
+              <table>
+                <thead><tr><th>Class</th><th>Action</th></tr></thead>
+                <tbody id="classSetupRows">
+                  <tr><td colspan="2">No custom classes added yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+          <section class="panel class-section-setup-panel" id="sectionSetupPanel" hidden>
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Fees Collection</p>
+                <h2>Add Section</h2>
+                <small>Admission form-er section dropdown-e use korar jonno section add korun.</small>
+              </div>
+              <small id="sectionSetupSummary">0 custom sections</small>
+            </div>
+            <form id="sectionSetupForm" class="class-section-setup-form">
+              <label>Section Name
+                <input name="sectionName" placeholder="Amber / A / Science" required />
+              </label>
+              <button class="primary-action" type="submit">Add Section</button>
+            </form>
+            <div class="table-wrap class-section-setup-table">
+              <table>
+                <thead><tr><th>Section</th><th>Action</th></tr></thead>
+                <tbody id="sectionSetupRows">
+                  <tr><td colspan="2">No custom sections added yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+          <section class="panel class-section-setup-panel" id="subjectSetupPanel" hidden>
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Fees Collection</p>
+                <h2>Add Subject</h2>
+                <small>Class timetable subject dropdown-e use korar jonno subject add korun.</small>
+              </div>
+              <small id="subjectSetupSummary">0 subjects</small>
+            </div>
+            <form id="subjectSetupForm" class="class-section-setup-form">
+              <label>Subject Name
+                <input name="subjectName" placeholder="Mathematics / English / Bengali" required />
+              </label>
+              <button class="primary-action" type="submit">Add Subject</button>
+            </form>
+            <div class="table-wrap class-section-setup-table">
+              <table>
+                <thead><tr><th>Subject</th><th>Action</th></tr></thead>
+                <tbody id="subjectSetupRows">
+                  <tr><td colspan="2">No subjects added yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+          <section class="panel class-section-setup-panel" id="subjectAssignPanel" hidden>
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Fees Collection</p>
+                <h2>Assign Subject</h2>
+                <small>Kon class-e kon subject thakbe ekhane tick kore save korun.</small>
+              </div>
+              <small id="subjectAssignSummary">0 class assigned</small>
+            </div>
+            <form id="subjectAssignForm" class="class-section-setup-form subject-assign-form">
+              <label>Class
+                <select name="className" id="subjectAssignClass" required>
+                  <option value="">Select class</option>
+                </select>
+              </label>
+              <div class="subject-assign-list" id="subjectAssignList">
+                <small>No subjects added yet.</small>
+              </div>
+              <button class="primary-action" type="submit">Save Assignment</button>
+            </form>
+            <div class="table-wrap class-section-setup-table">
+              <table>
+                <thead><tr><th>Class</th><th>Subjects</th><th>Total</th><th>Action</th></tr></thead>
+                <tbody id="subjectAssignRows">
+                  <tr><td colspan="4">No class subject assignment yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="tuitionFineSetup">
+        <div class="panel transport-fine-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Fees setup</p>
+              <h2>Tuition Fine Setup</h2>
+              <small>Tuition late fine amount change korle calculation automatic update hobe.</small>
+            </div>
+          </div>
+          <form id="tuitionFineForm" class="transport-fine-form">
+            <label>
+              <span>Daily fine after 15th</span>
+              <input name="dailyRate" type="number" min="0" required />
+            </label>
+            <label>
+              <span>Next month add</span>
+              <input name="nextMonth" type="number" min="0" required />
+            </label>
+            <label>
+              <span>Second month add</span>
+              <input name="secondMonth" type="number" min="0" required />
+            </label>
+            <label>
+              <span>Later every month</span>
+              <input name="laterMonth" type="number" min="0" required />
+            </label>
+            <button class="primary-action" type="submit">Save Fine Setup</button>
+          </form>
+          <div class="transport-fine-example" id="tuitionFineExample"></div>
+        </div>
+      </section>
+
+      <section class="view" id="feeReminder">
+        <div class="finance-grid">
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Communication</p>
+                <h2>Fee Reminder</h2>
+              </div>
+              <button class="primary-action" id="sendFeeReminder" type="button">Send Reminder</button>
+            </div>
+            <div class="fee-form reminder-form">
+              <label>Audience
+                <select><option>All Due Parents</option><option>Overdue Only</option><option>Promise to Pay</option></select>
+              </label>
+              <label>Channel
+                <select><option>SMS + App</option><option>WhatsApp</option><option>Email</option></select>
+              </label>
+              <label>Due Before
+                <input type="text" placeholder="DD-MM-YYYY" />
+              </label>
+            </div>
+            <div class="receipt">Draft: Dear Parent, school fee is pending. Please clear dues before the due date to avoid late fee.</div>
+          </section>
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Reminder status</p>
+                <h2>Recent campaigns</h2>
+              </div>
+            </div>
+            <div class="task-list">
+              <article><b>0</b><div><strong>No campaigns</strong><p>No reminder campaigns entered yet.</p><small>Empty</small></div><em>Empty</em></article>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="staffDetails">
+        <div class="staff-master-layout">
+          <section class="panel staff-master-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Human resources</p>
+                <h2>Staff Details</h2>
+                <small>Email ID future mobile-app login ID hobe, phone number initial password hisebe use kora jabe.</small>
+              </div>
+            </div>
+            <form id="staffDetailsForm" class="staff-details-form">
+              <label class="staff-photo-field">Staff Photo
+                <span class="photo-upload">
+                  <span class="photo-preview staff-photo-preview" id="staffPhotoPreview">Photo</span>
+                  <input name="staffPhoto" type="file" accept="image/*" />
+                </span>
+              </label>
+              <label>Staff ID
+                <input name="staffId" placeholder="ANPS-STF-001" readonly required />
+              </label>
+              <label>Staff Name
+                <input name="name" placeholder="Full name" required />
+              </label>
+              <label>Role
+                <select name="role" required>
+                  <option value="">Select Role</option>
+                </select>
+              </label>
+              <label>Designation
+                <select name="designation" required>
+                  <option value="">Select Designation</option>
+                </select>
+              </label>
+              <label class="staff-teaching-subject-field" id="staffTeachingSubjectField" hidden>Teaching Subject
+                <input name="teachingSubject" list="staffSubjectOptions" placeholder="Mathematics / English / Bengali" />
+              </label>
+              <label>Department
+                <select name="department" required>
+                  <option value="">Select Department</option>
+                </select>
+              </label>
+              <label>Phone Number
+                <input name="phone" type="tel" placeholder="Mobile number" required />
+              </label>
+              <label>Emergency Number
+                <input name="emergencyPhone" type="tel" placeholder="Emergency contact" />
+              </label>
+              <label>Email ID
+                <input name="email" type="email" placeholder="staff@example.com" required />
+              </label>
+              <label class="staff-address-field">Address
+                <textarea name="address" rows="2" placeholder="Full address"></textarea>
+              </label>
+              <datalist id="staffSubjectOptions"></datalist>
+              <button class="primary-action" type="submit">Add Staff</button>
+            </form>
+          </section>
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Staff master</p>
+                <h2>Saved Staff</h2>
+              </div>
+              <small id="staffSummary">0 staff saved</small>
+            </div>
+            <div class="table-wrap staff-details-table">
+              <table>
+                <thead><tr><th>Staff</th><th>Role</th><th>Designation</th><th>Department</th><th>Phone</th><th>Email Login ID</th><th>Emergency</th><th>Status</th><th>Action</th></tr></thead>
+                <tbody id="staffDetailsRows">
+                  <tr><td colspan="9">No staff details entered yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="staffAttendance">
+        <div class="staff-attendance-layout">
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Human resources</p>
+                <h2>Staff Attendance</h2>
+                <small>Biometric machine-er in time, out time, device ID ekhane sync/import hobe.</small>
+              </div>
+              <div class="student-header-actions">
+                <button class="icon-action excel-action import" id="importStaffAttendanceBtn" type="button" title="Import biometric CSV" aria-label="Import staff biometric attendance">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3h10l6 6v12H4V3Zm9 1.8V10h5.2L13 4.8ZM11 18h2v-4.2l1.5 1.5 1.2-1.2L12 10.4l-3.7 3.7 1.2 1.2 1.5-1.5V18Z"/></svg>
+                </button>
+                <input class="hidden-file-input" id="staffAttendanceImport" type="file" accept=".csv,text/csv" />
+              </div>
+            </div>
+            <div class="module-status staff-attendance-summary">
+              <article><div><strong>Present</strong><small>Today biometric present</small></div><span class="status-pill stable" id="staffPresentCount">0</span></article>
+              <article><div><strong>Late</strong><small>After scheduled time</small></div><span class="status-pill stable" id="staffLateCount">0</span></article>
+              <article><div><strong>Absent</strong><small>No biometric punch</small></div><span class="status-pill stable" id="staffAbsentCount">0</span></article>
+              <article><div><strong>Total Records</strong><small>Imported/synced entries</small></div><span class="status-pill stable" id="staffAttendanceCount">0</span></article>
+            </div>
+            <div class="staff-attendance-tools">
+              <label>Date
+                <input id="staffAttendanceDate" type="text" placeholder="DD-MM-YYYY" />
+              </label>
+              <label>Device ID / IP
+                <input id="staffAttendanceDevice" placeholder="Biometric device ID or IP" />
+              </label>
+              <label>Device Model
+                <input id="staffAttendanceDeviceModel" placeholder="Team Office TM230F(W)" />
+              </label>
+              <label>Device Note
+                <input id="staffAttendanceDeviceNote" placeholder="Office biometric / main gate" />
+              </label>
+              <label>Sync Source
+                <select id="staffAttendanceSource">
+                  <option>CSV Import</option>
+                  <option>Biometric API Ready</option>
+                  <option>Manual Upload</option>
+                </select>
+              </label>
+              <button class="ghost-action staff-csv-upload-action" id="importStaffAttendanceToolBtn" type="button">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 3h10l6 6v12H4V3Zm9 1.8V10h5.2L13 4.8ZM11 18h2v-4.2l1.5 1.5 1.2-1.2L12 10.4l-3.7 3.7 1.2 1.2 1.5-1.5V18Z"/></svg>
+                CSV Upload
+              </button>
+              <button class="ghost-action" id="staffBiometricSyncBtn" type="button">Sync Ready</button>
+            </div>
+            <div class="table-wrap staff-attendance-table">
+              <table>
+                <thead><tr><th>Date</th><th>Staff ID</th><th>Staff Name</th><th>Department</th><th>Designation</th><th>In Time</th><th>Out Time</th><th>Device</th><th>Status</th></tr></thead>
+                <tbody id="staffAttendanceRows">
+                  <tr><td colspan="9">No biometric staff attendance imported yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+          <section class="panel biometric-ready-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Connection provision</p>
+                <h2>Biometric Ready</h2>
+              </div>
+            </div>
+            <div class="receipt">
+              CSV/API format ready: Staff ID, Staff Name, Date, In Time, Out Time, Device ID. Later biometric machine software/API connect korle ei page-e auto data show korbe.
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="applyLeave">
+        <div class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Human resources</p><h2>Apply Leave</h2></div></div>
+          <form class="fee-form reminder-form">
+            <label>Staff<select><option>Select Staff</option></select></label>
+            <label>Leave Type<select><option>Casual Leave</option><option>Sick Leave</option><option>Earned Leave</option></select></label>
+            <label>From Date<input type="text" placeholder="DD-MM-YYYY" /></label>
+            <label>To Date<input type="text" placeholder="DD-MM-YYYY" /></label>
+          </form>
+          <div class="receipt">Leave application draft will be routed to approval desk.</div>
+        </div>
+      </section>
+
+      <section class="view" id="leaveType">
+        <div class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Human resources</p><h2>Leave Type</h2></div><button class="primary-action" type="button">Add Leave Type</button></div>
+          <div class="cards fee-cards">
+            <article><span>Empty</span><strong>No leave types</strong><small>No leave types entered yet</small></article>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="approveLeave">
+        <div class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Human resources</p><h2>Approval Leave Request</h2></div><button class="primary-action" type="button">Approve Selected</button></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Staff</th><th>Leave Type</th><th>Dates</th><th>Reason</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr><td colspan="5">No leave requests entered yet.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="teachersRating">
+        <div class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Human resources</p><h2>Teachers Rating</h2></div></div>
+          <div class="module-status">
+            <article><div><strong>No ratings</strong><small>No teacher ratings entered yet</small></div><span class="status-pill stable">Empty</span></article>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="department">
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Human resources</p>
+              <h2>HR Setup</h2>
+              <small>Department, role and designation ek jaygay setup korun.</small>
+            </div>
+            <small id="departmentSummary">0 departments saved</small>
+          </div>
+          <div class="hr-option-strip">
+            <button class="primary-action" id="showDepartmentSetupBtn" type="button">Department</button>
+            <button class="ghost-action" id="showRoleSetupBtn" type="button">Role</button>
+            <button class="ghost-action" id="showDesignationSetupBtn" type="button">Designation</button>
+          </div>
+          <section class="hr-setup-panel" id="departmentSetupPanel">
+            <form id="departmentForm" class="hr-setup-form">
+              <label>Department Name
+                <input name="name" placeholder="Academic" required />
+              </label>
+              <button class="primary-action" type="submit">Add Department</button>
+            </form>
+            <div class="table-wrap hr-setup-table">
+              <table>
+                <thead><tr><th>Department</th><th>Staff Count</th><th>Action</th></tr></thead>
+                <tbody id="departmentRows">
+                  <tr><td colspan="3">No departments entered yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+          <section class="hr-setup-panel" id="roleSetupPanel" hidden>
+            <div class="panel-head compact-head">
+              <div>
+                <p class="eyebrow">Human resources</p>
+                <h2>Role Setup</h2>
+              </div>
+              <small id="roleSummary">0 roles saved</small>
+            </div>
+            <form id="roleForm" class="hr-setup-form">
+              <label>Role Name
+                <input name="name" placeholder="Teacher / Accounts / Driver" required />
+              </label>
+              <label>Description
+                <input name="description" placeholder="Role responsibility" />
+              </label>
+              <button class="primary-action" type="submit">Add Role</button>
+            </form>
+            <div class="table-wrap hr-setup-table">
+              <table>
+                <thead><tr><th>Role</th><th>Description</th><th>Staff Count</th><th>Action</th></tr></thead>
+                <tbody id="roleRows">
+                  <tr><td colspan="4">No roles entered yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+          <section class="hr-setup-panel" id="designationSetupPanel" hidden>
+            <div class="panel-head compact-head">
+              <div>
+                <p class="eyebrow">Human resources</p>
+                <h2>Designation Setup</h2>
+              </div>
+              <small id="designationSummary">0 designations saved</small>
+            </div>
+            <form id="designationForm" class="hr-setup-form">
+              <label>Designation Name
+                <input name="name" placeholder="Assistant Teacher" required />
+              </label>
+              <label>Department
+                <select name="department">
+                  <option value="">Select Department</option>
+                </select>
+              </label>
+              <label>Role Level
+                <input name="level" placeholder="Teaching / Admin / Support" />
+              </label>
+              <button class="primary-action" type="submit">Add Designation</button>
+            </form>
+            <div class="table-wrap hr-setup-table">
+              <table>
+                <thead><tr><th>Designation</th><th>Department</th><th>Role Level</th><th>Staff Count</th><th>Action</th></tr></thead>
+                <tbody id="designationRows">
+                  <tr><td colspan="5">No designations entered yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="disabledStaff">
+        <div class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Human resources</p><h2>Disabled Staff</h2></div><button class="ghost-action" type="button">Restore Selected</button></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Staff</th><th>Department</th><th>Disabled On</th><th>Reason</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr><td colspan="5">No disabled staff records entered yet.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="noticeBoard">
+        <div class="notice-board-layout">
+          <section class="panel notice-compose-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Communication</p>
+                <h2>Publish Notice</h2>
+              </div>
+              <span class="status-pill live">App ready</span>
+            </div>
+            <form class="notice-form" id="noticeForm">
+              <label>Notice Title
+                <input name="title" placeholder="School closed tomorrow" required />
+              </label>
+              <label>Audience
+                <select name="audience" required>
+                  <option>All Students</option>
+                  <option>All Students & Teachers</option>
+                  <option>Teachers Only</option>
+                  <option>Selected Class</option>
+                </select>
+              </label>
+              <label>Class
+                <select name="noticeClass">
+                  <option value="">All Classes</option>
+                  <option>Nursery</option>
+                  <option>Class I</option>
+                  <option>Class II</option>
+                  <option>Class III</option>
+                  <option>Class IV</option>
+                  <option>Class V</option>
+                  <option>Class VI</option>
+                  <option>Class VII</option>
+                  <option>Class VIII</option>
+                  <option>Class IX</option>
+                  <option>Class X</option>
+                  <option>Class XI</option>
+                  <option>Class XII</option>
+                </select>
+              </label>
+              <label>Publish Date
+                <input name="publishDate" type="text" placeholder="DD-MM-YYYY" />
+              </label>
+              <label class="wide">Notice Message
+                <textarea name="message" rows="5" placeholder="Write notice details here..." required></textarea>
+              </label>
+              <label>Priority
+                <select name="priority">
+                  <option>Normal</option>
+                  <option>Important</option>
+                  <option>Urgent</option>
+                </select>
+              </label>
+              <label>Delivery
+                <select name="delivery">
+                  <option>Notice Board</option>
+                  <option>Notice Board + Mobile App</option>
+                  <option>Notice Board + SMS Later</option>
+                </select>
+              </label>
+              <button class="primary-action" type="submit">Publish Notice</button>
+            </form>
+          </section>
+          <section class="panel notice-preview-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Future mobile app</p>
+                <h2>Student & Teacher View</h2>
+              </div>
+            </div>
+            <div class="notice-app-preview" id="noticeAppPreview">
+              <strong>No notice published yet.</strong>
+              <p>Published notices will be available for student IDs and teacher accounts when the mobile app is connected.</p>
+            </div>
+          </section>
+          <section class="panel notice-list-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Published</p>
+                <h2>Notice Register</h2>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead><tr><th>Notice</th><th>Audience</th><th>Class</th><th>Date</th><th>Priority</th><th>Status</th></tr></thead>
+                <tbody id="noticeRows">
+                  <tr><td colspan="6">No notices entered yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+          <div class="receipt notice-integration-note">
+            Provision ready: each notice is saved with audience, class, date, priority and delivery mode. Later mobile app/API can read these records and show notices to student IDs and teacher accounts.
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="sendSms">
+        <div class="finance-grid">
+          <section class="panel">
+            <div class="panel-head"><div><p class="eyebrow">Communication</p><h2>Send SMS</h2></div><button class="primary-action" id="sendSmsButton" type="button">Send SMS</button></div>
+            <div class="fee-form reminder-form">
+              <label>Audience<select><option>All Parents</option><option>Selected Class</option><option>Staff</option></select></label>
+              <label>Class<select><option>All Classes</option><option>I Amber</option><option>VII A</option><option>XII IB</option></select></label>
+              <label>Template<select><option>General Notice</option><option>Fee Reminder</option><option>Emergency Alert</option></select></label>
+            </div>
+            <div class="receipt">Draft SMS: Dear Parent, please check the school notice board for today's update.</div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><div><p class="eyebrow">Delivery</p><h2>Recent SMS</h2></div></div>
+            <div class="task-list">
+              <article><b>0</b><div><strong>No SMS</strong><p>No SMS campaigns entered yet.</p><small>Empty</small></div><em>Empty</em></article>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="addHomework">
+        <div class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Homework</p><h2>Add Homework</h2></div><button class="primary-action" id="saveHomeworkButton" type="button">Save Homework</button></div>
+          <div class="fee-form reminder-form">
+            <label>Class<select><option>I Amber</option><option>V B</option><option>VII A</option><option>XII IB</option></select></label>
+            <label>Subject<select><option>Mathematics</option><option>Science</option><option>English</option><option>Bengali</option></select></label>
+            <label>Due Date<input type="text" placeholder="DD-MM-YYYY" /></label>
+          </div>
+          <div class="receipt">Homework draft: Complete worksheet 4 and submit in next class.</div>
+        </div>
+      </section>
+
+      <section class="view" id="dailyAssignment">
+        <div class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Homework</p><h2>Daily Assignment</h2></div><button class="ghost-action" type="button">Export</button></div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Class</th><th>Subject</th><th>Assignment</th><th>Due Date</th><th>Status</th></tr></thead>
+              <tbody>
+                <tr><td colspan="5">No assignments entered yet.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="reportStudentInformation">
+        <div class="panel student-report-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Reports</p>
+              <h2>Student Information</h2>
+              <small>Class and section wise student strength and details.</small>
+            </div>
+          </div>
+          <div class="report-option-strip">
+            <button class="primary-action" id="classSectionReportBtn" type="button">Class & Section Report</button>
+            <button class="ghost-action" id="studentGenderRatioReportBtn" type="button">Student Gender Ratio Report</button>
+            <button class="ghost-action" id="studentTeacherRatioReportBtn" type="button">Student Teacher Ratio Report</button>
+          </div>
+          <div class="report-table-panel" id="classSectionReportPanel">
+            <div class="table-wrap class-section-report-table">
+              <table>
+                <thead><tr><th>Serial No.</th><th>Class</th><th>Student</th><th>Action</th></tr></thead>
+                <tbody id="classSectionReportRows">
+                  <tr><td colspan="4">No class and section report available yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div class="report-table-panel table-wrap gender-ratio-report-table" id="studentGenderRatioReportPanel" hidden>
+            <table>
+              <thead><tr><th>Class Section</th><th>Total Boys</th><th>Total Girls</th><th>Total Student</th><th>Boys & Girls Ratio</th></tr></thead>
+              <tbody id="studentGenderRatioRows">
+                <tr><td colspan="5">No gender ratio report available yet.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="report-table-panel table-wrap student-teacher-ratio-report-table" id="studentTeacherRatioReportPanel" hidden>
+            <table>
+              <thead><tr><th>Class Section</th><th>Total Student</th><th>Total Assigned Teacher</th><th>Student Teacher Ratio</th></tr></thead>
+              <tbody id="studentTeacherRatioRows">
+                <tr><td colspan="4">No student teacher ratio report available yet.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="dailyCollectionReport">
+        <div class="panel daily-collection-report-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Reports</p>
+              <h2>Daily Collection Report</h2>
+              <small>Pratidin koto taka collection hochhe tar full summary.</small>
+            </div>
+          </div>
+          <div class="daily-collection-summary" id="dailyCollectionSummary"></div>
+          <div class="report-table-panel table-wrap daily-collection-report-table">
+            <table>
+              <thead><tr><th>Date</th><th>Receipts</th><th>Students</th><th>Bank</th><th>Cash</th><th>Fine</th><th>Total Collection</th></tr></thead>
+              <tbody id="dailyCollectionReportRows">
+                <tr><td colspan="7">No daily collection found yet.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="entireSchoolFeesReport">
+        <div class="panel entire-school-fees-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Reports</p>
+              <h2>Entire School Fees</h2>
+              <small>Full school monthly expected fees, received amount and balance overview.</small>
+            </div>
+          </div>
+          <div class="entire-school-fees-options">
+            <button class="primary-action active" id="showEntireSchoolMonthlyFeesBtn" type="button">Monthly Fees</button>
+            <button class="ghost-action" id="showEntireSchoolYearlyFeesBtn" type="button">Yearly Fees</button>
+          </div>
+          <div id="entireSchoolMonthlyFeesPanel">
+            <div class="entire-school-fees-summary" id="entireSchoolFeesSummary"></div>
+            <div class="entire-school-fees-filter">
+              <label>Month
+                <select id="entireSchoolFeesMonthFilter">
+                  <option value="">All Months</option>
+                  <option>Apr</option>
+                  <option>May</option>
+                  <option>Jun</option>
+                  <option>Jul</option>
+                  <option>Aug</option>
+                  <option>Sep</option>
+                  <option>Oct</option>
+                  <option>Nov</option>
+                  <option>Dec</option>
+                  <option>Jan</option>
+                  <option>Feb</option>
+                  <option>Mar</option>
+                </select>
+              </label>
+            </div>
+            <div class="report-table-panel table-wrap entire-school-fees-table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Month</th><th>Total Student</th><th>Tuition</th><th>Transport</th><th>Day Boarding</th><th>Robotics Fees</th><th>Tiffin</th><th>Other Expenses</th><th>Total Expected</th><th>Received</th><th>Balance</th><th>Fine Received</th>
+                  </tr>
+                </thead>
+                <tbody id="entireSchoolFeesRows">
+                  <tr><td colspan="12">No school fees report available yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+          <div id="entireSchoolYearlyFeesPanel" hidden>
+            <div class="entire-school-fees-summary" id="entireSchoolYearlyFeesSummary"></div>
+            <div class="report-table-panel table-wrap entire-school-fees-table yearly-fees-table">
+              <table>
+                <thead>
+                  <tr><th>Fee Head</th><th>Students</th><th>Expected Yearly Fee</th><th>Received</th><th>Balance</th></tr>
+                </thead>
+                <tbody id="entireSchoolYearlyFeesRows">
+                  <tr><td colspan="5">No yearly fee report available yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="classTimetable">
+        <div class="class-timetable-layout">
+          <section class="panel class-timetable-panel" id="classTimetableBuilderPanel" hidden>
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Academic</p>
+                <h2>Class Timetable</h2>
+                <small>Class, day, subject, teacher, period time, duration, room and break/lunch planning.</small>
+              </div>
+              <button class="ghost-action" id="closeClassTimetableBuilder" type="button">Back</button>
+            </div>
+            <form id="classTimetableForm" class="class-timetable-builder">
+              <div class="timetable-selector-row">
+                <label>Class
+                  <select name="className" required>
+                    <option value="">Select class</option>
+                  </select>
+                </label>
+                <label>Section
+                  <select name="sectionName" required>
+                    <option value="">Select section</option>
+                  </select>
+                </label>
+              </div>
+              <h3>Select parameter to generate time table quickly</h3>
+              <div class="timetable-quick-row">
+                <label>Period Start Time *
+                  <input name="periodStartTime" type="time" />
+                </label>
+                <label>Duration (minute) *
+                  <input name="periodDuration" type="number" min="1" placeholder="40" />
+                </label>
+                <label>Room No.
+                  <input name="quickRoom" placeholder="133" />
+                </label>
+                <button class="ghost-action" id="applyTimetableQuick" type="button">Apply</button>
+              </div>
+              <div class="timetable-interval-row">
+                <label>Interval After Period
+                  <select name="intervalAfterPeriod" id="intervalAfterPeriod">
+                    <option value="">No interval</option>
+                  </select>
+                </label>
+                <label>Interval Time (minute)
+                  <input name="periodInterval" type="number" min="0" value="0" />
+                </label>
+                <button class="ghost-action" id="applyTimetableInterval" type="button">Apply Interval</button>
+                <div class="timetable-interval-list" id="timetableIntervalList">No interval applied.</div>
+              </div>
+              <input name="day" type="hidden" value="Monday" />
+              <div class="timetable-day-tabs" id="classTimetableDayTabs">
+                <button class="active" data-timetable-day="Monday" type="button">Monday</button>
+                <button data-timetable-day="Tuesday" type="button">Tuesday</button>
+                <button data-timetable-day="Wednesday" type="button">Wednesday</button>
+                <button data-timetable-day="Thursday" type="button">Thursday</button>
+                <button data-timetable-day="Friday" type="button">Friday</button>
+                <button data-timetable-day="Saturday" type="button">Saturday</button>
+                <button data-timetable-day="Sunday" type="button">Sunday</button>
+              </div>
+              <div class="timetable-builder-head">
+                <span>Subject</span>
+                <span>Teacher</span>
+                <span>Time From *</span>
+                <span>Time To *</span>
+                <span>Room No.</span>
+                <span>Action</span>
+              </div>
+              <div class="timetable-builder-rows" id="classTimetableBuilderRows"></div>
+              <div class="timetable-builder-actions">
+                <button class="ghost-action" id="addTimetableRow" type="button">+ Add Row</button>
+                <button class="primary-action" type="submit">Save</button>
+              </div>
+              <datalist id="classTimetableSubjectOptions"></datalist>
+              <datalist id="classTimetableTeacherOptions"></datalist>
+            </form>
+          </section>
+          <section class="panel timetable-overview-panel" id="classTimetableOverviewPanel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Weekly view</p>
+                <h2>Saved Timetable</h2>
+                <small id="classTimetableSummary">0 timetable entries</small>
+              </div>
+              <div class="timetable-filter">
+                <button class="primary-action" id="openClassTimetableBuilder" type="button">Add Timetable</button>
+              </div>
+            </div>
+            <div class="timetable-criteria">
+              <h3>Select Criteria</h3>
+              <div class="timetable-criteria-grid">
+                <label>Class *
+                  <select id="classTimetableClassFilter">
+                    <option value="">All Classes</option>
+                  </select>
+                </label>
+                <label>Section *
+                  <select id="classTimetableSectionFilter">
+                    <option value="">All Sections</option>
+                  </select>
+                </label>
+                <button class="ghost-action" id="searchClassTimetable" type="button">Search</button>
+              </div>
+            </div>
+            <div class="module-status timetable-kpis">
+              <article><div><strong>Classes</strong><small>Class sections planned</small></div><span class="status-pill stable" id="timetableClassCount">0</span></article>
+              <article><div><strong>Subjects</strong><small>Unique subjects</small></div><span class="status-pill stable" id="timetableSubjectCount">0</span></article>
+              <article><div><strong>Teachers</strong><small>Assigned teachers</small></div><span class="status-pill stable" id="timetableTeacherCount">0</span></article>
+              <article><div><strong>Breaks</strong><small>Tiffin/lunch/assembly</small></div><span class="status-pill stable" id="timetableBreakCount">0</span></article>
+            </div>
+            <div class="class-timetable-week-board" id="classTimetableRows"></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="teacherTimetable">
+        <div class="teacher-timetable-layout">
+          <section class="panel teacher-timetable-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Academic</p>
+                <h2>Teachers Time Table</h2>
+                <small>Select a teacher to see all assigned classes, subjects, rooms and period times.</small>
+              </div>
+            </div>
+            <div class="teacher-timetable-filter">
+              <label>Teacher
+                <select id="teacherTimetableSelect">
+                  <option value="">Select teacher</option>
+                </select>
+              </label>
+            </div>
+            <div class="module-status teacher-timetable-kpis">
+              <article><div><strong>Total Classes</strong><small>Assigned periods</small></div><span class="status-pill stable" id="teacherTimetableClassCount">0</span></article>
+              <article><div><strong>Subjects</strong><small>Unique subjects</small></div><span class="status-pill stable" id="teacherTimetableSubjectCount">0</span></article>
+              <article><div><strong>Days</strong><small>Working days</small></div><span class="status-pill stable" id="teacherTimetableDayCount">0</span></article>
+            </div>
+            <div class="class-timetable-week-board teacher-timetable-board" id="teacherTimetableRows"></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="syllabus">
+        <div class="syllabus-layout">
+          <section class="panel syllabus-entry-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Academic</p>
+                <h2>Syllabus</h2>
+                <small id="syllabusAccessNote">Teacher role hole sudhu nijer subject-er syllabus entry korte parbe.</small>
+              </div>
+            </div>
+            <form id="syllabusForm" class="syllabus-form">
+              <label>Class
+                <select name="className" required></select>
+              </label>
+              <label>Section
+                <select name="sectionName" required></select>
+              </label>
+              <label>Subject
+                <select name="subject" required></select>
+              </label>
+              <label>Term / Unit
+                <input name="term" placeholder="Term 1 / Unit 2" required />
+              </label>
+              <label>Chapter / Topic
+                <input name="topic" placeholder="Chapter name" required />
+              </label>
+              <label>Status
+                <select name="status">
+                  <option>Published</option>
+                  <option>Draft</option>
+                </select>
+              </label>
+              <label class="syllabus-full">Syllabus Details
+                <textarea name="details" rows="4" placeholder="Teacher ekhane subject-wise syllabus likhben..." required></textarea>
+              </label>
+              <button class="primary-action" id="saveSyllabusBtn" type="submit">Save Syllabus</button>
+            </form>
+          </section>
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Saved syllabus</p>
+                <h2>Student App Ready Syllabus</h2>
+                <small id="syllabusSummary">0 syllabus entries saved.</small>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>Class</th><th>Section</th><th>Subject</th><th>Term</th><th>Topic</th><th>Teacher</th><th>Status</th><th>Action</th></tr>
+                </thead>
+                <tbody id="syllabusRows"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="teacherComplaint">
+        <div class="front-office-layout">
+          <section class="panel front-office-panel complaint-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Academic</p>
+                <h2>Teacher Complaint</h2>
+                <small>Teacher kono complaint korle ekhane entry hobe, complaint desk-e automatic chole jabe.</small>
+              </div>
+            </div>
+            <form id="teacherComplaintForm" class="front-office-form">
+              <label>Date <input name="date" type="date" required /></label>
+              <label>Teacher Name <input name="personName" placeholder="Teacher name" required /></label>
+              <label>Complaint For <select name="forType"><option>Student</option><option>Teacher</option><option>General</option></select></label>
+              <label>Class / Section <input name="classSection" placeholder="Class - Section" /></label>
+              <label>Category <select name="category"><option>Academic</option><option>Discipline</option><option>Student Behaviour</option><option>Parent Concern</option><option>Staff</option><option>Other</option></select></label>
+              <label>Priority <select name="priority"><option>Normal</option><option>High</option><option>Urgent</option></select></label>
+              <label class="front-office-full">Complaint Details <textarea name="details" rows="3" placeholder="Teacher complaint details" required></textarea></label>
+              <button class="primary-action" type="submit">Send Complaint</button>
+            </form>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="holidayReport">
+        <div class="holiday-layout">
+          <section class="panel holiday-entry-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Academic calendar</p>
+                <h2>Holiday Report</h2>
+                <small>School holiday entry ekhane add/edit/delete kore annual calendar-e show hobe.</small>
+              </div>
+            </div>
+            <form id="holidayReportForm" class="holiday-form">
+              <label>Holiday Date
+                <input name="date" type="date" required />
+              </label>
+              <label>Holiday Name
+                <input name="name" placeholder="Durga Puja, Independence Day..." required />
+              </label>
+              <label>Type
+                <select name="type">
+                  <option value="Holiday">Holiday</option>
+                  <option value="Festival">Festival</option>
+                  <option value="National Holiday">National Holiday</option>
+                  <option value="School Event">School Event</option>
+                  <option value="Exam Break">Exam Break</option>
+                </select>
+              </label>
+              <label>Details
+                <input name="details" placeholder="Short note" />
+              </label>
+              <button class="primary-action" id="saveHolidayReportBtn" type="submit">Save Holiday</button>
+            </form>
+          </section>
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Saved holidays</p>
+                <h2>Holiday Details</h2>
+                <small id="holidayReportSummary">0 holidays added.</small>
+              </div>
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr><th>Date</th><th>Holiday</th><th>Type</th><th>Details</th><th>Action</th></tr>
+                </thead>
+                <tbody id="holidayReportRows"></tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="annualCalendar">
+        <div class="annual-calendar-layout">
+          <section class="panel annual-calendar-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Academic calendar</p>
+                <h2>Annual Calendar</h2>
+                <small>School closed days and holiday details month-wise dekha jabe.</small>
+              </div>
+              <div class="annual-calendar-filter">
+                <label>Month
+                  <select id="annualCalendarMonth"></select>
+                </label>
+              </div>
+            </div>
+            <div class="module-status holiday-kpis">
+              <article><div><strong>Total Holidays</strong><small>Selected session</small></div><span class="status-pill stable" id="calendarHolidayCount">0</span></article>
+              <article><div><strong>This Month</strong><small>Selected month holidays</small></div><span class="status-pill amber" id="calendarMonthHolidayCount">0</span></article>
+              <article><div><strong>Next Holiday</strong><small>Upcoming school holiday</small></div><span class="status-pill stable" id="calendarNextHoliday">-</span></article>
+            </div>
+            <div class="annual-calendar-grid" id="annualCalendarGrid"></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="learning">
+        <div class="cards" id="learningCards"></div>
+      </section>
+
+      <section class="view" id="studentIdCard">
+        <div class="id-card-layout">
+          <section class="panel id-card-control-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Certificate</p>
+                <h2>Student ID Card</h2>
+                <small>School ID card preview and print ekhane theke hobe.</small>
+              </div>
+            </div>
+            <div class="id-card-tools">
+              <label>Student Name
+                <select id="idCardStudentSelect">
+                  <option value="">Select Student</option>
+                </select>
+              </label>
+              <label>Contact Name
+                <select id="studentIdContactType">
+                  <option value="guardian">Guardian</option>
+                  <option value="father">Father</option>
+                  <option value="mother">Mother</option>
+                </select>
+              </label>
+              <label>Width (mm)
+                <input id="studentIdCardWidthMm" type="number" min="50" max="140" value="86" />
+              </label>
+              <label>Height (mm)
+                <input id="studentIdCardHeightMm" type="number" min="35" max="100" value="54" />
+              </label>
+              <button class="primary-action" id="generateStudentIdCard" type="button">Generate ID Card</button>
+              <button class="ghost-action" id="printStudentIdCard" type="button">Print ID Card</button>
+            </div>
+          </section>
+          <section class="id-card-preview-shell" id="studentIdCardPreview">
+            <div class="student-id-card-empty">Select a student to preview ID card.</div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="teacherIdCard">
+        <div class="id-card-layout">
+          <section class="panel id-card-control-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Certificate</p>
+                <h2>Teachers ID Card</h2>
+                <small>Teacher/staff school ID card preview and print ekhane theke hobe.</small>
+              </div>
+            </div>
+            <div class="id-card-tools">
+              <label>Teacher Name
+                <select id="teacherIdCardSelect">
+                  <option value="">Select Teacher</option>
+                </select>
+              </label>
+              <button class="primary-action" id="generateTeacherIdCard" type="button">Generate ID Card</button>
+              <button class="ghost-action" id="printTeacherIdCard" type="button">Print ID Card</button>
+            </div>
+          </section>
+          <section class="id-card-preview-shell" id="teacherIdCardPreview">
+            <div class="student-id-card-empty">Select a teacher to preview ID card.</div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="userAccessSettings">
+        <div class="settings-access-layout">
+          <section class="panel user-access-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Settings</p>
+                <h2>User Access & Permissions</h2>
+                <small>Role Setup-er role diye Login ID, Password and page permission manage korun.</small>
+              </div>
+              <span class="status-pill stable" id="userAccessSummary">0 users saved</span>
+            </div>
+            <form id="userAccessForm" class="user-access-form">
+              <label>Staff
+                <select name="staffId" id="accessStaffSelect">
+                  <option value="">Select Staff</option>
+                </select>
+              </label>
+              <label>Role
+                <select name="role" id="accessUserRoleSelect" required>
+                  <option value="">Select Role</option>
+                </select>
+              </label>
+              <label>Login ID
+                <input name="loginId" placeholder="email or user id" required />
+              </label>
+              <label>Password
+                <input name="password" type="text" placeholder="password" required />
+              </label>
+              <label>Status
+                <select name="status">
+                  <option>Active</option>
+                  <option>Disabled</option>
+                </select>
+              </label>
+              <button class="primary-action" type="submit">Save User Login</button>
+            </form>
+            <div class="table-wrap compact-table">
+              <table>
+                <thead><tr><th>Staff</th><th>Role</th><th>Login ID</th><th>Password</th><th>Status</th><th>Action</th></tr></thead>
+                <tbody id="userAccessRows">
+                  <tr><td colspan="6">No user login saved yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel role-permission-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Access Control</p>
+                <h2>Role Permissions</h2>
+                <small>Select a role and tick which work that role can do.</small>
+              </div>
+            </div>
+            <form id="accessPermissionForm">
+              <div class="permission-role-bar">
+                <label>Role
+                  <select id="accessPermissionRole" name="role">
+                    <option value="">Select Role</option>
+                  </select>
+                </label>
+                <label class="permission-all-toggle">All Tick
+                  <input id="accessPermissionAllTick" type="checkbox" />
+                </label>
+                <button class="primary-action" type="submit">Save Permissions</button>
+              </div>
+              <div class="table-wrap permission-table-wrap">
+                <table class="permission-table">
+                  <thead><tr><th>Page / Module</th><th>View</th><th>Add</th><th>Edit</th><th>Delete</th><th>Print</th></tr></thead>
+                  <tbody id="accessPermissionRows">
+                    <tr><td colspan="6">Select a role to set permissions.</td></tr>
+                  </tbody>
+                </table>
+              </div>
+            </form>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="studentUserLogin">
+        <div class="settings-access-layout">
+          <section class="panel student-user-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Student App</p>
+                <h2>Student User Login</h2>
+                <small>Future mobile app-er jonno student login and app access ready kore rakha.</small>
+              </div>
+              <span class="status-pill stable" id="studentUserSummary">0 student users saved</span>
+            </div>
+            <form id="studentUserAccessForm" class="user-access-form student-user-form">
+              <label>Student
+                <select name="admissionNo" id="studentUserSelect">
+                  <option value="">Select Student</option>
+                </select>
+              </label>
+              <label>Admission No.
+                <input name="admissionNoDisplay" placeholder="Admission no." readonly />
+              </label>
+              <label>Login ID
+                <input name="loginId" placeholder="ANPS-admission last no." readonly required />
+              </label>
+              <label>Password
+                <input name="password" type="text" placeholder="mobile or password" required />
+              </label>
+              <label>Status
+                <select name="status">
+                  <option>Active</option>
+                  <option>Disabled</option>
+                </select>
+              </label>
+              <div class="student-app-permissions">
+                <span>App Access</span>
+                <label><input type="checkbox" name="appPermissions" value="Notices" checked /> Notices</label>
+                <label><input type="checkbox" name="appPermissions" value="Class Timetable" checked /> Class Timetable</label>
+                <label><input type="checkbox" name="appPermissions" value="Fees" checked /> Fees</label>
+                <label><input type="checkbox" name="appPermissions" value="Attendance" checked /> Attendance</label>
+                <label><input type="checkbox" name="appPermissions" value="Homework" checked /> Homework</label>
+              </div>
+              <button class="primary-action" type="submit">Save Student User</button>
+            </form>
+            <div class="table-wrap compact-table">
+              <table>
+                <thead><tr><th>Student Name</th><th>Class</th><th>Login ID</th><th>Password</th><th>App Access</th><th>Status</th><th>Action</th></tr></thead>
+                <tbody id="studentUserRows">
+                  <tr><td colspan="7">No student user saved yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="securityMaintenance">
+        <div class="security-dashboard">
+          <section class="panel security-hero-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Security</p>
+                <h2>Security Maintenance</h2>
+                <small>Database, backup, readiness, audit and performance check ek jaigai.</small>
+              </div>
+              <span class="status-pill stable" id="securityRunMode">Run Mode: Local</span>
+            </div>
+            <div class="security-status-grid" id="securityStatusCards"></div>
+          </section>
+
+          <section class="panel security-actions-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Maintenance Tools</p>
+                <h2>Backup & System Actions</h2>
+              </div>
+            </div>
+            <div class="security-action-grid">
+              <button class="primary-action" id="securityBackupBtn" type="button">Backup</button>
+              <button class="ghost-action" id="securityExportBtn" type="button">Export</button>
+              <button class="ghost-action" id="securityServerJsonBtn" type="button">Server JSON</button>
+              <button class="ghost-action" id="securityRestoreBtn" type="button">Restore Data</button>
+              <button class="ghost-action" id="securityMaintenanceBtn" type="button">Run Maintenance</button>
+              <button class="ghost-action" id="securityShowBackupsBtn" type="button">Show Backups</button>
+              <button class="ghost-action" id="securityAuditBtn" type="button">Data Audit</button>
+              <button class="ghost-action" id="securityHealthBtn" type="button">System Health</button>
+              <button class="ghost-action" id="securityReadinessBtn" type="button">Readiness Check</button>
+              <button class="ghost-action" id="securityBackupReminderBtn" type="button">Backup Reminder</button>
+              <button class="ghost-action" id="securityFullReportBtn" type="button">Full Report</button>
+              <button class="ghost-action" id="securityActiveSessionsBtn" type="button">Active Sign-ins</button>
+              <button class="ghost-action" id="securityPerformanceBtn" type="button">Performance Doctor</button>
+              <button class="ghost-action" id="securityRefreshBtn" type="button">Refresh Rate</button>
+              <button class="ghost-action danger-lite" id="securityCleanDemoBtn" type="button">Clear Test/Demo Data</button>
+              <button class="ghost-action danger-lite" id="securityReloadBtn" type="button">Reload App</button>
+              <input id="securityRestoreFile" type="file" accept="application/json,.json" hidden />
+            </div>
+          </section>
+
+          <section class="security-panels-grid">
+            <div class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">System Output</p>
+                  <h2>Audit / Backup / Readiness</h2>
+                </div>
+              </div>
+              <div class="security-output" id="securityOutput">No security action run yet.</div>
+            </div>
+            <div class="panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Server JSON</p>
+                  <h2>Database Snapshot</h2>
+                </div>
+              </div>
+              <textarea id="securityJsonOutput" class="security-json-output" readonly placeholder="Click Server JSON to view saved database JSON."></textarea>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="transportFeesMaster">
+        <div class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Transport</p><h2>Fees Master</h2></div><button class="primary-action" type="button">Add Fee</button></div>
+          <div class="table-wrap"><table><thead><tr><th>Fee Name</th><th>Route Type</th><th>Amount</th><th>Status</th></tr></thead><tbody><tr><td colspan="4">No transport fee setup entered yet.</td></tr></tbody></table></div>
+        </div>
+      </section>
+
+      <section class="view" id="transportFineSetup">
+        <div class="panel transport-fine-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Transport</p>
+              <h2>Transport Fine Setup</h2>
+              <small>Transport late fine amount change korle calculation automatic update hobe.</small>
+            </div>
+          </div>
+          <form id="transportFineForm" class="transport-fine-form">
+            <label>
+              <span>Same month 16th onward</span>
+              <input name="sameMonth" type="number" min="0" required />
+            </label>
+            <label>
+              <span>Next month 1st onward</span>
+              <input name="nextMonth" type="number" min="0" required />
+            </label>
+            <label>
+              <span>Second month 1st onward</span>
+              <input name="secondMonth" type="number" min="0" required />
+            </label>
+            <label>
+              <span>Later every month</span>
+              <input name="laterMonth" type="number" min="0" required />
+            </label>
+            <button class="primary-action" type="submit">Save Fine Setup</button>
+          </form>
+          <div class="transport-fine-example" id="transportFineExample"></div>
+        </div>
+      </section>
+
+      <section class="view" id="transportPickupPoint">
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Transport</p>
+              <h2>Pickup Point / Village Master</h2>
+            </div>
+          </div>
+          <form class="fee-master-form transport-village-form" id="transportVillageForm">
+            <label>Village Name
+              <input name="villageName" placeholder="Village name" required />
+            </label>
+            <label>Distance KM
+              <input name="distanceKm" type="number" min="0" step="0.1" placeholder="0.0" />
+            </label>
+            <label>New Student Fee
+              <input name="newStudentFee" type="number" min="0" placeholder="0" />
+            </label>
+            <label>Promoted Student Fee
+              <input name="promotedStudentFee" type="number" min="0" placeholder="0" />
+            </label>
+            <label>Special Student Fee
+              <input name="specialStudentFee" type="number" min="0" placeholder="0" />
+            </label>
+            <button class="primary-action" type="submit">Add Village</button>
+          </form>
+          <div class="transport-village-summary">
+            <strong id="transportVillageCount">0 villages</strong>
+            <span>Village name box-e click kore edit korun. Alfred Nobel School theke Google Maps distance note korun.</span>
+          </div>
+          <div class="table-wrap transport-village-table">
+            <table>
+              <thead><tr><th>Village Name</th><th>Distance</th><th>New Fee</th><th>Promoted Fee</th><th>Special Fee</th><th>Map</th><th></th></tr></thead>
+              <tbody id="transportVillageRows"><tr><td colspan="7">No village entered yet.</td></tr></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="transportRoute">
+        <div class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Transport</p><h2>Route</h2></div></div>
+          <form class="fee-master-form transport-route-form" id="transportRouteForm">
+            <label>Route Name
+              <input name="routeName" placeholder="Route name" required />
+            </label>
+            <label>Route Note
+              <input name="routeNote" placeholder="Optional note" />
+            </label>
+            <button class="primary-action" type="submit">Add Route</button>
+          </form>
+          <div class="table-wrap"><table><thead><tr><th>Route Name</th><th>Route Note</th><th>Status</th><th>Action</th></tr></thead><tbody id="transportRouteRows"><tr><td colspan="4">No routes entered yet.</td></tr></tbody></table></div>
+        </div>
+      </section>
+
+      <section class="view" id="transportVehicle">
+        <div class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Transport</p><h2>Vehicle</h2></div></div>
+          <form class="fee-master-form transport-vehicle-form" id="transportVehicleForm">
+            <label>Vehicle No.
+              <input name="vehicleNo" placeholder="WB 00 AB 0000" required />
+            </label>
+            <label>Vehicle Name
+              <input name="vehicleName" placeholder="Bus name / vehicle name" />
+            </label>
+            <label>Driver Name
+              <input name="driverName" placeholder="Driver name" />
+            </label>
+            <label>Driver Mobile
+              <input name="driverMobile" inputmode="tel" placeholder="10 digit mobile" />
+            </label>
+            <button class="primary-action" type="submit">Add Vehicle</button>
+          </form>
+          <div class="table-wrap"><table><thead><tr><th>Vehicle No.</th><th>Vehicle Name</th><th>Driver Name</th><th>Driver Mobile</th><th>Status</th><th>Action</th></tr></thead><tbody id="transportVehicleRows"><tr><td colspan="6">No vehicles entered yet.</td></tr></tbody></table></div>
+        </div>
+      </section>
+
+      <section class="view" id="transportAssignVehicle">
+        <div class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Transport</p><h2>Assign Vehicle</h2></div></div>
+          <form class="fee-master-form transport-assign-form" id="transportAssignVehicleForm">
+            <label>Route
+              <select name="routeName" id="transportAssignRouteSelect" required>
+                <option value="">Select route</option>
+              </select>
+            </label>
+            <label>Vehicle
+              <select name="vehicleNo" id="transportAssignVehicleSelect" required>
+                <option value="">Select vehicle</option>
+              </select>
+            </label>
+            <label>Shift
+              <select name="shift" required>
+                <option value="">Select trip</option>
+                <option>Morning Pickup</option>
+                <option>Second Shift Drop - 11:45</option>
+                <option>Day Shift Drop</option>
+              </select>
+            </label>
+            <button class="primary-action" type="submit">Assign Vehicle</button>
+          </form>
+          <div class="table-wrap"><table><thead><tr><th>Route</th><th>Vehicle Name</th><th>Vehicle No.</th><th>Driver</th><th>Driver Mobile</th><th>Shift</th><th>Status</th><th>Action</th></tr></thead><tbody id="transportAssignVehicleRows"><tr><td colspan="8">No vehicle assignments entered yet.</td></tr></tbody></table></div>
+        </div>
+      </section>
+
+      <section class="view" id="transportRoutePickupPoint">
+        <div class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Transport</p><h2>Route Pickup Point</h2></div></div>
+          <form class="fee-master-form transport-route-pickup-form" id="transportRoutePickupForm">
+            <label>Route
+              <select name="routeName" id="routePickupRouteSelect" required>
+                <option value="">Select route</option>
+              </select>
+            </label>
+            <label>Village / Pickup Point
+              <select name="villageName" id="routePickupVillageSelect" required>
+                <option value="">Select village</option>
+              </select>
+            </label>
+            <label>Trip
+              <select name="shift" required>
+                <option value="">Select trip</option>
+                <option>Morning Pickup</option>
+                <option>Second Shift Drop - 11:45</option>
+                <option>Day Shift Drop</option>
+              </select>
+            </label>
+            <label>Time
+              <input name="time" placeholder="08:00 AM" />
+            </label>
+            <label>Sequence
+              <input name="sequence" type="number" min="1" placeholder="1" />
+            </label>
+            <button class="primary-action" type="submit">Map Pickup Point</button>
+          </form>
+          <div class="transport-route-count-panel">
+            <label>Route Student Count
+              <select id="routePickupCountRoute">
+                <option value="">All routes</option>
+              </select>
+            </label>
+            <div id="routePickupCountSummary" class="transport-route-count-summary">
+              <span>No route mapped yet.</span>
+            </div>
+          </div>
+          <div id="routePickupStudentDetails" class="transport-route-student-details" hidden></div>
+          <div class="table-wrap"><table><thead><tr><th>Route</th><th>Pickup Point</th><th>Admission No.</th><th>Student</th><th>Vehicle</th><th>Trip</th><th>Time</th><th>Sequence</th><th>Action</th></tr></thead><tbody id="transportRoutePickupRows"><tr><td colspan="9">No route pickup points mapped yet.</td></tr></tbody></table></div>
+        </div>
+      </section>
+
+      <section class="view" id="studentTransportFees">
+        <div class="panel">
+          <div class="panel-head"><div><p class="eyebrow">Transport</p><h2>Student Transport Fees</h2></div></div>
+          <div class="table-wrap"><table><thead><tr><th>Admission No.</th><th>Student</th><th>Village / Pickup</th><th>Vehicle Name</th><th>Fee Type</th><th>Transport Fee</th><th>Months</th><th>Status</th></tr></thead><tbody id="studentTransportFeeRows"><tr><td colspan="8">No student transport fees assigned yet.</td></tr></tbody></table></div>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal-backdrop" id="admissionModal" aria-hidden="true">
+    <section class="admission-modal" role="dialog" aria-modal="true" aria-labelledby="admissionTitle">
+      <header class="modal-head">
+        <div>
+          <p class="eyebrow">Admissions desk</p>
+          <h2 id="admissionTitle">New Admission Form</h2>
+          <small>Student details, parents information, guardian contact and class allocation.</small>
+        </div>
+        <button class="icon-close" id="closeAdmission" type="button" aria-label="Close admission form">x</button>
+      </header>
+
+      <form class="admission-form" id="admissionForm">
+        <fieldset>
+          <legend>Student Details</legend>
+          <label class="photo-field wide">Student Photo
+            <span class="photo-upload">
+              <span class="photo-preview" id="studentPhotoPreview">Photo</span>
+              <input name="studentPhoto" type="file" accept="image/*" />
+            </span>
+          </label>
+          <label class="admission-number-field"><span>Admission No.</span>
+            <input name="admissionNo" placeholder="Enter admission no." required />
+          </label>
+          <label>Student Name
+            <input name="studentName" placeholder="Enter full name" required />
+          </label>
+          <label>Date of Birth
+            <input name="dob" type="text" placeholder="DD-MM-YYYY" required />
+          </label>
+          <label>Gender
+            <select name="gender" required>
+              <option value="">Select</option>
+              <option>Female</option>
+              <option>Male</option>
+              <option>Other</option>
+            </select>
+          </label>
+          <label>Class
+            <select name="klass" required>
+              <option value="">Select</option>
+              <option>Nursery</option>
+              <option>I</option>
+              <option>II</option>
+              <option>III</option>
+              <option>IV</option>
+              <option>V</option>
+              <option>VI</option>
+              <option>VII</option>
+              <option>VIII</option>
+              <option>IX</option>
+              <option>X</option>
+              <option>XI</option>
+              <option>XII</option>
+            </select>
+          </label>
+          <label>Section
+            <select name="section" required>
+              <option value="">Select</option>
+              <option>Amber</option>
+              <option>Ruby</option>
+              <option>A</option>
+              <option>B</option>
+              <option>C</option>
+              <option>IGCSE</option>
+              <option>IB</option>
+              <option>Science</option>
+              <option>Commerce</option>
+            </select>
+          </label>
+          <label>Student Type
+            <select name="studentType" required>
+              <option>New Student</option>
+              <option>Promoted Student</option>
+            </select>
+          </label>
+          <label>Blood Group
+            <select name="bloodGroup">
+              <option value="">Select</option>
+              <option>A+</option>
+              <option>A-</option>
+              <option>B+</option>
+              <option>B-</option>
+              <option>AB+</option>
+              <option>AB-</option>
+              <option>O+</option>
+              <option>O-</option>
+            </select>
+          </label>
+          <label>Nationality
+            <input name="nationality" placeholder="Nationality" />
+          </label>
+          <label>Religion
+            <input name="religion" placeholder="Religion" />
+          </label>
+          <label>Mother Tongue
+            <input name="motherTongue" placeholder="Mother tongue" />
+          </label>
+          <label>Village/Town
+            <select name="villageTown" required>
+              <option value="">Select village/town</option>
+            </select>
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Parents/Guardian Information</legend>
+          <label>Father's Name
+            <input name="fatherName" placeholder="Enter father's name" required />
+          </label>
+          <label>Father's Occupation
+            <input name="fatherOccupation" placeholder="Occupation" />
+          </label>
+          <label>Father's Academic Qualification
+            <input name="fatherQualification" placeholder="Highest qualification" />
+          </label>
+          <label>Father Works At
+            <select name="fatherWorkType">
+              <option value="">Select</option>
+              <option>Government</option>
+              <option>Private</option>
+              <option>Business</option>
+            </select>
+          </label>
+          <label>Father's Annual Income
+            <input name="fatherAnnualIncome" type="number" min="0" placeholder="Annual income" />
+          </label>
+          <label>Father's Mobile Number
+            <input name="fatherMobile" inputmode="tel" placeholder="10 digit mobile" required />
+          </label>
+          <label>Father's Email Address
+            <input name="fatherEmail" type="email" placeholder="father@email.com" />
+          </label>
+          <label>Mother's Name
+            <input name="motherName" placeholder="Enter mother's name" required />
+          </label>
+          <label>Mother's Occupation
+            <input name="motherOccupation" placeholder="Occupation" />
+          </label>
+          <label>Mother's Academic Qualification
+            <input name="motherQualification" placeholder="Highest qualification" />
+          </label>
+          <label>Mother Works At
+            <select name="motherWorkType">
+              <option value="">Select</option>
+              <option>Government</option>
+              <option>Private</option>
+              <option>Business</option>
+            </select>
+          </label>
+          <label>Mother's Annual Income
+            <input name="motherAnnualIncome" type="number" min="0" placeholder="Annual income" />
+          </label>
+          <label>Mother's Mobile Number
+            <input name="motherMobile" inputmode="tel" placeholder="10 digit mobile" required />
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Local Guardian & Contact</legend>
+          <label>Guardian Name
+            <input name="guardianName" placeholder="Parent or guardian" required />
+          </label>
+          <label>Mobile Number
+            <input name="mobile" inputmode="tel" placeholder="10 digit mobile" required />
+          </label>
+          <label>Email
+            <input name="email" type="email" placeholder="optional@email.com" />
+          </label>
+          <label>Transport Route
+            <select name="route">
+              <option>Self</option>
+              <option>Route A</option>
+              <option>Route B</option>
+              <option>Route C</option>
+            </select>
+          </label>
+          <label class="check-field">Transport
+            <input name="transportRequired" type="checkbox" value="Yes" />
+          </label>
+          <label>Opening Fee Status
+            <select name="fee">
+              <option>Due</option>
+              <option>Paid</option>
+            </select>
+          </label>
+          <label class="wide">Address
+            <textarea name="address" rows="3" placeholder="House, area, city"></textarea>
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Medical Information</legend>
+          <label>Any Medical Conditions
+            <input name="medicalConditions" placeholder="If any" />
+          </label>
+          <label>Allergy
+            <input name="allergies" placeholder="Food, medicine or other allergies" />
+          </label>
+          <label>Regular Medicine
+            <input name="regularMedicine" placeholder="Medicine name and dosage" />
+          </label>
+          <label>Emergency Contact Number
+            <input name="emergencyContactNumber" inputmode="tel" placeholder="Emergency mobile number" />
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Fees</legend>
+          <label>Admission Fee
+            <input name="admissionFee" type="number" min="0" placeholder="12000" />
+          </label>
+          <label>Annual Fee
+            <input name="annualFee" type="number" min="0" placeholder="6500" />
+          </label>
+          <label>Form Fee
+            <input name="formFee" type="number" min="0" placeholder="500" />
+          </label>
+          <label>Tuition Fee
+            <input name="tuitionFee" type="number" min="0" placeholder="3000" />
+          </label>
+          <div class="fee-months">
+            <span>Tuition Months</span>
+            <details class="month-dropdown">
+              <summary><span data-month-summary="feeMonths">12 months selected</span></summary>
+              <div class="month-check-grid">
+              <label><input type="checkbox" name="feeMonths" value="Apr" checked /> Apr</label>
+              <label><input type="checkbox" name="feeMonths" value="May" checked /> May</label>
+              <label><input type="checkbox" name="feeMonths" value="Jun" checked /> Jun</label>
+              <label><input type="checkbox" name="feeMonths" value="Jul" checked /> Jul</label>
+              <label><input type="checkbox" name="feeMonths" value="Aug" checked /> Aug</label>
+              <label><input type="checkbox" name="feeMonths" value="Sep" checked /> Sep</label>
+              <label><input type="checkbox" name="feeMonths" value="Oct" checked /> Oct</label>
+              <label><input type="checkbox" name="feeMonths" value="Nov" checked /> Nov</label>
+              <label><input type="checkbox" name="feeMonths" value="Dec" checked /> Dec</label>
+              <label><input type="checkbox" name="feeMonths" value="Jan" checked /> Jan</label>
+              <label><input type="checkbox" name="feeMonths" value="Feb" checked /> Feb</label>
+              <label><input type="checkbox" name="feeMonths" value="Mar" checked /> Mar</label>
+              </div>
+            </details>
+          </div>
+        </fieldset>
+
+        <fieldset class="other-fees-fieldset">
+          <legend>Applicable Fees</legend>
+          <div class="service-checks wide">
+            <span>Applicable Services</span>
+            <label><input type="checkbox" name="otherServices" value="Transport" /> Transport</label>
+            <label><input type="checkbox" name="otherServices" value="Special/Custom" /> Special/Custom</label>
+            <label><input type="checkbox" name="otherServices" value="Day Boarding" /> Day Boarding</label>
+            <label><input type="checkbox" name="otherServices" value="Tiffin" /> Tiffin</label>
+            <label><input type="checkbox" name="otherServices" value="Robotics" /> Robotics</label>
+          </div>
+          <div class="fee-row transport-fee-row">
+            <label>Transport Fees
+              <input name="transportFee" type="number" min="0" placeholder="0" />
+            </label>
+            <label>Special/Custom Transport Fee
+              <input name="specialTransportFee" type="number" min="0" placeholder="0" />
+            </label>
+            <div class="fee-months">
+              <span>Transport Months</span>
+              <details class="month-dropdown">
+                <summary><span data-month-summary="transportMonths">12 months selected</span></summary>
+                <div class="month-check-grid">
+                  <label><input type="checkbox" name="transportMonths" value="Apr" checked /> Apr</label>
+                  <label><input type="checkbox" name="transportMonths" value="May" checked /> May</label>
+                  <label><input type="checkbox" name="transportMonths" value="Jun" checked /> Jun</label>
+                  <label><input type="checkbox" name="transportMonths" value="Jul" checked /> Jul</label>
+                  <label><input type="checkbox" name="transportMonths" value="Aug" checked /> Aug</label>
+                  <label><input type="checkbox" name="transportMonths" value="Sep" checked /> Sep</label>
+                  <label><input type="checkbox" name="transportMonths" value="Oct" checked /> Oct</label>
+                  <label><input type="checkbox" name="transportMonths" value="Nov" checked /> Nov</label>
+                  <label><input type="checkbox" name="transportMonths" value="Dec" checked /> Dec</label>
+                  <label><input type="checkbox" name="transportMonths" value="Jan" checked /> Jan</label>
+                  <label><input type="checkbox" name="transportMonths" value="Feb" checked /> Feb</label>
+                  <label><input type="checkbox" name="transportMonths" value="Mar" checked /> Mar</label>
+                </div>
+              </details>
+            </div>
+          </div>
+          <div class="fee-row day-boarding-row">
+            <label>Day Boarding Fees
+              <input name="dayBoardingFee" type="number" min="0" placeholder="0" />
+            </label>
+            <label>Day Boarding Transport
+              <input name="dayBoardingTransportFee" type="number" min="0" placeholder="0" />
+            </label>
+            <div class="fee-months">
+              <span>Day Boarding Months</span>
+              <details class="month-dropdown">
+                <summary><span data-month-summary="dayBoardingMonths">12 months selected</span></summary>
+                <div class="month-check-grid">
+                  <label><input type="checkbox" name="dayBoardingMonths" value="Apr" checked /> Apr</label>
+                  <label><input type="checkbox" name="dayBoardingMonths" value="May" checked /> May</label>
+                  <label><input type="checkbox" name="dayBoardingMonths" value="Jun" checked /> Jun</label>
+                  <label><input type="checkbox" name="dayBoardingMonths" value="Jul" checked /> Jul</label>
+                  <label><input type="checkbox" name="dayBoardingMonths" value="Aug" checked /> Aug</label>
+                  <label><input type="checkbox" name="dayBoardingMonths" value="Sep" checked /> Sep</label>
+                  <label><input type="checkbox" name="dayBoardingMonths" value="Oct" checked /> Oct</label>
+                  <label><input type="checkbox" name="dayBoardingMonths" value="Nov" checked /> Nov</label>
+                  <label><input type="checkbox" name="dayBoardingMonths" value="Dec" checked /> Dec</label>
+                  <label><input type="checkbox" name="dayBoardingMonths" value="Jan" checked /> Jan</label>
+                  <label><input type="checkbox" name="dayBoardingMonths" value="Feb" checked /> Feb</label>
+                  <label><input type="checkbox" name="dayBoardingMonths" value="Mar" checked /> Mar</label>
+                </div>
+              </details>
+            </div>
+          </div>
+          <div class="fee-row robotics-fee-row">
+            <label>Robotics Fees
+              <input name="roboticsFee" type="number" min="0" placeholder="0" />
+            </label>
+            <div class="fee-months">
+              <span>Robotics Months</span>
+              <details class="month-dropdown">
+                <summary><span data-month-summary="roboticsMonths">12 months selected</span></summary>
+                <div class="month-check-grid">
+                  <label><input type="checkbox" name="roboticsMonths" value="Apr" checked /> Apr</label>
+                  <label><input type="checkbox" name="roboticsMonths" value="May" checked /> May</label>
+                  <label><input type="checkbox" name="roboticsMonths" value="Jun" checked /> Jun</label>
+                  <label><input type="checkbox" name="roboticsMonths" value="Jul" checked /> Jul</label>
+                  <label><input type="checkbox" name="roboticsMonths" value="Aug" checked /> Aug</label>
+                  <label><input type="checkbox" name="roboticsMonths" value="Sep" checked /> Sep</label>
+                  <label><input type="checkbox" name="roboticsMonths" value="Oct" checked /> Oct</label>
+                  <label><input type="checkbox" name="roboticsMonths" value="Nov" checked /> Nov</label>
+                  <label><input type="checkbox" name="roboticsMonths" value="Dec" checked /> Dec</label>
+                  <label><input type="checkbox" name="roboticsMonths" value="Jan" checked /> Jan</label>
+                  <label><input type="checkbox" name="roboticsMonths" value="Feb" checked /> Feb</label>
+                  <label><input type="checkbox" name="roboticsMonths" value="Mar" checked /> Mar</label>
+                </div>
+              </details>
+            </div>
+          </div>
+          <label>Tiffin Fees
+            <input name="othersFee" type="number" min="0" placeholder="0" />
+          </label>
+          <div class="fee-months">
+            <span>Tiffin Months</span>
+            <details class="month-dropdown">
+              <summary><span data-month-summary="othersMonths">12 months selected</span></summary>
+              <div class="month-check-grid">
+                <label><input type="checkbox" name="othersMonths" value="Apr" checked /> Apr</label>
+                <label><input type="checkbox" name="othersMonths" value="May" checked /> May</label>
+                <label><input type="checkbox" name="othersMonths" value="Jun" checked /> Jun</label>
+                <label><input type="checkbox" name="othersMonths" value="Jul" checked /> Jul</label>
+                <label><input type="checkbox" name="othersMonths" value="Aug" checked /> Aug</label>
+                <label><input type="checkbox" name="othersMonths" value="Sep" checked /> Sep</label>
+                <label><input type="checkbox" name="othersMonths" value="Oct" checked /> Oct</label>
+                <label><input type="checkbox" name="othersMonths" value="Nov" checked /> Nov</label>
+                <label><input type="checkbox" name="othersMonths" value="Dec" checked /> Dec</label>
+                <label><input type="checkbox" name="othersMonths" value="Jan" checked /> Jan</label>
+                <label><input type="checkbox" name="othersMonths" value="Feb" checked /> Feb</label>
+                <label><input type="checkbox" name="othersMonths" value="Mar" checked /> Mar</label>
+              </div>
+            </details>
+          </div>
+        </fieldset>
+
+        <div class="form-error" id="admissionError" role="alert"></div>
+
+        <footer class="modal-actions">
+          <button class="ghost-action" id="resetAdmission" type="reset">Reset</button>
+          <button class="primary-action" type="submit">Save Admission</button>
+        </footer>
+      </form>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="disableReasonModal" aria-hidden="true">
+    <section class="disable-reason-modal" role="dialog" aria-modal="true" aria-labelledby="disableReasonTitle">
+      <header class="modal-head">
+        <div>
+          <p class="eyebrow">Student information</p>
+          <h2 id="disableReasonTitle">Disable Student</h2>
+        </div>
+        <button class="mini" id="closeDisableReason" type="button">Close</button>
+      </header>
+      <form id="disableReasonForm" class="disable-reason-form">
+        <input type="hidden" name="admissionNo" />
+        <label>Reason
+          <textarea name="reason" rows="4" placeholder="Why is this student being disabled?" required></textarea>
+        </label>
+        <small id="disableReasonStudent">Select a student to disable.</small>
+        <footer class="modal-actions">
+          <button class="ghost-action" id="cancelDisableReason" type="button">Cancel</button>
+          <button class="primary-action" type="submit">Disable Student</button>
+        </footer>
+      </form>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="receiptPreviewModal" aria-hidden="true">
+    <section class="receipt-preview-modal" role="dialog" aria-modal="true" aria-labelledby="receiptPreviewTitle">
+      <header class="modal-head">
+        <div>
+          <p class="eyebrow">Fee book</p>
+          <h2 id="receiptPreviewTitle">Receipt Preview</h2>
+        </div>
+        <div class="modal-head-actions">
+          <button class="mini" id="printReceiptPreview" type="button" hidden>Print</button>
+          <button class="mini" id="closeReceiptPreview" type="button">Close</button>
+        </div>
+      </header>
+      <div id="receiptPreviewBody"></div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="combinedCollectionModal" aria-hidden="true">
+    <section class="combined-collection-modal" role="dialog" aria-modal="true" aria-labelledby="combinedCollectionTitle">
+      <header class="combined-collection-hero">
+        <div>
+          <p class="eyebrow">Fee book</p>
+          <h2 id="combinedCollectionTitle">Monthly Collection</h2>
+          <p id="combinedCollectionSubtitle">Select monthly fees and collect in one receipt.</p>
+        </div>
+        <button class="mini" id="closeCombinedCollection" type="button">Close</button>
+      </header>
+      <form id="combinedCollectionForm" class="combined-collection-form">
+        <input type="hidden" name="admissionNo" />
+        <input type="hidden" name="month" />
+        <div class="combined-student-strip">
+          <div><span>Admission No.</span><strong id="combinedAdmissionNo">-</strong></div>
+          <div><span>Student</span><strong id="combinedStudentName">-</strong></div>
+          <div><span>Class</span><strong id="combinedStudentClass">-</strong></div>
+          <div><span>Month</span><strong id="combinedFeeMonth">-</strong></div>
+        </div>
+        <div class="combined-entry-grid">
+          <label>Date
+            <input name="date" type="text" placeholder="DD-MM-YYYY" />
+          </label>
+          <label>Receipt No.
+            <input name="receiptNo" readonly />
+          </label>
+          <label>Bank Payment
+            <input name="bankAmount" type="number" min="0" placeholder="0" />
+          </label>
+          <label>Cash Payment
+            <input name="cashAmount" type="number" min="0" placeholder="0" />
+          </label>
+          <label>Discount
+            <input name="discountAmount" type="number" min="0" placeholder="0" />
+          </label>
+        </div>
+        <label class="combined-remarks-field">Remarks
+          <input name="remarks" type="text" placeholder="Receipt timing / guardian note" />
+        </label>
+        <div class="combined-fee-panel">
+          <div class="combined-fee-head">
+            <span>Fee Head</span><span>Amount</span><span>Fine</span><span>Total</span>
+          </div>
+          <div id="combinedFeeItems"></div>
+        </div>
+        <div class="combined-total-card">
+          <div><span>Selected Fees</span><strong id="combinedFeeSubtotal">Rs. 0</strong></div>
+          <div><span>Fine</span><strong id="combinedFineTotal">Rs. 0</strong></div>
+          <div><span>Discount</span><strong id="combinedDiscountTotal">Rs. 0</strong></div>
+          <div><span>Total Payable</span><strong id="combinedGrandTotal">Rs. 0</strong></div>
+          <div><span>Paid Now</span><strong id="combinedPaidNow">Rs. 0</strong></div>
+          <div><span>Balance</span><strong id="combinedBalance">Rs. 0</strong></div>
+        </div>
+        <footer class="modal-actions">
+          <button class="ghost-action" id="cancelCombinedCollection" type="button">Cancel</button>
+          <button class="primary-action" type="submit">Save Combined Receipt</button>
+        </footer>
+      </form>
+    </section>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+  <script src="./new-school-os.js?v=20260618-separate-anps-backend"></script>
+</body>
+</html>
