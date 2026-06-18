@@ -1085,6 +1085,30 @@ def verify_login(username, password):
                 "full_name": user.get("name") or user.get("id"),
                 "role_name": user.get("role") or "Administrator",
             }
+    for user in state.get("userAccessAccounts", []) or []:
+        login_id = str(user.get("loginId") or user.get("id") or user.get("username") or "").strip()
+        if login_id != wanted:
+            continue
+        if user.get("status") != "Active":
+            return None
+        if hmac.compare_digest(str(user.get("password") or ""), supplied):
+            return {
+                "username": login_id,
+                "full_name": user.get("staffName") or user.get("name") or login_id,
+                "role_name": user.get("role") or "Staff",
+            }
+    for user in state.get("studentUserAccounts", []) or []:
+        login_id = str(user.get("loginId") or user.get("id") or "").strip()
+        if login_id != wanted:
+            continue
+        if user.get("status") != "Active":
+            return None
+        if hmac.compare_digest(str(user.get("password") or ""), supplied):
+            return {
+                "username": login_id,
+                "full_name": user.get("studentName") or user.get("name") or login_id,
+                "role_name": "Student",
+            }
     return None
 
 

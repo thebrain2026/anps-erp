@@ -80,6 +80,7 @@ const PRODUCTION_CLEAN_KEY = "newSchoolOsProductionCleanVersion";
 const PRODUCTION_CLEAN_VERSION = "2026-06-18-v2";
 const BACKEND_TOKEN_KEY = "school_api_token";
 const BACKEND_USER_KEY = "school_api_user";
+const BACKEND_LOGGED_OUT_KEY = "school_api_logged_out";
 const BACKEND_API_BASE = (
   document.querySelector('meta[name="school-api-base"]')?.content ||
   localStorage.getItem("school_api_base") ||
@@ -426,6 +427,7 @@ function backendHeaders(extra = {}) {
 
 async function ensureBackendToken() {
   if (localStorage.getItem(BACKEND_TOKEN_KEY)) return true;
+  if (localStorage.getItem(BACKEND_LOGGED_OUT_KEY) === "1") return false;
   try {
     const response = await fetch(backendApiUrl("/api/login"), {
       method: "POST",
@@ -436,6 +438,7 @@ async function ensureBackendToken() {
     const result = await response.json();
     if (!result?.token) return false;
     localStorage.setItem(BACKEND_TOKEN_KEY, result.token);
+    localStorage.removeItem(BACKEND_LOGGED_OUT_KEY);
     if (result.user) localStorage.setItem(BACKEND_USER_KEY, JSON.stringify(result.user));
     return true;
   } catch (error) {
@@ -747,6 +750,70 @@ function showToast(message) {
   toast.classList.add("show");
   clearTimeout(showToast.timer);
   showToast.timer = setTimeout(() => toast.classList.remove("show"), 2400);
+}
+
+function ensureLoginOverlay() {
+  let overlay = document.getElementById("loginOverlay");
+  if (overlay) return overlay;
+  overlay = document.createElement("div");
+  overlay.id = "loginOverlay";
+  overlay.className = "login-overlay hidden";
+  overlay.innerHTML = `
+    <form id="loginOverlayForm" class="login-panel">
+      <div class="login-brand">
+        <img src="./assets/anps-logo.png" alt="Alfred Nobel Public School" />
+        <span>Alfred Nobel Public School</span>
+      </div>
+      <h2>ERP Login</h2>
+      <label>
+        <span>Login ID</span>
+        <input name="username" type="text" autocomplete="username" required />
+      </label>
+      <label>
+        <span>Password</span>
+        <input name="password" type="password" autocomplete="current-password" required />
+      </label>
+      <p id="loginOverlayError" class="login-error"></p>
+      <button type="submit">Login</button>
+    </form>
+  `;
+  document.body.appendChild(overlay);
+  overlay.querySelector("form").addEventListener("submit", async event => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const error = overlay.querySelector("#loginOverlayError");
+    error.textContent = "";
+    const username = String(form.elements.username.value || "").trim();
+    const password = String(form.elements.password.value || "");
+    try {
+      const response = await fetch(backendApiUrl("/api/login"), {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({username, password})
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok || !result?.token) {
+        error.textContent = "Invalid login ID or password.";
+        return;
+      }
+      localStorage.setItem(BACKEND_TOKEN_KEY, result.token);
+      localStorage.removeItem(BACKEND_LOGGED_OUT_KEY);
+      if (result.user) localStorage.setItem(BACKEND_USER_KEY, JSON.stringify(result.user));
+      overlay.classList.add("hidden");
+      backendSyncReady = true;
+      await initializeBackendSync();
+      showToast("Login successful.");
+    } catch (err) {
+      error.textContent = "Login failed. Please try again.";
+    }
+  });
+  return overlay;
+}
+
+function showLoginOverlay() {
+  const overlay = ensureLoginOverlay();
+  overlay.classList.remove("hidden");
+  setTimeout(() => overlay.querySelector("input[name='username']")?.focus(), 50);
 }
 
 function getCurrentTopbarRole() {
@@ -8943,7 +9010,17 @@ document.getElementById("topbarAlerts")?.addEventListener("click", () => {
 
 document.getElementById("topbarLogout")?.addEventListener("click", () => {
   saveAppState();
-  showToast(`${getCurrentTopbarRole()} logged out placeholder ready.`);
+  fetch(backendApiUrl("/api/logout"), {
+    method: "POST",
+    headers: backendHeaders({"Content-Type": "application/json"}),
+    body: JSON.stringify({logout: true})
+  }).catch(() => {});
+  localStorage.removeItem(BACKEND_TOKEN_KEY);
+  localStorage.removeItem(BACKEND_USER_KEY);
+  localStorage.setItem(BACKEND_LOGGED_OUT_KEY, "1");
+  backendSyncReady = false;
+  showLoginOverlay();
+  showToast(`${getCurrentTopbarRole()} logged out.`);
 });
 
 document.getElementById("sendFeeReminder").addEventListener("click", () => {
@@ -9619,3 +9696,6 @@ renderFeeBookStudentOptions();
 renderStudentFeeCounter();
 renderFeeBook();
 initializeBackendSync();
+if (localStorage.getItem(BACKEND_LOGGED_OUT_KEY) === "1") {
+  showLoginOverlay();
+}
