@@ -3821,6 +3821,30 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   white-space: nowrap;
 }
 
+.student-filter-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin: 0 0 10px;
+}
+
+.student-filter-bar label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #475569;
+  font-size: .86rem;
+  font-weight: 800;
+}
+
+.student-filter-bar select {
+  min-width: 170px;
+  min-height: 34px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  padding: 6px 10px;
+  background: #fff;
+}
+
 .staff-table-photo {
   display: grid;
   place-items: center;

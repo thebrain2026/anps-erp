@@ -1533,16 +1533,24 @@ function badgeClass(value) {
 
 function renderStudents() {
   const query = document.getElementById("globalSearch").value.trim().toLowerCase();
+  renderStudentClassFilter();
+  const selectedClass = String(document.getElementById("studentClassFilter")?.value || "").trim();
   const filtered = getActiveStudents().filter(student => {
     const matchesSearch = Object.values(student).join(" ").toLowerCase().includes(query);
-    return matchesSearch;
+    const {klass} = splitStudentClassSection(student.klass || "");
+    const matchesClass = !selectedClass || klass === selectedClass;
+    return matchesSearch && matchesClass;
   });
 
   document.getElementById("studentTable").innerHTML = filtered.map(student => `
+    ${(() => {
+      const classInfo = splitStudentClassSection(student.klass || "");
+      return `
     <tr>
       <td>${student.admissionNo || "-"}</td>
       <td><button class="student-name-link" type="button" data-open-admission-preview="${student.admissionNo || ""}"><strong>${student.name}</strong></button></td>
-      <td>${student.klass}</td>
+      <td>${escapeHtml(classInfo.klass || "-")}</td>
+      <td>${escapeHtml(classInfo.section || "-")}</td>
       <td>${student.guardian || "-"}</td>
       <td>${student.mobile || "-"}</td>
       <td>
@@ -1562,13 +1570,27 @@ function renderStudents() {
         </div>
       </td>
     </tr>
-  `).join("") || `<tr><td colspan="6">No matching students found.</td></tr>`;
+      `;
+    })()}
+  `).join("") || `<tr><td colspan="7">No matching students found.</td></tr>`;
 
   document.getElementById("studentCount").textContent = getActiveStudents().length.toLocaleString("en-IN");
   renderClassSectionReport();
   renderStudentGenderRatioReport();
   renderStudentTeacherRatioReport();
   renderTransportRoutePickupPoints();
+}
+
+function renderStudentClassFilter() {
+  const select = document.getElementById("studentClassFilter");
+  if (!select) return;
+  const current = select.value;
+  const classes = [...new Set([
+    ...getAdmissionClassOptions(),
+    ...getActiveStudents().map(student => splitStudentClassSection(student.klass || "").klass).filter(Boolean)
+  ])].sort((a, b) => a.localeCompare(b, undefined, {numeric: true}));
+  select.innerHTML = `<option value="">All Classes</option>${classes.map(className => `<option value="${escapeHtml(className)}">${escapeHtml(className)}</option>`).join("")}`;
+  if (current && classes.includes(current)) select.value = current;
 }
 
 function getClassSectionGroups() {
@@ -7158,6 +7180,8 @@ document.getElementById("globalSearch").addEventListener("input", () => {
   renderStudents();
   if (!document.getElementById("students").classList.contains("active")) setView("students");
 });
+
+document.getElementById("studentClassFilter")?.addEventListener("change", renderStudents);
 
 document.getElementById("transportPickupPoint").addEventListener("input", event => {
   const distanceInput = event.target.closest("[data-village-distance]");
