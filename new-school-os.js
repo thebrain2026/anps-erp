@@ -1066,12 +1066,11 @@ function openStudentEditForm(admissionNo) {
   setSelectValue(admissionForm.elements.section, section || "");
   setSelectValue(admissionForm.elements.studentType, student.studentType || "New Student");
   setSelectValue(admissionForm.elements.bloodGroup, student.bloodGroup || "");
-  setSelectValue(admissionForm.elements.nationality, student.nationality || "India");
+  setSelectValue(admissionForm.elements.nationality, student.nationality || "Indian");
   setSelectValue(admissionForm.elements.religion, student.religion || "");
   setSelectValue(admissionForm.elements.motherTongue, student.motherTongue || "");
   setSelectValue(admissionForm.elements.villageTown, student.villageTown || "");
   admissionForm.elements.fatherName.value = student.fatherName || "";
-  setSelectValue(admissionForm.elements.fatherOccupation, student.fatherOccupation || "");
   admissionForm.elements.fatherQualification.value = student.fatherQualification || "";
   setSelectValue(admissionForm.elements.fatherWorkType, student.fatherWorkType || "");
   admissionForm.elements.fatherAnnualIncome.value = student.fatherAnnualIncome || "";
@@ -1126,7 +1125,14 @@ function closeAdmissionForm() {
 }
 
 function normalizeAdmissionNo(value) {
-  return String(value || "").trim().toLowerCase();
+  const clean = String(value || "").trim().replace(/\s*\/\s*/g, "/").replace(/\s+/g, "");
+  const match = clean.match(/^(anps-adm\/[^/]+\/)(.+)$/i);
+  if (match) {
+    const serial = match[2].trim();
+    const canonicalSerial = /^\d+$/.test(serial) ? String(Number(serial)) : serial.toLowerCase();
+    return `${match[1].toLowerCase()}${canonicalSerial}`;
+  }
+  return clean.toLowerCase();
 }
 
 function findStudentByAdmissionNo(admissionNo) {
@@ -8890,7 +8896,7 @@ admissionForm.addEventListener("submit", event => {
     motherTongue: String(data.get("motherTongue") || "").trim(),
     villageTown: String(data.get("villageTown") || "").trim(),
     fatherName: String(data.get("fatherName") || "").trim(),
-    fatherOccupation: String(data.get("fatherOccupation") || "").trim(),
+    fatherOccupation: "",
     fatherQualification: String(data.get("fatherQualification") || "").trim(),
     fatherWorkType: String(data.get("fatherWorkType") || "").trim(),
     fatherAnnualIncome: Number(data.get("fatherAnnualIncome") || 0),

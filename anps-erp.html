@@ -2391,7 +2391,7 @@
           </label>
           <label>Nationality
             <select name="nationality">
-              <option>India</option>
+              <option>Indian</option>
             </select>
           </label>
           <label>Religion
@@ -2420,14 +2420,6 @@
           <legend>Parents/Guardian Information</legend>
           <label>Father's Name
             <input name="fatherName" placeholder="Enter father's name" required />
-          </label>
-          <label>Father's Occupation
-            <select name="fatherOccupation">
-              <option value="">Select</option>
-              <option>Government</option>
-              <option>Private</option>
-              <option>Business</option>
-            </select>
           </label>
           <label>Father's Academic Qualification
             <input name="fatherQualification" placeholder="Highest qualification" />
@@ -2479,18 +2471,18 @@
 
         <fieldset>
           <legend>Local Guardian & Contact</legend>
-          <div class="service-checks wide">
+          <div class="service-checks local-guardian-same wide">
             <span>Same as</span>
             <label><input type="checkbox" name="localGuardianSame" value="Father" /> Father</label>
             <label><input type="checkbox" name="localGuardianSame" value="Mother" /> Mother</label>
           </div>
-          <label>Guardian Name
+          <label class="local-guardian-field">Guardian Name
             <input name="guardianName" placeholder="Parent or guardian" required />
           </label>
-          <label>Mobile Number
+          <label class="local-guardian-field">Mobile Number
             <input name="mobile" inputmode="tel" placeholder="10 digit mobile" required />
           </label>
-          <label>Email
+          <label class="local-guardian-field">Email
             <input name="email" type="email" placeholder="optional@email.com" />
           </label>
           <input name="route" type="hidden" value="Self" />
