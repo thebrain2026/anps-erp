@@ -274,42 +274,7 @@ const titleMap = {
   studentTransportFees: "Student Transport Fees"
 };
 
-const ACCESS_PERMISSION_MODULES = [
-  "dashboard",
-  "admissionEnquiry",
-  "complaintRegister",
-  "complaintsDesk",
-  "students",
-  "studentAdmission",
-  "finance",
-  "feeBook",
-  "dueFeesSearch",
-  "feeMaster",
-  "feeGroup",
-  "staffDetails",
-  "staffAttendance",
-  "department",
-  "noticeBoard",
-  "sendSms",
-  "reportStudentInformation",
-  "dailyCollectionReport",
-  "entireSchoolFeesReport",
-  "classTimetable",
-  "teacherTimetable",
-  "syllabus",
-  "teacherComplaint",
-  "holidayReport",
-  "annualCalendar",
-  "studentIdCard",
-  "teacherIdCard",
-  "transportPickupPoint",
-  "transportRoute",
-  "transportVehicle",
-  "studentTransportFees",
-  "userAccessSettings",
-  "studentUserLogin",
-  "securityMaintenance"
-];
+const ACCESS_PERMISSION_MODULES = Object.keys(titleMap);
 
 const ACCESS_ACTIONS = ["view", "add", "edit", "delete", "print"];
 
@@ -862,6 +827,7 @@ function ensureLoginOverlay() {
       if (result.user) localStorage.setItem(BACKEND_USER_KEY, JSON.stringify(result.user));
       overlay.classList.add("hidden");
       backendSyncReady = true;
+      updateTopbarSystemStatus();
       await initializeBackendSync();
       showToast("Login successful.");
     } catch (err) {
@@ -877,13 +843,40 @@ function showLoginOverlay() {
   setTimeout(() => overlay.querySelector("input[name='username']")?.focus(), 50);
 }
 
+function getLoggedInBackendUser() {
+  try {
+    return JSON.parse(localStorage.getItem(BACKEND_USER_KEY) || "null") || null;
+  } catch {
+    return null;
+  }
+}
+
 function getCurrentTopbarRole() {
-  const activeStaffAccount = userAccessAccounts.find(account => account.status === "Active" && account.role);
-  return activeStaffAccount?.role || "Admin";
+  const user = getLoggedInBackendUser();
+  return user?.role_name || user?.role || "Admin";
 }
 
 function getCurrentCollectorRoleName() {
   return getCurrentTopbarRole() || "Admin";
+}
+
+function isCurrentRoleAdmin() {
+  return /admin|administrator|principal/i.test(getCurrentTopbarRole());
+}
+
+function canCurrentRoleAccessView(viewName = "") {
+  if (!viewName || viewName === "dashboard" || isCurrentRoleAdmin()) return true;
+  const permissions = normalizeRolePermission(getCurrentTopbarRole());
+  return permissions?.[viewName]?.view !== false;
+}
+
+function updateRoleBasedNavigation() {
+  navButtons.forEach(button => {
+    const viewName = button.dataset.view;
+    const isAllowed = canCurrentRoleAccessView(viewName);
+    button.hidden = !isAllowed;
+    button.disabled = !isAllowed;
+  });
 }
 
 function setTopbarSaveStatus(status = "saved") {
@@ -913,6 +906,7 @@ function updateTopbarSystemStatus() {
   const role = document.getElementById("topbarCurrentRole");
   const alerts = document.getElementById("topbarAlerts");
   if (role) role.textContent = getCurrentTopbarRole();
+  updateRoleBasedNavigation();
   if (alerts) {
     const report = typeof getSystemHealthReport === "function" ? getSystemHealthReport() : {issues: []};
     const issues = report.issues || [];
@@ -923,6 +917,10 @@ function updateTopbarSystemStatus() {
 }
 
 function setView(viewName) {
+  if (!canCurrentRoleAccessView(viewName)) {
+    showToast(`${getCurrentTopbarRole()} role does not have access to ${titleMap[viewName] || viewName}.`);
+    return;
+  }
   views.forEach(view => view.classList.toggle("active", view.id === viewName));
   navButtons.forEach(button => button.classList.toggle("active", button.dataset.view === viewName));
   pageTitle.textContent = titleMap[viewName] || "Dashboard";
@@ -9257,6 +9255,7 @@ document.getElementById("topbarAlerts")?.addEventListener("click", () => {
 });
 
 document.getElementById("topbarLogout")?.addEventListener("click", () => {
+  const roleName = getCurrentTopbarRole();
   saveAppState();
   fetch(backendApiUrl("/api/logout"), {
     method: "POST",
@@ -9267,8 +9266,9 @@ document.getElementById("topbarLogout")?.addEventListener("click", () => {
   localStorage.removeItem(BACKEND_USER_KEY);
   localStorage.setItem(BACKEND_LOGGED_OUT_KEY, "1");
   backendSyncReady = false;
+  updateTopbarSystemStatus();
   showLoginOverlay();
-  showToast(`${getCurrentTopbarRole()} logged out.`);
+  showToast(`${roleName} logged out.`);
 });
 
 document.getElementById("sendFeeReminder").addEventListener("click", () => {
