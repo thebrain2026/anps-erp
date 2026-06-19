@@ -1065,9 +1065,19 @@ def sync_state_tables(conn, state):
 
 
 def read_state():
+    record = read_state_record()
+    return record["state"] if record else None
+
+
+def read_state_record():
     with connect() as conn:
-        row = conn.execute("SELECT value FROM app_state WHERE key = ?", (STATE_KEY,)).fetchone()
-    return json.loads(row[0]) if row else None
+        row = conn.execute("SELECT value, updated_at FROM app_state WHERE key = ?", (STATE_KEY,)).fetchone()
+    if not row:
+        return None
+    return {
+        "state": json.loads(row["value"]),
+        "updated_at": row["updated_at"],
+    }
 
 
 def verify_login(username, password):
@@ -1146,6 +1156,7 @@ def write_state(value):
             (STATE_KEY, raw),
         )
         sync_state_tables(conn, value)
+        state_row = conn.execute("SELECT updated_at FROM app_state WHERE key = ?", (STATE_KEY,)).fetchone()
         conn.execute(
             """
             INSERT INTO audit_events (actor, action, entity_type, entity_id, details)
@@ -1159,6 +1170,7 @@ def write_state(value):
                 f"{len(raw)} bytes synced",
             ),
         )
+    return state_row["updated_at"] if state_row else None
 
 
 def table_rows(table, limit=500):
@@ -1933,7 +1945,11 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
         if path == "/api/state":
             if not self.authorized():
                 return
-            return self.json_response({"state": read_state()})
+            record = read_state_record()
+            return self.json_response({
+                "state": record["state"] if record else None,
+                "updated_at": record["updated_at"] if record else None,
+            })
         if path == "/api/students":
             if not self.authorized():
                 return
@@ -2019,8 +2035,8 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             state = payload.get("state", payload)
             if not isinstance(state, dict):
                 raise ValueError("state must be an object")
-            write_state(state)
-            self.json_response({"ok": True})
+            updated_at = write_state(state)
+            self.json_response({"ok": True, "updated_at": updated_at})
         except Exception as exc:
             self.json_response({"ok": False, "error": str(exc)}, status=400)
 

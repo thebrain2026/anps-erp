@@ -88,8 +88,12 @@ const BACKEND_API_BASE = (
   ""
 ).replace(/\/$/, "");
 let backendSaveTimer = null;
+let backendAutoSyncTimer = null;
 let backendSyncReady = false;
 let backendHydrating = false;
+let backendLastUpdatedAt = "";
+let backendLastLocalSaveAt = 0;
+const BACKEND_AUTO_SYNC_INTERVAL_MS = 12000;
 const ACADEMIC_MONTHS = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
 const DEFAULT_ADMISSION_CLASSES = ["Nursery", "Class I", "Class II", "Class III", "Class IV", "Class V", "Class VI", "Class VII", "Class VIII", "Class IX", "Class X", "Class XI", "Class XII"];
 const DEFAULT_ADMISSION_SECTIONS = ["Amber", "Ruby", "A", "B", "C", "IGCSE", "IB", "Science", "Commerce"];
@@ -463,6 +467,9 @@ function queueBackendSave(snapshot = getAppStateSnapshot()) {
         body: JSON.stringify({state: snapshot})
       });
       if (!response.ok) throw new Error(`Backend save failed ${response.status}`);
+      const result = await response.json().catch(() => ({}));
+      if (result?.updated_at) backendLastUpdatedAt = result.updated_at;
+      backendLastLocalSaveAt = Date.now();
       setTopbarSaveStatus("saved");
     } catch (error) {
       console.warn("Backend sync pending.", error);
@@ -7002,6 +7009,50 @@ function refreshAllAfterSecurityClean() {
   renderFeeBook();
 }
 
+function isBackendAutoSyncPaused() {
+  if (backendHydrating || document.hidden) return true;
+  if (document.body.classList.contains("modal-open")) return true;
+  if (Date.now() - backendLastLocalSaveAt < 3000) return true;
+  const active = document.activeElement;
+  return !!(active && active.closest && active.closest("form"));
+}
+
+async function pullBackendStateIfChanged(showMessage = false) {
+  if (!backendSyncReady || isBackendAutoSyncPaused()) return;
+  try {
+    const hasToken = await ensureBackendToken();
+    if (!hasToken) return;
+    const healthResponse = await fetch(backendApiUrl(`/api/health?v=${Date.now()}`), {cache: "no-store"});
+    if (!healthResponse.ok) return;
+    const health = await healthResponse.json();
+    const serverUpdatedAt = health?.updated_at || "";
+    if (serverUpdatedAt && backendLastUpdatedAt && serverUpdatedAt === backendLastUpdatedAt) return;
+    const stateResponse = await fetch(backendApiUrl(`/api/state?v=${Date.now()}`), {
+      cache: "no-store",
+      headers: backendHeaders()
+    });
+    if (!stateResponse.ok) return;
+    const payload = await stateResponse.json();
+    const backendState = payload?.state || {};
+    if (!backendState || !Object.keys(backendState).length) return;
+    backendHydrating = true;
+    backendLastUpdatedAt = payload?.updated_at || serverUpdatedAt || backendLastUpdatedAt;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(backendState));
+    applySavedState(backendState);
+    refreshAllAfterSecurityClean();
+    if (showMessage) showToast("Latest database data synced.");
+  } catch (error) {
+    console.warn("Backend auto-sync skipped.", error);
+  } finally {
+    backendHydrating = false;
+  }
+}
+
+function startBackendAutoSync() {
+  clearInterval(backendAutoSyncTimer);
+  backendAutoSyncTimer = setInterval(() => pullBackendStateIfChanged(false), BACKEND_AUTO_SYNC_INTERVAL_MS);
+}
+
 async function initializeBackendSync() {
   try {
     const healthResponse = await fetch(backendApiUrl("/api/health"), {cache: "no-store"});
@@ -7015,6 +7066,7 @@ async function initializeBackendSync() {
     if (!stateResponse.ok) return;
     const payload = await stateResponse.json();
     const backendState = payload?.state || {};
+    backendLastUpdatedAt = payload?.updated_at || "";
     backendSyncReady = true;
     if (backendState && Object.keys(backendState).length) {
       backendHydrating = true;
@@ -7026,6 +7078,7 @@ async function initializeBackendSync() {
     } else {
       queueBackendSave(getAppStateSnapshot());
     }
+    startBackendAutoSync();
   } catch (error) {
     backendSyncReady = false;
   } finally {
@@ -9777,6 +9830,10 @@ renderFeeBookStudentOptions();
 renderStudentFeeCounter();
 renderFeeBook();
 initializeBackendSync();
+document.addEventListener("visibilitychange", () => {
+  if (!document.hidden) pullBackendStateIfChanged(true);
+});
+window.addEventListener("focus", () => pullBackendStateIfChanged(true));
 if (localStorage.getItem(BACKEND_LOGGED_OUT_KEY) === "1") {
   showLoginOverlay();
 }
