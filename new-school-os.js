@@ -926,9 +926,52 @@ function getSourceView(element) {
   return view ? view.id : "finance";
 }
 
+function getAdmissionNoSessionCode() {
+  const session = String(activeSession || "2026-27").trim();
+  const match = session.match(/^20(\d{2})-(\d{2})$/);
+  return match ? `${match[1]}-${match[2]}` : session;
+}
+
+function getAdmissionNoPrefix() {
+  return `ANPS-ADM/${getAdmissionNoSessionCode()}/`;
+}
+
+function getAdmissionSerialInput() {
+  return admissionForm?.elements?.admissionSerial || document.getElementById("admissionNoSerial");
+}
+
+function getAdmissionSerialFromFullNo(fullNo = "") {
+  const clean = String(fullNo || "").trim();
+  const prefix = getAdmissionNoPrefix();
+  if (!clean) return "";
+  if (clean.startsWith(prefix)) return clean.slice(prefix.length);
+  return clean.split("/").pop() || clean;
+}
+
+function setAdmissionNumberInputs(fullNo = "") {
+  const prefix = getAdmissionNoPrefix();
+  const prefixNode = document.getElementById("admissionNoPrefix");
+  const serialInput = getAdmissionSerialInput();
+  if (prefixNode) prefixNode.textContent = prefix;
+  if (serialInput) serialInput.value = getAdmissionSerialFromFullNo(fullNo);
+  if (admissionForm?.elements?.admissionNo) {
+    const serial = serialInput ? String(serialInput.value || "").trim() : "";
+    admissionForm.elements.admissionNo.value = serial ? `${prefix}${serial}` : "";
+  }
+}
+
+function getAdmissionNumberFromForm() {
+  const serialInput = getAdmissionSerialInput();
+  const serial = String(serialInput?.value || "").trim();
+  const admissionNo = serial ? `${getAdmissionNoPrefix()}${serial}` : "";
+  if (admissionForm?.elements?.admissionNo) admissionForm.elements.admissionNo.value = admissionNo;
+  return admissionNo;
+}
+
 function openAdmissionForm() {
   editingAdmissionNo = "";
   admissionForm.reset();
+  setAdmissionNumberInputs();
   setAdmissionFeeFieldsLocked(false);
   renderAdmissionClassOptions();
   renderAdmissionSectionOptions();
@@ -938,7 +981,7 @@ function openAdmissionForm() {
   renderAdmissionPhotoPreview();
   setAdmissionMonthGroups();
   admissionError.textContent = "";
-  admissionForm.elements.admissionNo.classList.remove("field-error");
+  getAdmissionSerialInput()?.classList.remove("field-error");
   admissionModal.setAttribute("aria-hidden", "false");
   document.body.classList.add("modal-open");
   setTimeout(() => admissionForm.elements.studentName.focus(), 0);
@@ -973,8 +1016,8 @@ function openStudentEditForm(admissionNo) {
   if (!student) return;
   editingAdmissionNo = student.admissionNo || "";
   admissionError.textContent = "";
-  admissionForm.elements.admissionNo.classList.remove("field-error");
-  admissionForm.elements.admissionNo.value = student.admissionNo || "";
+  getAdmissionSerialInput()?.classList.remove("field-error");
+  setAdmissionNumberInputs(student.admissionNo || "");
   admissionForm.elements.studentName.value = student.name || "";
   admissionForm.elements.dob.value = formatDateDDMMYYYY(student.dob || "");
   setSelectValue(admissionForm.elements.gender, student.gender || "");
@@ -8681,8 +8724,8 @@ document.getElementById("openAdmissionFromPage").addEventListener("click", () =>
 
 admissionForm.addEventListener("submit", event => {
   event.preventDefault();
+  const admissionNo = getAdmissionNumberFromForm();
   const data = new FormData(admissionForm);
-  const admissionNo = String(data.get("admissionNo") || "").trim();
   const studentName = String(data.get("studentName") || "").trim();
   const klass = String(data.get("klass") || "").trim();
   const section = String(data.get("section") || "").trim();
@@ -8692,13 +8735,13 @@ admissionForm.addEventListener("submit", event => {
   const duplicate = students.find(student => normalizeAdmissionNo(student.admissionNo) === normalizeAdmissionNo(admissionNo) && normalizeAdmissionNo(student.admissionNo) !== normalizeAdmissionNo(editingAdmissionNo));
 
   admissionError.textContent = "";
-  admissionForm.elements.admissionNo.classList.remove("field-error");
+  getAdmissionSerialInput()?.classList.remove("field-error");
 
   if (duplicate) {
     admissionError.textContent = `Admission No. ${admissionNo} already exists for ${duplicate.name}. Same admission number cannot be used again.`;
-    admissionForm.elements.admissionNo.classList.add("field-error");
-    admissionForm.elements.admissionNo.focus();
-    admissionForm.elements.admissionNo.select();
+    getAdmissionSerialInput()?.classList.add("field-error");
+    getAdmissionSerialInput()?.focus();
+    getAdmissionSerialInput()?.select();
     showToast("Duplicate admission number blocked.");
     return;
   }
@@ -8784,9 +8827,10 @@ admissionForm.addEventListener("submit", event => {
   showToast(`${studentName} ${editIndex >= 0 ? "updated" : "admission saved"}.`);
 });
 
-admissionForm.elements.admissionNo.addEventListener("input", () => {
+getAdmissionSerialInput()?.addEventListener("input", () => {
   admissionError.textContent = "";
-  admissionForm.elements.admissionNo.classList.remove("field-error");
+  getAdmissionSerialInput()?.classList.remove("field-error");
+  getAdmissionNumberFromForm();
 });
 
 ["feeMonths", "transportMonths", "dayBoardingMonths", "roboticsMonths", "othersMonths"].forEach(name => {

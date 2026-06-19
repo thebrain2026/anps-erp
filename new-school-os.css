@@ -6225,12 +6225,43 @@ body.modal-open {
   padding-top: 2px;
 }
 
-.admission-number-field > span {
+.admission-number-field > span:first-child {
   justify-self: start;
   margin-left: 0;
   padding: 0;
   color: #1f4d8f;
   line-height: 1.2;
+}
+
+.admission-number-combo {
+  display: grid;
+  grid-template-columns: max-content minmax(68px, 1fr);
+  align-items: center;
+  min-height: 38px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.admission-number-prefix {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  background: #edf6ff;
+  color: #0f3f6d;
+  font-weight: 800;
+  white-space: nowrap;
+  border-right: 1px solid #cbd5e1;
+}
+
+.admission-number-combo input {
+  border: 0;
+  border-radius: 0;
+  min-height: 36px;
+  padding: 8px 10px;
+  font-weight: 800;
 }
 
 .admission-number-field input {

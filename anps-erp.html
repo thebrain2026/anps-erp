@@ -2310,7 +2310,11 @@
             </span>
           </label>
           <label class="admission-number-field"><span>Admission No.</span>
-            <input name="admissionNo" placeholder="Enter admission no." required />
+            <input name="admissionNo" type="hidden" />
+            <span class="admission-number-combo">
+              <span class="admission-number-prefix" id="admissionNoPrefix">ANPS-ADM/26-27/</span>
+              <input name="admissionSerial" id="admissionNoSerial" inputmode="numeric" placeholder="001" required />
+            </span>
           </label>
           <label>Student Name
             <input name="studentName" placeholder="Enter full name" required />
