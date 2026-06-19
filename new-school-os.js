@@ -440,24 +440,12 @@ async function flushPendingBackendSnapshot() {
 }
 
 async function ensureBackendToken() {
-  if (localStorage.getItem(BACKEND_TOKEN_KEY)) return true;
-  if (localStorage.getItem(BACKEND_LOGGED_OUT_KEY) === "1") return false;
-  try {
-    const response = await fetch(backendApiUrl("/api/login"), {
-      method: "POST",
-      headers: {"Content-Type": "application/json"},
-      body: JSON.stringify({username: "admin", password: "admin123"})
-    });
-    if (!response.ok) return false;
-    const result = await response.json();
-    if (!result?.token) return false;
-    localStorage.setItem(BACKEND_TOKEN_KEY, result.token);
-    localStorage.removeItem(BACKEND_LOGGED_OUT_KEY);
-    if (result.user) localStorage.setItem(BACKEND_USER_KEY, JSON.stringify(result.user));
-    return true;
-  } catch (error) {
-    return false;
+  if (localStorage.getItem(BACKEND_TOKEN_KEY) && getLoggedInBackendUser()) return true;
+  if (localStorage.getItem(BACKEND_TOKEN_KEY) && !getLoggedInBackendUser()) {
+    localStorage.removeItem(BACKEND_TOKEN_KEY);
   }
+  if (localStorage.getItem(BACKEND_LOGGED_OUT_KEY) === "1") return false;
+  return false;
 }
 
 function queueBackendSave(snapshot = getAppStateSnapshot()) {
@@ -853,7 +841,7 @@ function getLoggedInBackendUser() {
 
 function getCurrentTopbarRole() {
   const user = getLoggedInBackendUser();
-  return user?.role_name || user?.role || "Admin";
+  return user?.role_name || user?.role || "Not Logged In";
 }
 
 function getCurrentCollectorRoleName() {
@@ -9944,7 +9932,11 @@ renderFeeBookStudentOptions();
 renderStudentFeeCounter();
 renderFeeBook();
 setTopbarNetworkStatus();
-initializeBackendSync();
+if (localStorage.getItem(BACKEND_TOKEN_KEY) && getLoggedInBackendUser()) {
+  initializeBackendSync();
+} else {
+  showLoginOverlay();
+}
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) pullBackendStateIfChanged(true);
 });
@@ -9954,6 +9946,4 @@ window.addEventListener("online", () => {
   initializeBackendSync();
 });
 window.addEventListener("offline", () => setTopbarNetworkStatus("offline"));
-if (localStorage.getItem(BACKEND_LOGGED_OUT_KEY) === "1") {
-  showLoginOverlay();
-}
+if (localStorage.getItem(BACKEND_LOGGED_OUT_KEY) === "1") showLoginOverlay();
