@@ -6288,6 +6288,15 @@ body.modal-open {
   font-weight: 800;
 }
 
+.admission-number-preview {
+  display: block;
+  min-height: 16px;
+  color: #0f766e;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
 .admission-number-field input {
   padding-top: 0;
 }

@@ -936,35 +936,46 @@ function getAdmissionNoPrefix() {
   return `ANPS-ADM/${getAdmissionNoSessionCode()}/`;
 }
 
+function getAdmissionNoPrefixFromFullNo(fullNo = "") {
+  const clean = String(fullNo || "").trim().replace(/\s*\/\s*/g, "/");
+  const match = clean.match(/^(ANPS-ADM\/[^/]+\/)/i);
+  return match ? match[1].toUpperCase() : "";
+}
+
 function getAdmissionSerialInput() {
   return admissionForm?.elements?.admissionSerial || document.getElementById("admissionNoSerial");
 }
 
 function getAdmissionSerialFromFullNo(fullNo = "") {
-  const clean = String(fullNo || "").trim();
-  const prefix = getAdmissionNoPrefix();
+  const clean = String(fullNo || "").trim().replace(/\s*\/\s*/g, "/");
+  const prefix = getAdmissionNoPrefixFromFullNo(clean) || getAdmissionNoPrefix();
   if (!clean) return "";
   if (clean.startsWith(prefix)) return clean.slice(prefix.length);
-  return clean.split("/").pop() || clean;
+  return (clean.split("/").pop() || clean).trim();
 }
 
 function setAdmissionNumberInputs(fullNo = "") {
-  const prefix = getAdmissionNoPrefix();
+  const prefix = getAdmissionNoPrefixFromFullNo(fullNo) || getAdmissionNoPrefix();
   const prefixNode = document.getElementById("admissionNoPrefix");
+  const previewNode = document.getElementById("admissionNoFullPreview");
   const serialInput = getAdmissionSerialInput();
   if (prefixNode) prefixNode.textContent = prefix;
   if (serialInput) serialInput.value = getAdmissionSerialFromFullNo(fullNo);
   if (admissionForm?.elements?.admissionNo) {
     const serial = serialInput ? String(serialInput.value || "").trim() : "";
     admissionForm.elements.admissionNo.value = serial ? `${prefix}${serial}` : "";
+    if (previewNode) previewNode.textContent = admissionForm.elements.admissionNo.value || prefix;
   }
 }
 
 function getAdmissionNumberFromForm() {
   const serialInput = getAdmissionSerialInput();
   const serial = String(serialInput?.value || "").trim();
-  const admissionNo = serial ? `${getAdmissionNoPrefix()}${serial}` : "";
+  const prefix = document.getElementById("admissionNoPrefix")?.textContent || getAdmissionNoPrefix();
+  const admissionNo = serial ? `${prefix}${serial}` : "";
   if (admissionForm?.elements?.admissionNo) admissionForm.elements.admissionNo.value = admissionNo;
+  const previewNode = document.getElementById("admissionNoFullPreview");
+  if (previewNode) previewNode.textContent = admissionNo || prefix;
   return admissionNo;
 }
 
@@ -1544,26 +1555,27 @@ function renderStudents() {
   document.getElementById("studentTable").innerHTML = filtered.map(student => `
     ${(() => {
       const classInfo = splitStudentClassSection(student.klass || "");
+      const admissionAttr = escapeHtml(student.admissionNo || "");
       return `
     <tr>
-      <td>${student.admissionNo || "-"}</td>
-      <td><button class="student-name-link" type="button" data-open-admission-preview="${student.admissionNo || ""}"><strong>${student.name}</strong></button></td>
+      <td>${escapeHtml(student.admissionNo || "-")}</td>
+      <td><button class="student-name-link" type="button" data-open-admission-preview="${admissionAttr}"><strong>${escapeHtml(student.name || "-")}</strong></button></td>
       <td>${escapeHtml(classInfo.klass || "-")}</td>
       <td>${escapeHtml(classInfo.section || "-")}</td>
-      <td>${student.guardian || "-"}</td>
-      <td>${student.mobile || "-"}</td>
+      <td>${escapeHtml(student.guardian || "-")}</td>
+      <td>${escapeHtml(student.mobile || "-")}</td>
       <td>
         <div class="row-actions">
-          <button class="icon-action edit" type="button" data-edit-student="${student.admissionNo || ""}" title="Edit student" aria-label="Edit ${student.name}">
+          <button class="icon-action edit" type="button" data-edit-student="${admissionAttr}" title="Edit student" aria-label="Edit ${escapeHtml(student.name || "student")}">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4.7L19.3 9.4a2.1 2.1 0 0 0 0-3L17.6 4.7a2.1 2.1 0 0 0-3 0L4 15.3V20Zm3.8-2H6v-1.8l8.5-8.5 1.8 1.8L7.8 18Zm7.9-11.5.4-.4 1.8 1.8-.4.4-1.8-1.8Z"/></svg>
           </button>
-          <button class="icon-action fees" type="button" data-open-fee-book="${student.admissionNo || ""}" title="Open fee book" aria-label="Open fee book for ${student.name}">
+          <button class="icon-action fees" type="button" data-open-fee-book="${admissionAttr}" title="Open fee book" aria-label="Open fee book for ${escapeHtml(student.name || "student")}">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5C4 5.1 5.1 4 6.5 4h11C18.9 4 20 5.1 20 6.5v11c0 1.4-1.1 2.5-2.5 2.5h-11C5.1 20 4 18.9 4 17.5v-11ZM6.5 6a.5.5 0 0 0-.5.5V8h12V6.5a.5.5 0 0 0-.5-.5h-11ZM6 10v7.5c0 .3.2.5.5.5h11c.3 0 .5-.2.5-.5V10H6Zm6.8 6.7h-1.6v-1.1c-1-.2-1.8-.8-2.2-1.6l1.5-.8c.3.5.8.8 1.6.8.7 0 1-.2 1-.6s-.4-.5-1.4-.8c-1.4-.4-2.4-.9-2.4-2.2 0-1.1.8-1.9 1.9-2.1V7.3h1.6v1c.8.2 1.5.7 1.9 1.5l-1.4.8c-.3-.5-.7-.7-1.2-.7-.6 0-.9.2-.9.5 0 .4.4.5 1.4.8 1.4.4 2.4.9 2.4 2.2 0 1.2-.8 2-2.2 2.2v1.1Z"/></svg>
           </button>
-          <button class="icon-action disable" type="button" data-disable-student="${student.admissionNo || ""}" title="Disable student" aria-label="Disable ${student.name}">
+          <button class="icon-action disable" type="button" data-disable-student="${admissionAttr}" title="Disable student" aria-label="Disable ${escapeHtml(student.name || "student")}">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20Zm0 2c1.9 0 3.6.7 4.9 1.8L5.8 16.9A8 8 0 0 1 12 4Zm0 16c-1.9 0-3.6-.7-4.9-1.8L18.2 7.1A8 8 0 0 1 12 20Z"/></svg>
           </button>
-          <button class="icon-action delete" type="button" data-delete-student="${student.admissionNo || ""}" title="Delete student" aria-label="Delete ${student.name}">
+          <button class="icon-action delete" type="button" data-delete-student="${admissionAttr}" title="Delete student" aria-label="Delete ${escapeHtml(student.name || "student")}">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 21c-.6 0-1.1-.2-1.5-.6S5 19.5 5 19V8H4V6h5V4h6v2h5v2h-1v11c0 .6-.2 1.1-.6 1.5s-.9.6-1.5.6H7ZM17 8H7v11h10V8Zm-8 9h2v-7H9v7Zm4 0h2v-7h-2v7Z"/></svg>
           </button>
         </div>
@@ -7528,6 +7540,7 @@ admissionForm.elements.studentType.addEventListener("change", event => {
   updateAdmissionTransportFee();
 });
 
+getAdmissionSerialInput()?.addEventListener("input", getAdmissionNumberFromForm);
 admissionForm.elements.villageTown.addEventListener("change", updateAdmissionTransportFee);
 admissionForm.elements.specialTransportFee.addEventListener("input", updateAdmissionTransportFee);
 
