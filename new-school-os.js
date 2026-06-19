@@ -986,6 +986,24 @@ function getAdmissionNumberFromForm() {
   return admissionNo;
 }
 
+function syncLocalGuardianFromParent(source = "") {
+  const sourceInputs = [...admissionForm.querySelectorAll("[name='localGuardianSame']")];
+  sourceInputs.forEach(input => {
+    input.checked = input.value === source && input.checked;
+  });
+  const selected = sourceInputs.find(input => input.checked)?.value || "";
+  if (selected === "Father") {
+    admissionForm.elements.guardianName.value = admissionForm.elements.fatherName.value || "";
+    admissionForm.elements.mobile.value = admissionForm.elements.fatherMobile.value || "";
+    admissionForm.elements.email.value = admissionForm.elements.fatherEmail.value || "";
+  }
+  if (selected === "Mother") {
+    admissionForm.elements.guardianName.value = admissionForm.elements.motherName.value || "";
+    admissionForm.elements.mobile.value = admissionForm.elements.motherMobile.value || "";
+    admissionForm.elements.email.value = admissionForm.elements.motherEmail.value || "";
+  }
+}
+
 function openAdmissionForm() {
   editingAdmissionNo = "";
   admissionForm.reset();
@@ -1048,12 +1066,12 @@ function openStudentEditForm(admissionNo) {
   setSelectValue(admissionForm.elements.section, section || "");
   setSelectValue(admissionForm.elements.studentType, student.studentType || "New Student");
   setSelectValue(admissionForm.elements.bloodGroup, student.bloodGroup || "");
-  admissionForm.elements.nationality.value = student.nationality || "";
-  admissionForm.elements.religion.value = student.religion || "";
-  admissionForm.elements.motherTongue.value = student.motherTongue || "";
+  setSelectValue(admissionForm.elements.nationality, student.nationality || "India");
+  setSelectValue(admissionForm.elements.religion, student.religion || "");
+  setSelectValue(admissionForm.elements.motherTongue, student.motherTongue || "");
   setSelectValue(admissionForm.elements.villageTown, student.villageTown || "");
   admissionForm.elements.fatherName.value = student.fatherName || "";
-  admissionForm.elements.fatherOccupation.value = student.fatherOccupation || "";
+  setSelectValue(admissionForm.elements.fatherOccupation, student.fatherOccupation || "");
   admissionForm.elements.fatherQualification.value = student.fatherQualification || "";
   setSelectValue(admissionForm.elements.fatherWorkType, student.fatherWorkType || "");
   admissionForm.elements.fatherAnnualIncome.value = student.fatherAnnualIncome || "";
@@ -1065,12 +1083,13 @@ function openStudentEditForm(admissionNo) {
   setSelectValue(admissionForm.elements.motherWorkType, student.motherWorkType || "");
   admissionForm.elements.motherAnnualIncome.value = student.motherAnnualIncome || "";
   admissionForm.elements.motherMobile.value = student.motherMobile || "";
+  admissionForm.elements.motherEmail.value = student.motherEmail || "";
   admissionForm.elements.guardianName.value = student.guardian || "";
   admissionForm.elements.mobile.value = student.mobile || "";
   admissionForm.elements.email.value = student.email || "";
-  setSelectValue(admissionForm.elements.route, student.route || "Self");
+  admissionForm.elements.route.value = student.route || "Self";
   admissionForm.elements.transportRequired.checked = Boolean(student.transportRequired);
-  setSelectValue(admissionForm.elements.fee, student.fee || "Due");
+  admissionForm.elements.fee.value = student.fee || "Due";
   admissionForm.elements.address.value = student.address || "";
   admissionForm.elements.medicalConditions.value = student.medicalConditions || "";
   admissionForm.elements.allergies.value = student.allergies || "";
@@ -7594,6 +7613,19 @@ admissionForm.elements.studentType.addEventListener("change", event => {
 });
 
 getAdmissionSerialInput()?.addEventListener("input", getAdmissionNumberFromForm);
+admissionForm.querySelectorAll("[name='localGuardianSame']").forEach(input => {
+  input.addEventListener("change", event => syncLocalGuardianFromParent(event.target.checked ? event.target.value : ""));
+});
+["fatherName", "fatherMobile", "fatherEmail"].forEach(name => {
+  admissionForm.elements[name]?.addEventListener("input", () => {
+    if (admissionForm.querySelector("[name='localGuardianSame'][value='Father']")?.checked) syncLocalGuardianFromParent("Father");
+  });
+});
+["motherName", "motherMobile", "motherEmail"].forEach(name => {
+  admissionForm.elements[name]?.addEventListener("input", () => {
+    if (admissionForm.querySelector("[name='localGuardianSame'][value='Mother']")?.checked) syncLocalGuardianFromParent("Mother");
+  });
+});
 admissionForm.elements.villageTown.addEventListener("change", updateAdmissionTransportFee);
 admissionForm.elements.specialTransportFee.addEventListener("input", updateAdmissionTransportFee);
 
@@ -8870,6 +8902,7 @@ admissionForm.addEventListener("submit", event => {
     motherWorkType: String(data.get("motherWorkType") || "").trim(),
     motherAnnualIncome: Number(data.get("motherAnnualIncome") || 0),
     motherMobile: String(data.get("motherMobile") || "").trim(),
+    motherEmail: String(data.get("motherEmail") || "").trim(),
     email: String(data.get("email") || "").trim(),
     address: String(data.get("address") || "").trim(),
     medicalConditions: String(data.get("medicalConditions") || "").trim(),

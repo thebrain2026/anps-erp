@@ -2390,13 +2390,24 @@
             </select>
           </label>
           <label>Nationality
-            <input name="nationality" placeholder="Nationality" />
+            <select name="nationality">
+              <option>India</option>
+            </select>
           </label>
           <label>Religion
-            <input name="religion" placeholder="Religion" />
+            <select name="religion">
+              <option value="">Select</option>
+              <option>Hinduism</option>
+              <option>Islam</option>
+              <option>Christianity</option>
+            </select>
           </label>
           <label>Mother Tongue
-            <input name="motherTongue" placeholder="Mother tongue" />
+            <select name="motherTongue">
+              <option value="">Select</option>
+              <option>Bengali</option>
+              <option>Hindi</option>
+            </select>
           </label>
           <label>Village/Town
             <select name="villageTown" required>
@@ -2411,7 +2422,12 @@
             <input name="fatherName" placeholder="Enter father's name" required />
           </label>
           <label>Father's Occupation
-            <input name="fatherOccupation" placeholder="Occupation" />
+            <select name="fatherOccupation">
+              <option value="">Select</option>
+              <option>Government</option>
+              <option>Private</option>
+              <option>Business</option>
+            </select>
           </label>
           <label>Father's Academic Qualification
             <input name="fatherQualification" placeholder="Highest qualification" />
@@ -2456,10 +2472,18 @@
           <label>Mother's Mobile Number
             <input name="motherMobile" inputmode="tel" placeholder="10 digit mobile" required />
           </label>
+          <label>Mother's Email Address
+            <input name="motherEmail" type="email" placeholder="mother@email.com" />
+          </label>
         </fieldset>
 
         <fieldset>
           <legend>Local Guardian & Contact</legend>
+          <div class="service-checks wide">
+            <span>Same as</span>
+            <label><input type="checkbox" name="localGuardianSame" value="Father" /> Father</label>
+            <label><input type="checkbox" name="localGuardianSame" value="Mother" /> Mother</label>
+          </div>
           <label>Guardian Name
             <input name="guardianName" placeholder="Parent or guardian" required />
           </label>
@@ -2469,23 +2493,9 @@
           <label>Email
             <input name="email" type="email" placeholder="optional@email.com" />
           </label>
-          <label>Transport Route
-            <select name="route">
-              <option>Self</option>
-              <option>Route A</option>
-              <option>Route B</option>
-              <option>Route C</option>
-            </select>
-          </label>
-          <label class="check-field">Transport
-            <input name="transportRequired" type="checkbox" value="Yes" />
-          </label>
-          <label>Opening Fee Status
-            <select name="fee">
-              <option>Due</option>
-              <option>Paid</option>
-            </select>
-          </label>
+          <input name="route" type="hidden" value="Self" />
+          <input name="transportRequired" type="checkbox" value="Yes" hidden />
+          <input name="fee" type="hidden" value="Due" />
           <label class="wide">Address
             <textarea name="address" rows="3" placeholder="House, area, city"></textarea>
           </label>
