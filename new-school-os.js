@@ -2903,10 +2903,11 @@ function renderStaffDetails() {
   if (!rows) return;
   rows.innerHTML = staffMembers.map(staff => `
     <tr>
+      <td><strong>${escapeHtml(staff.staffId || "-")}</strong></td>
       <td>
         <div class="staff-table-profile">
           <span class="staff-table-photo">${staff.photo ? `<img src="${staff.photo}" alt="${escapeHtml(staff.name || "Staff")} photo" />` : escapeHtml((staff.name || "ST").split(/\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase() || "ST")}</span>
-          <span><strong>${escapeHtml(staff.name)}</strong><br><small>${escapeHtml(staff.staffId)}</small><br><small>${escapeHtml(staff.address || "-")}</small></span>
+          <span><strong>${escapeHtml(staff.name || "-")}</strong><br><small>${escapeHtml(staff.address || "-")}</small></span>
         </div>
       </td>
       <td>${escapeHtml(staff.role || "-")}</td>
@@ -2930,7 +2931,7 @@ function renderStaffDetails() {
         </div>
       </td>
     </tr>
-  `).join("") || `<tr><td colspan="9">No staff details entered yet.</td></tr>`;
+  `).join("") || `<tr><td colspan="10">No staff details entered yet.</td></tr>`;
   if (summary) summary.textContent = `${staffMembers.length} staff saved`;
 }
 

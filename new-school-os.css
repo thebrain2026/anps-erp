@@ -3816,6 +3816,11 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   align-items: center;
 }
 
+.staff-details-table td:first-child,
+.staff-details-table th:first-child {
+  white-space: nowrap;
+}
+
 .staff-table-photo {
   display: grid;
   place-items: center;
