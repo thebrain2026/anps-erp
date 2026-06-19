@@ -840,6 +840,21 @@ function setTopbarSaveStatus(status = "saved") {
   button.classList.toggle("saving", isSaving);
 }
 
+function setTopbarNetworkStatus(status = navigator.onLine ? "checking" : "offline") {
+  const node = document.getElementById("topbarNetworkStatus");
+  if (!node) return;
+  const label = node.querySelector("strong");
+  node.classList.toggle("online", status === "online");
+  node.classList.toggle("offline", status === "offline");
+  node.classList.toggle("checking", status === "checking");
+  if (label) label.textContent = status === "online" ? "Online" : status === "checking" ? "Checking" : "Offline";
+  node.title = status === "online"
+    ? "Software is online and connected to server."
+    : status === "checking"
+      ? "Checking server connection..."
+      : "Software is offline or server connection is unavailable.";
+}
+
 function updateTopbarSystemStatus() {
   const role = document.getElementById("topbarCurrentRole");
   const alerts = document.getElementById("topbarAlerts");
@@ -7044,10 +7059,12 @@ function isBackendAutoSyncPaused() {
 async function pullBackendStateIfChanged(showMessage = false) {
   if (!backendSyncReady || isBackendAutoSyncPaused()) return;
   try {
+    setTopbarNetworkStatus(navigator.onLine ? "checking" : "offline");
     const hasToken = await ensureBackendToken();
     if (!hasToken) return;
     const healthResponse = await fetch(backendApiUrl(`/api/health?v=${Date.now()}`), {cache: "no-store"});
     if (!healthResponse.ok) return;
+    setTopbarNetworkStatus("online");
     const health = await healthResponse.json();
     const serverUpdatedAt = health?.updated_at || "";
     if (serverUpdatedAt && backendLastUpdatedAt && serverUpdatedAt === backendLastUpdatedAt) return;
@@ -7066,6 +7083,7 @@ async function pullBackendStateIfChanged(showMessage = false) {
     refreshAllAfterSecurityClean();
     if (showMessage) showToast("Latest database data synced.");
   } catch (error) {
+    setTopbarNetworkStatus("offline");
     console.warn("Backend auto-sync skipped.", error);
   } finally {
     backendHydrating = false;
@@ -7079,8 +7097,10 @@ function startBackendAutoSync() {
 
 async function initializeBackendSync() {
   try {
+    setTopbarNetworkStatus(navigator.onLine ? "checking" : "offline");
     const healthResponse = await fetch(backendApiUrl("/api/health"), {cache: "no-store"});
     if (!healthResponse.ok) return;
+    setTopbarNetworkStatus("online");
     const hasToken = await ensureBackendToken();
     if (!hasToken) return;
     const stateResponse = await fetch(backendApiUrl(`/api/state?v=${Date.now()}`), {
@@ -7104,6 +7124,7 @@ async function initializeBackendSync() {
     }
     startBackendAutoSync();
   } catch (error) {
+    setTopbarNetworkStatus("offline");
     backendSyncReady = false;
   } finally {
     backendHydrating = false;
@@ -9867,11 +9888,17 @@ renderDisabledStudents();
 renderFeeBookStudentOptions();
 renderStudentFeeCounter();
 renderFeeBook();
+setTopbarNetworkStatus();
 initializeBackendSync();
 document.addEventListener("visibilitychange", () => {
   if (!document.hidden) pullBackendStateIfChanged(true);
 });
 window.addEventListener("focus", () => pullBackendStateIfChanged(true));
+window.addEventListener("online", () => {
+  setTopbarNetworkStatus("checking");
+  initializeBackendSync();
+});
+window.addEventListener("offline", () => setTopbarNetworkStatus("offline"));
 if (localStorage.getItem(BACKEND_LOGGED_OUT_KEY) === "1") {
   showLoginOverlay();
 }
