@@ -7038,8 +7038,7 @@ function isBackendAutoSyncPaused() {
   if (backendHydrating || document.hidden) return true;
   if (document.body.classList.contains("modal-open")) return true;
   if (Date.now() - backendLastLocalSaveAt < 3000) return true;
-  const active = document.activeElement;
-  return !!(active && active.closest && active.closest("form"));
+  return false;
 }
 
 async function pullBackendStateIfChanged(showMessage = false) {
