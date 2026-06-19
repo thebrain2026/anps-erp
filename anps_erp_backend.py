@@ -85,6 +85,29 @@ def load_api_token():
 
 
 SERVER_TOKEN = load_api_token()
+SESSION_TOKENS = {}
+
+
+def create_session_token(user):
+    token = secrets.token_urlsafe(32)
+    SESSION_TOKENS[token] = {
+        "user": dict(user or {}),
+        "created_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+    }
+    return token
+
+
+def get_session_user(token):
+    if token in SESSION_TOKENS:
+        return SESSION_TOKENS[token].get("user") or {}
+    if token and hmac.compare_digest(token, SERVER_TOKEN):
+        return {"username": "system", "full_name": "System", "role_name": "Administrator"}
+    return None
+
+
+def remove_session_token(token):
+    if token in SESSION_TOKENS:
+        del SESSION_TOKENS[token]
 
 
 def connect():
@@ -1874,7 +1897,7 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             return False
         header = self.headers.get("Authorization", "")
         token = header.replace("Bearer ", "", 1).strip()
-        if hmac.compare_digest(token, SERVER_TOKEN):
+        if get_session_user(token):
             return True
         self.json_response({"ok": False, "error": "Unauthorized"}, status=401)
         return False
@@ -1921,7 +1944,8 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
         if path == "/api/session":
             if not self.authorized():
                 return
-            return self.json_response({"ok": True, "user": {"role_name": "Administrator"}})
+            token = self.headers.get("Authorization", "").replace("Bearer ", "", 1).strip()
+            return self.json_response({"ok": True, "user": get_session_user(token) or {}})
         if path == "/api/module/students":
             if not self.authorized():
                 return
@@ -2013,6 +2037,8 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
         if path == "/api/reset-data":
             return self.json_response(reset_live_data())
         if path == "/api/logout":
+            token = self.headers.get("Authorization", "").replace("Bearer ", "", 1).strip()
+            remove_session_token(token)
             return self.json_response({"ok": True})
         self.save_state_request()
 
@@ -2051,7 +2077,7 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             if not user:
                 return self.json_response({"ok": False, "error": "Invalid login"}, status=401)
             record_audit("Login", "user", user.get("username") or "", user.get("username") or "", user.get("role_name") or "")
-            self.json_response({"ok": True, "token": SERVER_TOKEN, "user": user})
+            self.json_response({"ok": True, "token": create_session_token(user), "user": user})
         except Exception as exc:
             self.json_response({"ok": False, "error": str(exc)}, status=400)
 

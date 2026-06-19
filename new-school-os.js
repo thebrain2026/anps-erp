@@ -440,7 +440,27 @@ async function flushPendingBackendSnapshot() {
 }
 
 async function ensureBackendToken() {
-  if (localStorage.getItem(BACKEND_TOKEN_KEY) && getLoggedInBackendUser()) return true;
+  if (localStorage.getItem(BACKEND_TOKEN_KEY) && getLoggedInBackendUser()) {
+    try {
+      const response = await fetch(backendApiUrl(`/api/session?v=${Date.now()}`), {
+        cache: "no-store",
+        headers: backendHeaders()
+      });
+      if (response.ok) {
+        const payload = await response.json().catch(() => ({}));
+        if (payload?.user) localStorage.setItem(BACKEND_USER_KEY, JSON.stringify(payload.user));
+        return true;
+      }
+      if (response.status === 401) {
+        localStorage.removeItem(BACKEND_TOKEN_KEY);
+        localStorage.removeItem(BACKEND_USER_KEY);
+        showLoginOverlay();
+        return false;
+      }
+    } catch (error) {
+      return true;
+    }
+  }
   if (localStorage.getItem(BACKEND_TOKEN_KEY) && !getLoggedInBackendUser()) {
     localStorage.removeItem(BACKEND_TOKEN_KEY);
   }
