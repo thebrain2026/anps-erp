@@ -1344,17 +1344,16 @@ function getAdmissionStudentTypeOptions() {
   const sessionTypes = [...new Set((financeSessions[activeSession]?.feeMaster || [])
     .map(item => item.studentType)
     .filter(Boolean))];
-  if (sessionTypes.length) return sessionTypes;
   const feeMasterTypes = [...feeMasterForm.elements.studentType.options]
     .map(option => option.value || option.textContent)
     .filter(Boolean);
-  return feeMasterTypes.length ? feeMasterTypes : DEFAULT_STUDENT_TYPES;
+  return [...new Set([...DEFAULT_STUDENT_TYPES, ...feeMasterTypes, ...sessionTypes])];
 }
 
 function renderAdmissionStudentTypeOptions(selectedValue = admissionForm.elements.studentType?.value || "New Student") {
-  const types = getAdmissionStudentTypeOptions();
-  admissionForm.elements.studentType.innerHTML = types.map(type => `<option>${type}</option>`).join("");
-  if (selectedValue) setSelectValue(admissionForm.elements.studentType, selectedValue);
+  const types = [...new Set([...getAdmissionStudentTypeOptions(), selectedValue].filter(Boolean))];
+  admissionForm.elements.studentType.innerHTML = types.map(type => `<option>${escapeHtml(type)}</option>`).join("");
+  setSelectValue(admissionForm.elements.studentType, selectedValue || "New Student");
 }
 
 function renderAdmissionVillageTownOptions(selectedValue = admissionForm.elements.villageTown?.value || "") {
