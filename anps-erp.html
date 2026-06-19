@@ -11,7 +11,7 @@
       location.replace("http://127.0.0.1:4174/anps-erp.html#dashboard");
     }
   </script>
-  <link rel="stylesheet" href="./new-school-os.css?v=20260619-role-login-fix" />
+  <link rel="stylesheet" href="./new-school-os.css?v=20260619-pickup-search" />
 </head>
 <body>
   <div class="shell">
@@ -2168,6 +2168,11 @@
             <strong id="transportVillageCount">0 villages</strong>
             <span>Village name box-e click kore edit korun. Alfred Nobel School theke Google Maps distance note korun.</span>
           </div>
+          <div class="transport-village-search">
+            <label>Search Village
+              <input id="transportVillageSearch" type="search" placeholder="Village name search..." autocomplete="off" />
+            </label>
+          </div>
           <div class="table-wrap transport-village-table">
             <table>
               <thead><tr><th>Village Name</th><th>Distance</th><th>New Fee</th><th>Promoted Fee</th><th>Special Fee</th><th>Map</th><th></th></tr></thead>
@@ -2773,6 +2778,6 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="./new-school-os.js?v=20260619-role-login-fix"></script>
+  <script src="./new-school-os.js?v=20260619-pickup-search"></script>
 </body>
 </html>

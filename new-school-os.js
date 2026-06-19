@@ -5373,8 +5373,12 @@ function renderTransportVillages() {
   const count = document.getElementById("transportVillageCount");
   if (!rows) return;
   dedupeTransportVillages();
+  const searchTerm = normalizeVillageName(document.getElementById("transportVillageSearch")?.value || "");
   const sortedVillages = transportVillages.slice().sort((first, second) => first.localeCompare(second, "en", {sensitivity: "base"}));
-  rows.innerHTML = sortedVillages.map(village => {
+  const visibleVillages = searchTerm
+    ? sortedVillages.filter(village => normalizeVillageName(village).includes(searchTerm))
+    : sortedVillages;
+  rows.innerHTML = visibleVillages.map(village => {
     const distance = transportVillageDistances[village] || "";
     const fees = transportVillageFees[village] || {};
     return `
@@ -5399,8 +5403,10 @@ function renderTransportVillages() {
         </td>
       </tr>
     `;
-  }).join("");
-  if (count) count.textContent = `${transportVillages.length} villages`;
+  }).join("") || `<tr><td colspan="7">No village matched your search.</td></tr>`;
+  if (count) count.textContent = searchTerm
+    ? `${visibleVillages.length} of ${transportVillages.length} villages`
+    : `${transportVillages.length} villages`;
   renderRoutePickupOptions();
 }
 
@@ -8391,6 +8397,8 @@ if (designationForm) {
 document.getElementById("showDepartmentSetupBtn")?.addEventListener("click", () => setHrSetupPanel("departmentSetupPanel"));
 document.getElementById("showRoleSetupBtn")?.addEventListener("click", () => setHrSetupPanel("roleSetupPanel"));
 document.getElementById("showDesignationSetupBtn")?.addEventListener("click", () => setHrSetupPanel("designationSetupPanel"));
+
+document.getElementById("transportVillageSearch")?.addEventListener("input", renderTransportVillages);
 
 if (transportVillageForm) {
   transportVillageForm.addEventListener("submit", event => {

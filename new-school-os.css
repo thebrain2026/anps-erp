@@ -1516,6 +1516,39 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   font-size: .86rem;
 }
 
+.transport-village-search {
+  display: flex;
+  justify-content: flex-end;
+  margin: -2px 0 10px;
+}
+
+.transport-village-search label {
+  display: grid;
+  gap: 5px;
+  width: min(320px, 100%);
+  color: #173761;
+  font-size: .74rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.transport-village-search input {
+  min-height: 38px;
+  padding: 0 12px;
+  border: 1px solid #b8d5ee;
+  border-radius: 8px;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: .92rem;
+  font-weight: 800;
+  box-shadow: inset 0 1px 0 rgba(20, 121, 139, .05);
+}
+
+.transport-village-search input:focus {
+  border-color: #14798b;
+  outline: 3px solid rgba(20, 121, 139, .14);
+}
+
 .transport-village-table td {
   padding-top: 9px;
   padding-bottom: 9px;
