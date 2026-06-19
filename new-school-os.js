@@ -81,6 +81,7 @@ const PRODUCTION_CLEAN_VERSION = "2026-06-18-v2";
 const BACKEND_TOKEN_KEY = "school_api_token";
 const BACKEND_USER_KEY = "school_api_user";
 const BACKEND_LOGGED_OUT_KEY = "school_api_logged_out";
+const BACKEND_PENDING_STATE_KEY = "school_api_pending_state";
 const BACKEND_API_BASE = (
   document.querySelector('meta[name="school-api-base"]')?.content ||
   localStorage.getItem("school_api_base") ||
@@ -429,6 +430,50 @@ function backendHeaders(extra = {}) {
   return token ? {...extra, Authorization: `Bearer ${token}`} : extra;
 }
 
+function storePendingBackendSnapshot(snapshot = getAppStateSnapshot()) {
+  try {
+    localStorage.setItem(BACKEND_PENDING_STATE_KEY, JSON.stringify({
+      savedAt: new Date().toISOString(),
+      state: snapshot
+    }));
+  } catch (error) {
+    console.warn("Could not store pending backend snapshot.", error);
+  }
+}
+
+async function flushPendingBackendSnapshot() {
+  const raw = localStorage.getItem(BACKEND_PENDING_STATE_KEY);
+  if (!raw) return false;
+  try {
+    const pending = JSON.parse(raw);
+    const snapshot = pending?.state;
+    if (!snapshot || typeof snapshot !== "object") {
+      localStorage.removeItem(BACKEND_PENDING_STATE_KEY);
+      return false;
+    }
+    const hasToken = await ensureBackendToken();
+    if (!hasToken) return false;
+    setTopbarSaveStatus("saving");
+    const response = await fetch(backendApiUrl("/api/state"), {
+      method: "PUT",
+      headers: backendHeaders({"Content-Type": "application/json"}),
+      body: JSON.stringify({state: snapshot})
+    });
+    if (!response.ok) throw new Error(`Pending backend save failed ${response.status}`);
+    const result = await response.json().catch(() => ({}));
+    if (result?.updated_at) backendLastUpdatedAt = result.updated_at;
+    backendLastLocalSaveAt = Date.now();
+    localStorage.removeItem(BACKEND_PENDING_STATE_KEY);
+    setTopbarSaveStatus("saved");
+    setTopbarNetworkStatus("online");
+    return true;
+  } catch (error) {
+    setTopbarNetworkStatus("offline");
+    console.warn("Pending backend save still waiting.", error);
+    return false;
+  }
+}
+
 async function ensureBackendToken() {
   if (localStorage.getItem(BACKEND_TOKEN_KEY)) return true;
   if (localStorage.getItem(BACKEND_LOGGED_OUT_KEY) === "1") return false;
@@ -451,13 +496,19 @@ async function ensureBackendToken() {
 }
 
 function queueBackendSave(snapshot = getAppStateSnapshot()) {
-  if (!backendSyncReady || backendHydrating) return;
+  if (backendHydrating) return;
+  if (!backendSyncReady) {
+    storePendingBackendSnapshot(snapshot);
+    setTopbarNetworkStatus("offline");
+    return;
+  }
   clearTimeout(backendSaveTimer);
   backendSaveTimer = setTimeout(async () => {
     try {
       setTopbarSaveStatus("saving");
       const hasToken = await ensureBackendToken();
       if (!hasToken) {
+        storePendingBackendSnapshot(snapshot);
         setTopbarSaveStatus("saved");
         return;
       }
@@ -470,8 +521,11 @@ function queueBackendSave(snapshot = getAppStateSnapshot()) {
       const result = await response.json().catch(() => ({}));
       if (result?.updated_at) backendLastUpdatedAt = result.updated_at;
       backendLastLocalSaveAt = Date.now();
+      localStorage.removeItem(BACKEND_PENDING_STATE_KEY);
       setTopbarSaveStatus("saved");
     } catch (error) {
+      storePendingBackendSnapshot(snapshot);
+      setTopbarNetworkStatus("offline");
       console.warn("Backend sync pending.", error);
       setTopbarSaveStatus("saved");
     }
@@ -7103,6 +7157,7 @@ async function initializeBackendSync() {
     setTopbarNetworkStatus("online");
     const hasToken = await ensureBackendToken();
     if (!hasToken) return;
+    const flushedPending = await flushPendingBackendSnapshot();
     const stateResponse = await fetch(backendApiUrl(`/api/state?v=${Date.now()}`), {
       cache: "no-store",
       headers: backendHeaders()
@@ -7112,14 +7167,14 @@ async function initializeBackendSync() {
     const backendState = payload?.state || {};
     backendLastUpdatedAt = payload?.updated_at || "";
     backendSyncReady = true;
-    if (backendState && Object.keys(backendState).length) {
+    if (!flushedPending && backendState && Object.keys(backendState).length) {
       backendHydrating = true;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(backendState));
       applySavedState(backendState);
       refreshAllAfterSecurityClean();
       backendHydrating = false;
       showToast("Backend database connected.");
-    } else {
+    } else if (!backendState || !Object.keys(backendState).length) {
       queueBackendSave(getAppStateSnapshot());
     }
     startBackendAutoSync();
