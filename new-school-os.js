@@ -246,7 +246,7 @@ const titleMap = {
   designation: "Designation",
   disabledStaff: "Disabled Staff",
   noticeBoard: "Notice Board",
-  sendSms: "Send SMS",
+  sendSms: "WhatsApp Message",
   addHomework: "Add Homework",
   dailyAssignment: "Daily Assignment",
   reportStudentInformation: "Student Information Report",
@@ -9299,8 +9299,39 @@ document.getElementById("bulkDeletePreview").addEventListener("click", () => {
   showToast("Bulk delete preview generated.");
 });
 
-document.getElementById("sendSmsButton").addEventListener("click", () => {
-  showToast("SMS campaign queued.");
+document.getElementById("sendSmsButton").addEventListener("click", async () => {
+  const statusBox = document.getElementById("whatsappStatusBox");
+  const payload = {
+    to: document.getElementById("whatsappRecipient")?.value || "",
+    template: document.getElementById("whatsappTemplateName")?.value || "",
+    language: document.getElementById("whatsappLanguageCode")?.value || "en_US",
+    variables: document.getElementById("whatsappTemplateVariables")?.value || ""
+  };
+  if (!payload.to || !payload.template) {
+    showToast("Guardian mobile and template name required.");
+    return;
+  }
+  try {
+    if (statusBox) statusBox.textContent = "Sending WhatsApp message...";
+    const response = await fetch(backendApiUrl("/api/whatsapp/send"), {
+      method: "POST",
+      headers: backendHeaders({"Content-Type": "application/json"}),
+      body: JSON.stringify(payload)
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) {
+      const message = result.error || "WhatsApp message failed.";
+      if (statusBox) statusBox.textContent = message;
+      showToast("WhatsApp message failed.");
+      return;
+    }
+    const messageId = result.result?.messages?.[0]?.id || "sent";
+    if (statusBox) statusBox.textContent = `WhatsApp sent successfully. Message ID: ${messageId}`;
+    showToast("WhatsApp message sent.");
+  } catch (error) {
+    if (statusBox) statusBox.textContent = "WhatsApp send failed. Please check backend connection.";
+    showToast("WhatsApp send failed.");
+  }
 });
 
 document.getElementById("saveHomeworkButton").addEventListener("click", () => {

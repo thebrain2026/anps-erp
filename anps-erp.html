@@ -11,7 +11,7 @@
       location.replace("http://127.0.0.1:4174/anps-erp.html#dashboard");
     }
   </script>
-  <link rel="stylesheet" href="./new-school-os.css?v=20260619-backup-label" />
+  <link rel="stylesheet" href="./new-school-os.css?v=20260620-whatsapp-cloud" />
 </head>
 <body>
   <div class="shell">
@@ -78,7 +78,7 @@
           <button class="nav-group-title" id="communicationToggle" type="button" aria-expanded="false">Communication</button>
           <div class="nav-sub">
             <button data-view="noticeBoard" type="button">Notice Board</button>
-            <button data-view="sendSms" type="button">Send SMS</button>
+            <button data-view="sendSms" type="button">WhatsApp Message</button>
           </div>
         </div>
         <div class="nav-group" id="homeworkNavGroup">
@@ -1362,18 +1362,28 @@
       <section class="view" id="sendSms">
         <div class="finance-grid">
           <section class="panel">
-            <div class="panel-head"><div><p class="eyebrow">Communication</p><h2>Send SMS</h2></div><button class="primary-action" id="sendSmsButton" type="button">Send SMS</button></div>
-            <div class="fee-form reminder-form">
-              <label>Audience<select><option>All Parents</option><option>Selected Class</option><option>Staff</option></select></label>
-              <label>Class<select><option>All Classes</option><option>I Amber</option><option>VII A</option><option>XII IB</option></select></label>
-              <label>Template<select><option>General Notice</option><option>Fee Reminder</option><option>Emergency Alert</option></select></label>
+            <div class="panel-head"><div><p class="eyebrow">Meta WhatsApp</p><h2>WhatsApp Message</h2></div><button class="primary-action" id="sendSmsButton" type="button">Send WhatsApp</button></div>
+            <div class="fee-form reminder-form whatsapp-message-form">
+              <label>Guardian Mobile
+                <input id="whatsappRecipient" inputmode="tel" placeholder="10 digit mobile number" />
+              </label>
+              <label>Template Name
+                <input id="whatsappTemplateName" placeholder="fee_due_reminder" />
+              </label>
+              <label>Language Code
+                <input id="whatsappLanguageCode" value="en_US" placeholder="en_US" />
+              </label>
+              <label>Template Variables
+                <input id="whatsappTemplateVariables" placeholder="Student Name, Rs. 2400, 25-06-2026" />
+              </label>
             </div>
-            <div class="receipt">Draft SMS: Dear Parent, please check the school notice board for today's update.</div>
+            <div class="receipt" id="whatsappStatusBox">Meta Cloud API token and phone number ID must be set on Render before sending.</div>
           </section>
           <section class="panel">
-            <div class="panel-head"><div><p class="eyebrow">Delivery</p><h2>Recent SMS</h2></div></div>
-            <div class="task-list">
-              <article><b>0</b><div><strong>No SMS</strong><p>No SMS campaigns entered yet.</p><small>Empty</small></div><em>Empty</em></article>
+            <div class="panel-head"><div><p class="eyebrow">Delivery</p><h2>WhatsApp Setup</h2></div></div>
+            <div class="task-list" id="whatsappRecentList">
+              <article><b>1</b><div><strong>Render Environment</strong><p>Set ANPS_WHATSAPP_ACCESS_TOKEN and ANPS_WHATSAPP_PHONE_NUMBER_ID.</p><small>Required</small></div><em>Setup</em></article>
+              <article><b>2</b><div><strong>Meta Template</strong><p>Use an approved WhatsApp template name with variables in order.</p><small>Required</small></div><em>Template</em></article>
             </div>
           </section>
         </div>
@@ -2778,6 +2788,6 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="./new-school-os.js?v=20260619-backup-label"></script>
+  <script src="./new-school-os.js?v=20260620-whatsapp-cloud"></script>
 </body>
 </html>

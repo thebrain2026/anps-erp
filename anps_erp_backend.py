@@ -4,6 +4,8 @@ import hmac
 import os
 import secrets
 import sqlite3
+import urllib.error
+import urllib.request
 from datetime import datetime
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -21,6 +23,9 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 HOST = os.environ.get("ANPS_ERP_HOST", "127.0.0.1")
 PORT = int(os.environ.get("ANPS_ERP_PORT") or os.environ.get("PORT") or "4174")
 API_TOKEN = os.environ.get("ANPS_ERP_API_TOKEN", "").strip()
+WHATSAPP_ACCESS_TOKEN = os.environ.get("ANPS_WHATSAPP_ACCESS_TOKEN", "").strip()
+WHATSAPP_PHONE_NUMBER_ID = os.environ.get("ANPS_WHATSAPP_PHONE_NUMBER_ID", "").strip()
+WHATSAPP_API_VERSION = os.environ.get("ANPS_WHATSAPP_API_VERSION", "v23.0").strip() or "v23.0"
 ALLOWED_ORIGINS = [
     origin.strip().rstrip("/")
     for origin in os.environ.get("ANPS_ERP_ALLOWED_ORIGINS", "*").split(",")
@@ -108,6 +113,61 @@ def get_session_user(token):
 def remove_session_token(token):
     if token in SESSION_TOKENS:
         del SESSION_TOKENS[token]
+
+
+def send_whatsapp_template(payload):
+    if not WHATSAPP_ACCESS_TOKEN or not WHATSAPP_PHONE_NUMBER_ID:
+        return {
+            "ok": False,
+            "configured": False,
+            "error": "WhatsApp Cloud API is not configured. Set ANPS_WHATSAPP_ACCESS_TOKEN and ANPS_WHATSAPP_PHONE_NUMBER_ID on Render.",
+        }
+    to_number = "".join(ch for ch in str(payload.get("to") or "") if ch.isdigit())
+    if len(to_number) == 10:
+        to_number = f"91{to_number}"
+    template_name = str(payload.get("template") or "").strip()
+    language = str(payload.get("language") or "en_US").strip() or "en_US"
+    variables = payload.get("variables") or []
+    if isinstance(variables, str):
+        variables = [part.strip() for part in variables.split(",") if part.strip()]
+    if not to_number or not template_name:
+        return {"ok": False, "configured": True, "error": "Recipient number and template name are required."}
+    components = []
+    if variables:
+        components.append({
+            "type": "body",
+            "parameters": [{"type": "text", "text": str(value)} for value in variables],
+        })
+    message = {
+        "messaging_product": "whatsapp",
+        "to": to_number,
+        "type": "template",
+        "template": {
+            "name": template_name,
+            "language": {"code": language},
+        },
+    }
+    if components:
+        message["template"]["components"] = components
+    url = f"https://graph.facebook.com/{WHATSAPP_API_VERSION}/{WHATSAPP_PHONE_NUMBER_ID}/messages"
+    request = urllib.request.Request(
+        url,
+        data=json.dumps(message).encode("utf-8"),
+        headers={
+            "Authorization": f"Bearer {WHATSAPP_ACCESS_TOKEN}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=15) as response:
+            result = json.loads(response.read().decode("utf-8") or "{}")
+        return {"ok": True, "configured": True, "result": result}
+    except urllib.error.HTTPError as exc:
+        error_body = exc.read().decode("utf-8", errors="replace")
+        return {"ok": False, "configured": True, "status": exc.code, "error": error_body}
+    except Exception as exc:
+        return {"ok": False, "configured": True, "error": str(exc)}
 
 
 def connect():
@@ -2040,6 +2100,8 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             token = self.headers.get("Authorization", "").replace("Bearer ", "", 1).strip()
             remove_session_token(token)
             return self.json_response({"ok": True})
+        if path == "/api/whatsapp/send":
+            return self.whatsapp_send_request()
         self.save_state_request()
 
     def do_PUT(self):
@@ -2078,6 +2140,19 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
                 return self.json_response({"ok": False, "error": "Invalid login"}, status=401)
             record_audit("Login", "user", user.get("username") or "", user.get("username") or "", user.get("role_name") or "")
             self.json_response({"ok": True, "token": create_session_token(user), "user": user})
+        except Exception as exc:
+            self.json_response({"ok": False, "error": str(exc)}, status=400)
+
+    def whatsapp_send_request(self):
+        length = int(self.headers.get("Content-Length") or "0")
+        if length > MAX_BODY:
+            self.send_error(413, "Request body too large")
+            return
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+            result = send_whatsapp_template(payload)
+            status = 200 if result.get("ok") else 400
+            self.json_response(result, status=status)
         except Exception as exc:
             self.json_response({"ok": False, "error": str(exc)}, status=400)
 
