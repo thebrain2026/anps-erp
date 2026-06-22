@@ -1495,15 +1495,77 @@ function renderAdmissionVillageTownOptions(selectedValue = admissionForm.element
   if (selectedValue) setSelectValue(select, selectedValue);
 }
 
+function getCanonicalClassName(classToken = "") {
+  const clean = String(classToken || "").trim().replace(/\s+/g, " ");
+  if (!clean) return "";
+  const classOptions = getAdmissionClassOptions();
+  const exact = classOptions.find(className => className.toLowerCase() === clean.toLowerCase());
+  if (exact) return exact;
+  const token = clean.replace(/^class\s+/i, "").trim().toUpperCase();
+  const romanToClass = {
+    I: "Class I",
+    II: "Class II",
+    III: "Class III",
+    IV: "Class IV",
+    V: "Class V",
+    VI: "Class VI",
+    VII: "Class VII",
+    VIII: "Class VIII",
+    IX: "Class IX",
+    X: "Class X",
+    XI: "Class XI",
+    XII: "Class XII"
+  };
+  const numberToRoman = {
+    1: "I",
+    2: "II",
+    3: "III",
+    4: "IV",
+    5: "V",
+    6: "VI",
+    7: "VII",
+    8: "VIII",
+    9: "IX",
+    10: "X",
+    11: "XI",
+    12: "XII"
+  };
+  const roman = romanToClass[token] ? token : numberToRoman[token];
+  const canonical = romanToClass[roman];
+  if (!canonical) return clean;
+  return classOptions.find(className => className.toLowerCase() === canonical.toLowerCase()) || canonical;
+}
+
+function cleanSectionName(section = "") {
+  return String(section || "")
+    .replace(/^[\s(/-]+/, "")
+    .replace(/[)\s]+$/, "")
+    .trim();
+}
+
 function splitStudentClassSection(klassText = "") {
-  const text = String(klassText || "").trim();
+  const text = String(klassText || "").trim().replace(/\s+/g, " ");
+  if (!text) return {klass: "", section: ""};
   const classOptions = getAdmissionClassOptions().slice().sort((a, b) => b.length - a.length);
-  const matchedClass = classOptions.find(className => text === className || text.startsWith(`${className} `));
+  const matchedClass = classOptions.find(className => {
+    const lowerText = text.toLowerCase();
+    const lowerClass = className.toLowerCase();
+    return lowerText === lowerClass
+      || lowerText.startsWith(`${lowerClass} `)
+      || lowerText.startsWith(`${lowerClass}(`);
+  });
   if (matchedClass) {
-    return {klass: matchedClass, section: text.slice(matchedClass.length).trim()};
+    return {klass: matchedClass, section: cleanSectionName(text.slice(matchedClass.length))};
+  }
+  const legacyMatch = text.match(/^(?:class\s+)?([ivx]+|\d{1,2})(?:\s*\(?\s*([^)]+?)\s*\)?)?$/i);
+  if (legacyMatch) {
+    return {
+      klass: getCanonicalClassName(legacyMatch[1]),
+      section: cleanSectionName(legacyMatch[2] || "")
+    };
   }
   const [klass, ...sectionParts] = text.split(" ");
-  return {klass: klass || "", section: sectionParts.join(" ") || ""};
+  return {klass: getCanonicalClassName(klass) || klass || "", section: cleanSectionName(sectionParts.join(" "))};
 }
 
 function getFeeMasterForClass(className = "", studentType = admissionForm.elements.studentType?.value || "New Student") {
