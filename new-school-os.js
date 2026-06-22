@@ -94,7 +94,9 @@ let backendSyncReady = false;
 let backendHydrating = false;
 let backendLastUpdatedAt = "";
 let backendLastLocalSaveAt = 0;
-const BACKEND_AUTO_SYNC_INTERVAL_MS = 12000;
+const BACKEND_SAVE_DEBOUNCE_MS = 250;
+const BACKEND_AUTO_SYNC_INTERVAL_MS = 3000;
+const BACKEND_LOCAL_SAVE_GUARD_MS = 5000;
 const ACADEMIC_MONTHS = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
 const DEFAULT_ADMISSION_CLASSES = ["Nursery", "Class I", "Class II", "Class III", "Class IV", "Class V", "Class VI", "Class VII", "Class VIII", "Class IX", "Class X", "Class XI", "Class XII"];
 const DEFAULT_ADMISSION_SECTIONS = ["Amber", "Ruby", "A", "B", "C", "IGCSE", "IB", "Science", "Commerce"];
@@ -507,7 +509,7 @@ function queueBackendSave(snapshot = getAppStateSnapshot()) {
       console.warn("Backend sync pending.", error);
       setTopbarSaveStatus("saved");
     }
-  }, 700);
+  }, BACKEND_SAVE_DEBOUNCE_MS);
 }
 
 function saveAppState() {
@@ -7254,7 +7256,7 @@ function isBackendAutoSyncPaused() {
   if (document.body.classList.contains("modal-open")) return true;
   if (backendSaveTimer) return true;
   if (localStorage.getItem(BACKEND_PENDING_STATE_KEY)) return true;
-  if (Date.now() - backendLastLocalSaveAt < 8000) return true;
+  if (Date.now() - backendLastLocalSaveAt < BACKEND_LOCAL_SAVE_GUARD_MS) return true;
   return false;
 }
 
