@@ -82,12 +82,16 @@ const BACKEND_TOKEN_KEY = "school_api_token";
 const BACKEND_USER_KEY = "school_api_user";
 const BACKEND_LOGGED_OUT_KEY = "school_api_logged_out";
 const BACKEND_PENDING_STATE_KEY = "school_api_pending_state";
+const IS_PRODUCTION_RENDER = location.hostname.endsWith("onrender.com");
 const BACKEND_API_BASE = (
   document.querySelector('meta[name="school-api-base"]')?.content ||
-  localStorage.getItem("school_api_base") ||
-  window.SCHOOL_API_BASE ||
+  (!IS_PRODUCTION_RENDER ? localStorage.getItem("school_api_base") : "") ||
+  (!IS_PRODUCTION_RENDER ? window.SCHOOL_API_BASE : "") ||
   ""
 ).replace(/\/$/, "");
+if (IS_PRODUCTION_RENDER && localStorage.getItem("school_api_base")) {
+  localStorage.removeItem("school_api_base");
+}
 let backendSaveTimer = null;
 let backendAutoSyncTimer = null;
 let backendSyncReady = false;
