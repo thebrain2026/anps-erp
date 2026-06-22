@@ -2123,6 +2123,15 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             state = payload.get("state", payload)
             if not isinstance(state, dict):
                 raise ValueError("state must be an object")
+            base_updated_at = payload.get("base_updated_at") or payload.get("baseUpdatedAt")
+            current_record = read_state_record()
+            if current_record and current_record.get("updated_at") and base_updated_at != current_record.get("updated_at"):
+                return self.json_response({
+                    "ok": False,
+                    "error": "state_conflict",
+                    "updated_at": current_record.get("updated_at"),
+                    "state": current_record.get("state"),
+                }, status=409)
             updated_at = write_state(state)
             self.json_response({"ok": True, "updated_at": updated_at})
         except Exception as exc:

@@ -94,9 +94,11 @@ let backendSyncReady = false;
 let backendHydrating = false;
 let backendLastUpdatedAt = "";
 let backendLastLocalSaveAt = 0;
+let backendNetworkFailCount = 0;
 const BACKEND_SAVE_DEBOUNCE_MS = 250;
 const BACKEND_AUTO_SYNC_INTERVAL_MS = 3000;
 const BACKEND_LOCAL_SAVE_GUARD_MS = 5000;
+const BACKEND_OFFLINE_FAIL_THRESHOLD = 3;
 const ACADEMIC_MONTHS = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
 const DEFAULT_ADMISSION_CLASSES = ["Nursery", "Class I", "Class II", "Class III", "Class IV", "Class V", "Class VI", "Class VII", "Class VIII", "Class IX", "Class X", "Class XI", "Class XII"];
 const DEFAULT_ADMISSION_SECTIONS = ["Amber", "Ruby", "A", "B", "C", "IGCSE", "IB", "Science", "Commerce"];
@@ -400,6 +402,108 @@ function backendHeaders(extra = {}) {
   return token ? {...extra, Authorization: `Bearer ${token}`} : extra;
 }
 
+function mergePrimitiveList(remoteList = [], localList = []) {
+  const merged = [];
+  [...remoteList, ...localList].forEach(item => {
+    const value = String(item || "").trim();
+    if (value && !merged.some(existing => existing.toLowerCase() === value.toLowerCase())) merged.push(item);
+  });
+  return merged;
+}
+
+function mergeObjectListByKey(remoteList = [], localList = [], keyFields = []) {
+  const merged = [];
+  const indexByKey = new Map();
+  const getKey = item => {
+    if (!item || typeof item !== "object") return "";
+    for (const field of keyFields) {
+      const value = String(item[field] || "").trim();
+      if (value) return `${field}:${value.toLowerCase()}`;
+    }
+    return JSON.stringify(item);
+  };
+  [...remoteList, ...localList].forEach(item => {
+    if (!item || typeof item !== "object") return;
+    const key = getKey(item);
+    if (!indexByKey.has(key)) {
+      indexByKey.set(key, merged.length);
+      merged.push(item);
+      return;
+    }
+    merged[indexByKey.get(key)] = {...merged[indexByKey.get(key)], ...item};
+  });
+  return merged;
+}
+
+function mergeStateSnapshots(remoteState = {}, localState = {}) {
+  const merged = {...remoteState, ...localState};
+  const primitiveKeys = [
+    "customAdmissionClasses",
+    "customAdmissionSections",
+    "customSubjects",
+    "transportVillages",
+    "customTransportVillages"
+  ];
+  primitiveKeys.forEach(key => {
+    merged[key] = mergePrimitiveList(remoteState[key] || [], localState[key] || []);
+  });
+  const objectRules = {
+    students: ["admissionNo", "name"],
+    disabledStudents: ["admissionNo", "name"],
+    staffMembers: ["staffId", "email", "phone", "name"],
+    departments: ["name"],
+    roles: ["name"],
+    designations: ["name"],
+    userAccessAccounts: ["loginId", "id", "username"],
+    studentUserAccounts: ["loginId", "admissionNo"],
+    admissionEnquiries: ["id", "mobile", "studentName"],
+    complaintRecords: ["id", "complaintNo", "subject"],
+    staffAttendanceRecords: ["id", "staffId", "date"],
+    classTimetableEntries: ["id"],
+    syllabusEntries: ["id"],
+    holidayReports: ["id", "date", "holidayName"],
+    transportRoutes: ["routeName"],
+    transportVehicles: ["vehicleNo", "vehicleName"],
+    transportVehicleAssignments: ["routeName", "vehicleNo", "shift"],
+    transportRoutePickupPoints: ["routeName", "villageName", "shift"],
+    notices: ["id", "title"]
+  };
+  Object.entries(objectRules).forEach(([key, fields]) => {
+    merged[key] = mergeObjectListByKey(remoteState[key] || [], localState[key] || [], fields);
+  });
+  merged.transportVillageDistances = {...(remoteState.transportVillageDistances || {}), ...(localState.transportVillageDistances || {})};
+  merged.transportVillageFees = {...(remoteState.transportVillageFees || {}), ...(localState.transportVillageFees || {})};
+  merged.rolePermissions = {...(remoteState.rolePermissions || {}), ...(localState.rolePermissions || {})};
+  merged.classSubjectAssignments = {...(remoteState.classSubjectAssignments || {}), ...(localState.classSubjectAssignments || {})};
+  merged.collectedPayments = {...(remoteState.collectedPayments || {}), ...(localState.collectedPayments || {})};
+  merged.financeSessions = {...(remoteState.financeSessions || {}), ...(localState.financeSessions || {})};
+  return merged;
+}
+
+async function putBackendState(snapshot, allowMergeRetry = true) {
+  const response = await fetch(backendApiUrl("/api/state"), {
+    method: "PUT",
+    headers: backendHeaders({"Content-Type": "application/json"}),
+    body: JSON.stringify({state: snapshot, base_updated_at: backendLastUpdatedAt || ""})
+  });
+  if (response.status === 409 && allowMergeRetry) {
+    const conflict = await response.json().catch(() => ({}));
+    const mergedState = mergeStateSnapshots(conflict?.state || {}, snapshot);
+    backendLastUpdatedAt = conflict?.updated_at || backendLastUpdatedAt;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(mergedState));
+    applySavedState(mergedState);
+    const retryResponse = await fetch(backendApiUrl("/api/state"), {
+      method: "PUT",
+      headers: backendHeaders({"Content-Type": "application/json"}),
+      body: JSON.stringify({state: mergedState, base_updated_at: backendLastUpdatedAt || ""})
+    });
+    if (!retryResponse.ok) throw new Error(`Backend merge save failed ${retryResponse.status}`);
+    return retryResponse.json().catch(() => ({}));
+  }
+  if (!response.ok) throw new Error(`Backend save failed ${response.status}`);
+  return response.json().catch(() => ({}));
+}
+
 function storePendingBackendSnapshot(snapshot = getAppStateSnapshot()) {
   try {
     localStorage.setItem(BACKEND_PENDING_STATE_KEY, JSON.stringify({
@@ -424,21 +528,15 @@ async function flushPendingBackendSnapshot() {
     const hasToken = await ensureBackendToken();
     if (!hasToken) return false;
     setTopbarSaveStatus("saving");
-    const response = await fetch(backendApiUrl("/api/state"), {
-      method: "PUT",
-      headers: backendHeaders({"Content-Type": "application/json"}),
-      body: JSON.stringify({state: snapshot})
-    });
-    if (!response.ok) throw new Error(`Pending backend save failed ${response.status}`);
-    const result = await response.json().catch(() => ({}));
+    const result = await putBackendState(snapshot);
     if (result?.updated_at) backendLastUpdatedAt = result.updated_at;
     backendLastLocalSaveAt = Date.now();
     localStorage.removeItem(BACKEND_PENDING_STATE_KEY);
     setTopbarSaveStatus("saved");
-    setTopbarNetworkStatus("online");
+    markBackendOnline();
     return true;
   } catch (error) {
-    setTopbarNetworkStatus("offline");
+    markBackendConnectionIssue();
     console.warn("Pending backend save still waiting.", error);
     return false;
   }
@@ -478,7 +576,7 @@ function queueBackendSave(snapshot = getAppStateSnapshot()) {
   backendLastLocalSaveAt = Date.now();
   storePendingBackendSnapshot(snapshot);
   if (!backendSyncReady) {
-    setTopbarNetworkStatus("offline");
+    markBackendConnectionIssue();
     return;
   }
   clearTimeout(backendSaveTimer);
@@ -492,20 +590,14 @@ function queueBackendSave(snapshot = getAppStateSnapshot()) {
         setTopbarSaveStatus("saved");
         return;
       }
-      const response = await fetch(backendApiUrl("/api/state"), {
-        method: "PUT",
-        headers: backendHeaders({"Content-Type": "application/json"}),
-        body: JSON.stringify({state: snapshot})
-      });
-      if (!response.ok) throw new Error(`Backend save failed ${response.status}`);
-      const result = await response.json().catch(() => ({}));
+      const result = await putBackendState(snapshot);
       if (result?.updated_at) backendLastUpdatedAt = result.updated_at;
       backendLastLocalSaveAt = Date.now();
       localStorage.removeItem(BACKEND_PENDING_STATE_KEY);
       setTopbarSaveStatus("saved");
     } catch (error) {
       storePendingBackendSnapshot(snapshot);
-      setTopbarNetworkStatus("offline");
+      markBackendConnectionIssue();
       console.warn("Backend sync pending.", error);
       setTopbarSaveStatus("saved");
     }
@@ -923,6 +1015,20 @@ function setTopbarNetworkStatus(status = navigator.onLine ? "checking" : "offlin
     : status === "checking"
       ? "Checking server connection..."
       : "Software is offline or server connection is unavailable.";
+}
+
+function markBackendOnline() {
+  backendNetworkFailCount = 0;
+  setTopbarNetworkStatus("online");
+}
+
+function markBackendConnectionIssue() {
+  backendNetworkFailCount += 1;
+  if (!navigator.onLine || backendNetworkFailCount >= BACKEND_OFFLINE_FAIL_THRESHOLD) {
+    setTopbarNetworkStatus("offline");
+  } else {
+    setTopbarNetworkStatus("checking");
+  }
 }
 
 function updateTopbarSystemStatus() {
@@ -7267,8 +7373,8 @@ async function pullBackendStateIfChanged(showMessage = false) {
     const hasToken = await ensureBackendToken();
     if (!hasToken) return;
     const healthResponse = await fetch(backendApiUrl(`/api/health?v=${Date.now()}`), {cache: "no-store"});
-    if (!healthResponse.ok) return;
-    setTopbarNetworkStatus("online");
+    if (!healthResponse.ok) throw new Error(`Backend health failed ${healthResponse.status}`);
+    markBackendOnline();
     const health = await healthResponse.json();
     const serverUpdatedAt = health?.updated_at || "";
     if (serverUpdatedAt && backendLastUpdatedAt && serverUpdatedAt === backendLastUpdatedAt) return;
@@ -7287,7 +7393,7 @@ async function pullBackendStateIfChanged(showMessage = false) {
     refreshAllAfterSecurityClean();
     if (showMessage) showToast("Latest database data synced.");
   } catch (error) {
-    setTopbarNetworkStatus("offline");
+    markBackendConnectionIssue();
     console.warn("Backend auto-sync skipped.", error);
   } finally {
     backendHydrating = false;
@@ -7303,8 +7409,8 @@ async function initializeBackendSync() {
   try {
     setTopbarNetworkStatus(navigator.onLine ? "checking" : "offline");
     const healthResponse = await fetch(backendApiUrl("/api/health"), {cache: "no-store"});
-    if (!healthResponse.ok) return;
-    setTopbarNetworkStatus("online");
+    if (!healthResponse.ok) throw new Error(`Backend health failed ${healthResponse.status}`);
+    markBackendOnline();
     const hasToken = await ensureBackendToken();
     if (!hasToken) return;
     const flushedPending = await flushPendingBackendSnapshot();
@@ -7329,7 +7435,7 @@ async function initializeBackendSync() {
     }
     startBackendAutoSync();
   } catch (error) {
-    setTopbarNetworkStatus("offline");
+    markBackendConnectionIssue();
     backendSyncReady = false;
   } finally {
     backendHydrating = false;
