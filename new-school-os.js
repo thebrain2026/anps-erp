@@ -473,13 +473,15 @@ async function ensureBackendToken() {
 
 function queueBackendSave(snapshot = getAppStateSnapshot()) {
   if (backendHydrating) return;
+  backendLastLocalSaveAt = Date.now();
+  storePendingBackendSnapshot(snapshot);
   if (!backendSyncReady) {
-    storePendingBackendSnapshot(snapshot);
     setTopbarNetworkStatus("offline");
     return;
   }
   clearTimeout(backendSaveTimer);
   backendSaveTimer = setTimeout(async () => {
+    backendSaveTimer = null;
     try {
       setTopbarSaveStatus("saving");
       const hasToken = await ensureBackendToken();
@@ -7250,7 +7252,9 @@ function refreshAllAfterSecurityClean() {
 function isBackendAutoSyncPaused() {
   if (backendHydrating || document.hidden) return true;
   if (document.body.classList.contains("modal-open")) return true;
-  if (Date.now() - backendLastLocalSaveAt < 3000) return true;
+  if (backendSaveTimer) return true;
+  if (localStorage.getItem(BACKEND_PENDING_STATE_KEY)) return true;
+  if (Date.now() - backendLastLocalSaveAt < 8000) return true;
   return false;
 }
 
