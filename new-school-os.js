@@ -262,6 +262,7 @@ const titleMap = {
   learning: "Learning",
   studentIdCard: "Student ID Card",
   teacherIdCard: "Teachers ID Card",
+  masterAdmin: "Master Admin",
   userAccessSettings: "User Access & Permissions",
   studentUserLogin: "Student User Login",
   securityMaintenance: "Security Maintenance",
@@ -308,6 +309,7 @@ const staffDetailsForm = document.getElementById("staffDetailsForm");
 const departmentForm = document.getElementById("departmentForm");
 const roleForm = document.getElementById("roleForm");
 const designationForm = document.getElementById("designationForm");
+const masterAdminForm = document.getElementById("masterAdminForm");
 const userAccessForm = document.getElementById("userAccessForm");
 const studentUserAccessForm = document.getElementById("studentUserAccessForm");
 const accessPermissionForm = document.getElementById("accessPermissionForm");
@@ -984,6 +986,9 @@ function setView(viewName) {
   }
   if (viewName === "teacherIdCard") {
     renderTeacherIdCardModule();
+  }
+  if (viewName === "masterAdmin") {
+    renderMasterAdminSettings();
   }
   if (viewName === "userAccessSettings") {
     renderUserAccessSettings();
@@ -3459,6 +3464,26 @@ function renderUserAccessSettings() {
   if (permissionRole && !permissionRole.value && selectedRole) permissionRole.value = selectedRole;
   renderPermissionRows(document.getElementById("accessPermissionRole")?.value || "");
   renderUserAccessRows();
+}
+
+function getMasterAdminAccount() {
+  return userAccessAccounts.find(account => isProtectedRoleName(account.role) && String(account.role || "").trim().toLowerCase() === "master admin")
+    || userAccessAccounts.find(account => isProtectedRoleName(account.role));
+}
+
+function renderMasterAdminSettings() {
+  ensureProtectedRoles();
+  const account = getMasterAdminAccount();
+  if (masterAdminForm) {
+    masterAdminForm.elements.loginId.value = account?.loginId || "masteradmin";
+    masterAdminForm.elements.password.value = account?.password || "";
+  }
+  const status = document.getElementById("masterAdminStatus");
+  if (status) {
+    status.innerHTML = account
+      ? `<strong>Master Admin ready.</strong><br>Login ID: ${escapeHtml(account.loginId || "-")} | Status: Active | Full access locked.`
+      : `<strong>Master Admin not saved yet.</strong><br>Set a login ID and password, then save.`;
+  }
 }
 
 function renderStudentUserLogin() {
@@ -8713,6 +8738,41 @@ if (userAccessForm) {
     renderUserAccessSettings();
     resetUserAccessForm();
     showToast(`${account.loginId} user login saved.`);
+  });
+}
+
+if (masterAdminForm) {
+  masterAdminForm.addEventListener("submit", event => {
+    event.preventDefault();
+    ensureProtectedRoles();
+    const data = new FormData(masterAdminForm);
+    const loginId = String(data.get("loginId") || "").trim();
+    const password = String(data.get("password") || "").trim();
+    if (!loginId || !password) {
+      showToast("Master Admin Login ID and Password required.");
+      return;
+    }
+    const existingIndex = userAccessAccounts.findIndex(account => String(account.role || "").trim().toLowerCase() === "master admin");
+    const account = {
+      staffId: "",
+      staffName: "Master Admin",
+      role: "Master Admin",
+      loginId,
+      password,
+      status: "Active"
+    };
+    const duplicateLogin = userAccessAccounts.some((item, index) => index !== existingIndex && String(item.loginId || "").trim().toLowerCase() === loginId.toLowerCase());
+    if (duplicateLogin) {
+      showToast(`${loginId} Login ID already exists.`);
+      return;
+    }
+    if (existingIndex >= 0) userAccessAccounts[existingIndex] = account;
+    else userAccessAccounts.unshift(account);
+    rolePermissions["Master Admin"] = getDefaultRolePermission("Master Admin");
+    saveAppState();
+    renderMasterAdminSettings();
+    renderUserAccessSettings();
+    showToast("Master Admin login saved.");
   });
 }
 

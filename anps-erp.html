@@ -11,7 +11,7 @@
       location.replace("http://127.0.0.1:4174/anps-erp.html#dashboard");
     }
   </script>
-  <link rel="stylesheet" href="./new-school-os.css?v=20260620-whatsapp-cloud" />
+  <link rel="stylesheet" href="./new-school-os.css?v=20260622-master-admin-page" />
 </head>
 <body>
   <div class="shell">
@@ -118,6 +118,7 @@
         <div class="nav-group" id="settingsNavGroup">
           <button class="nav-group-title" id="settingsToggle" type="button" aria-expanded="false">Settings</button>
           <div class="nav-sub">
+            <button data-view="masterAdmin" type="button">Master Admin</button>
             <button data-view="userAccessSettings" type="button">User Access & Permissions</button>
             <button data-view="studentUserLogin" type="button">Student User Login</button>
           </div>
@@ -1911,6 +1912,44 @@
         </div>
       </section>
 
+      <section class="view" id="masterAdmin">
+        <div class="settings-access-layout">
+          <section class="panel user-access-panel master-admin-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Settings</p>
+                <h2>Master Admin</h2>
+                <small>Master Admin login protected thakbe. Eta disable/delete kora jabe na.</small>
+              </div>
+              <span class="status-pill stable">Protected</span>
+            </div>
+            <form id="masterAdminForm" class="user-access-form">
+              <label>Login ID
+                <input name="loginId" placeholder="master admin login id" required />
+              </label>
+              <label>Password
+                <input name="password" type="text" placeholder="master admin password" required />
+              </label>
+              <button class="primary-action" type="submit">Save Master Admin</button>
+            </form>
+            <div class="security-output" id="masterAdminStatus">Master Admin full access role. User Access page-e protected hisebe show korbe.</div>
+          </section>
+          <section class="panel role-permission-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Access Lock</p>
+                <h2>Full Permission</h2>
+                <small>Master Admin sob page/module access pabe. Permission off kora jabe na.</small>
+              </div>
+            </div>
+            <div class="task-list">
+              <article><b>1</b><div><strong>Protected Login</strong><p>Disable/delete blocked.</p><small>Always Active</small></div><em>Locked</em></article>
+              <article><b>2</b><div><strong>Full Access</strong><p>View, add, edit, delete, print sob allowed.</p><small>System</small></div><em>Full</em></article>
+            </div>
+          </section>
+        </div>
+      </section>
+
       <section class="view" id="userAccessSettings">
         <div class="settings-access-layout">
           <section class="panel user-access-panel">
@@ -2788,6 +2827,6 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="./new-school-os.js?v=20260620-whatsapp-cloud"></script>
+  <script src="./new-school-os.js?v=20260622-master-admin-page"></script>
 </body>
 </html>
