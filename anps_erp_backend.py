@@ -6,7 +6,7 @@ import secrets
 import sqlite3
 import urllib.error
 import urllib.request
-from datetime import datetime
+from datetime import datetime, timedelta
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -34,6 +34,7 @@ ALLOWED_ORIGINS = [
 STATE_KEY = "anps_erp_state_v1"
 MAX_BODY = 20 * 1024 * 1024
 DB_SCHEMA_VERSION = 2
+SESSION_TTL_DAYS = 7
 SENSITIVE_STATIC_SUFFIXES = {
     ".db",
     ".db-shm",
@@ -95,24 +96,61 @@ SESSION_TOKENS = {}
 
 def create_session_token(user):
     token = secrets.token_urlsafe(32)
+    user_data = dict(user or {})
+    expires_at = (datetime.utcnow() + timedelta(days=SESSION_TTL_DAYS)).isoformat(timespec="seconds") + "Z"
     SESSION_TOKENS[token] = {
-        "user": dict(user or {}),
+        "user": user_data,
         "created_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+        "expires_at": expires_at,
     }
+    try:
+        with connect() as conn:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO auth_sessions (token, user_json, expires_at)
+                VALUES (?, ?, ?)
+                """,
+                (token, json.dumps(user_data, ensure_ascii=False, separators=(",", ":")), expires_at),
+            )
+    except Exception:
+        pass
     return token
 
 
 def get_session_user(token):
     if token in SESSION_TOKENS:
-        return SESSION_TOKENS[token].get("user") or {}
+        session = SESSION_TOKENS[token]
+        if session.get("expires_at", "") > datetime.utcnow().isoformat(timespec="seconds") + "Z":
+            return session.get("user") or {}
+        SESSION_TOKENS.pop(token, None)
     if token and hmac.compare_digest(token, SERVER_TOKEN):
         return {"username": "system", "full_name": "System", "role_name": "Administrator"}
+    if token:
+        try:
+            with connect() as conn:
+                row = conn.execute("SELECT user_json, expires_at FROM auth_sessions WHERE token = ?", (token,)).fetchone()
+                if not row:
+                    return None
+                if row["expires_at"] <= datetime.utcnow().isoformat(timespec="seconds") + "Z":
+                    conn.execute("DELETE FROM auth_sessions WHERE token = ?", (token,))
+                    return None
+                user = json.loads(row["user_json"] or "{}")
+                SESSION_TOKENS[token] = {"user": user, "expires_at": row["expires_at"]}
+                return user
+        except Exception:
+            return None
     return None
 
 
 def remove_session_token(token):
     if token in SESSION_TOKENS:
         del SESSION_TOKENS[token]
+    if token:
+        try:
+            with connect() as conn:
+                conn.execute("DELETE FROM auth_sessions WHERE token = ?", (token,))
+        except Exception:
+            pass
 
 
 def send_whatsapp_template(payload):
@@ -190,6 +228,17 @@ def init_db():
             )
             """
         )
+        conn.execute(
+            """
+            CREATE TABLE IF NOT EXISTS auth_sessions (
+                token TEXT PRIMARY KEY,
+                user_json TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
+        conn.execute("DELETE FROM auth_sessions WHERE expires_at <= CURRENT_TIMESTAMP")
         conn.executescript(
             """
             CREATE TABLE IF NOT EXISTS students (
