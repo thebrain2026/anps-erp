@@ -512,6 +512,7 @@ function saveAppState() {
   try {
     setTopbarSaveStatus("saving");
     normalizeStudentUserLoginIds();
+    normalizeStudentContactFields();
     const snapshot = getAppStateSnapshot();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
     setTopbarSaveStatus("saved");
@@ -1723,6 +1724,21 @@ function badgeClass(value) {
   return "blue";
 }
 
+function getStudentGuardianName(student = {}) {
+  return student.guardian || student.fatherName || student.motherName || "";
+}
+
+function getStudentContactMobile(student = {}) {
+  return student.mobile || student.fatherMobile || student.motherMobile || "";
+}
+
+function normalizeStudentContactFields() {
+  students.forEach(student => {
+    if (!student.guardian) student.guardian = getStudentGuardianName(student);
+    if (!student.mobile) student.mobile = getStudentContactMobile(student);
+  });
+}
+
 function renderStudents() {
   const query = document.getElementById("globalSearch").value.trim().toLowerCase();
   renderStudentClassFilter();
@@ -1744,8 +1760,8 @@ function renderStudents() {
       <td><button class="student-name-link" type="button" data-open-admission-preview="${admissionAttr}"><strong>${escapeHtml(student.name || "-")}</strong></button></td>
       <td>${escapeHtml(classInfo.klass || "-")}</td>
       <td>${escapeHtml(classInfo.section || "-")}</td>
-      <td>${escapeHtml(student.guardian || "-")}</td>
-      <td>${escapeHtml(student.mobile || "-")}</td>
+      <td>${escapeHtml(getStudentGuardianName(student) || "-")}</td>
+      <td>${escapeHtml(getStudentContactMobile(student) || "-")}</td>
       <td>
         <div class="row-actions">
           <button class="icon-action edit" type="button" data-edit-student="${admissionAttr}" title="Edit student" aria-label="Edit ${escapeHtml(student.name || "student")}">
@@ -9131,6 +9147,12 @@ admissionForm.addEventListener("submit", event => {
   if (selectedOtherServices.includes("Special/Custom")) {
     selectedOtherServices = selectedOtherServices.filter(service => service !== "Transport");
   }
+  const fatherName = String(data.get("fatherName") || "").trim();
+  const fatherMobile = String(data.get("fatherMobile") || "").trim();
+  const motherName = String(data.get("motherName") || "").trim();
+  const motherMobile = String(data.get("motherMobile") || "").trim();
+  const guardianName = String(data.get("guardianName") || "").trim() || fatherName || motherName;
+  const guardianMobile = String(data.get("mobile") || "").trim() || fatherMobile || motherMobile;
   const studentData = {
     name: studentName,
     klass: `${klass} ${section}`.trim(),
@@ -9139,8 +9161,8 @@ admissionForm.addEventListener("submit", event => {
     route,
     admissionNo,
     studentType,
-    guardian: String(data.get("guardianName") || "").trim(),
-    mobile: String(data.get("mobile") || "").trim(),
+    guardian: guardianName,
+    mobile: guardianMobile,
     transportRequired: selectedOtherServices.includes("Transport") && !selectedOtherServices.includes("Special/Custom"),
     dob: formatDateDDMMYYYY(String(data.get("dob") || "").trim()),
     gender: String(data.get("gender") || "").trim(),
@@ -9149,19 +9171,19 @@ admissionForm.addEventListener("submit", event => {
     religion: String(data.get("religion") || "").trim(),
     motherTongue: String(data.get("motherTongue") || "").trim(),
     villageTown: String(data.get("villageTown") || "").trim(),
-    fatherName: String(data.get("fatherName") || "").trim(),
+    fatherName,
     fatherOccupation: "",
     fatherQualification: String(data.get("fatherQualification") || "").trim(),
     fatherWorkType: String(data.get("fatherWorkType") || "").trim(),
     fatherAnnualIncome: Number(data.get("fatherAnnualIncome") || 0),
-    fatherMobile: String(data.get("fatherMobile") || "").trim(),
+    fatherMobile,
     fatherEmail: String(data.get("fatherEmail") || "").trim(),
-    motherName: String(data.get("motherName") || "").trim(),
+    motherName,
     motherOccupation: String(data.get("motherOccupation") || "").trim(),
     motherQualification: String(data.get("motherQualification") || "").trim(),
     motherWorkType: String(data.get("motherWorkType") || "").trim(),
     motherAnnualIncome: Number(data.get("motherAnnualIncome") || 0),
-    motherMobile: String(data.get("motherMobile") || "").trim(),
+    motherMobile,
     motherEmail: String(data.get("motherEmail") || "").trim(),
     email: String(data.get("email") || "").trim(),
     address: String(data.get("address") || "").trim(),
