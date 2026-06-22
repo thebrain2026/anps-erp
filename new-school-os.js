@@ -101,6 +101,7 @@ const DEFAULT_ADMISSION_SECTIONS = ["Amber", "Ruby", "A", "B", "C", "IGCSE", "IB
 const DEFAULT_SUBJECTS = ["Mathematics", "Science", "English", "Bengali", "Hindi", "History", "Geography", "Computer", "Physical Education"];
 const DEFAULT_STAFF_DESIGNATIONS = ["Principal", "Counsellor", "Academic Coordinator", "Account", "Assistant Account", "Receptionist", "Admin Coordinator", "Teacher"];
 const DEFAULT_STUDENT_TYPES = ["New Student", "Promoted Student"];
+const PROTECTED_ROLE_NAMES = ["Master Admin", "Administrator", "Admin"];
 const TRANSPORT_SCHOOL_MAP_QUERY = "Alfred Nobel Public School, Bhatar, Purba Bardhaman, West Bengal";
 const DEFAULT_TUITION_FINE_SETUP = {
   dailyRate: 5,
@@ -578,6 +579,7 @@ function applySavedState(saved = {}) {
       const staffRoles = [...new Set(staffMembers.map(staff => String(staff.role || "").trim()).filter(Boolean))];
       roles.push(...staffRoles.map(name => ({name, type: "", description: ""})));
     }
+    ensureProtectedRoles();
     if (!designations.length) {
       const staffDesignations = [...new Set(staffMembers.map(staff => String(staff.designation || "").trim()).filter(Boolean))];
       designations.push(...staffDesignations.map(name => ({name, department: "", level: ""})));
@@ -764,6 +766,7 @@ function applyProductionCleanSeedOnce() {
       designations.push({name, department: "", level: ""});
     }
   });
+  ensureProtectedRoles();
   designations.sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
   localStorage.setItem(PRODUCTION_CLEAN_KEY, PRODUCTION_CLEAN_VERSION);
   saveAppState();
@@ -868,8 +871,13 @@ function getCurrentCollectorRoleName() {
   return getCurrentTopbarRole() || "Admin";
 }
 
+function isProtectedRoleName(roleName = "") {
+  const cleanRole = String(roleName || "").trim().toLowerCase();
+  return PROTECTED_ROLE_NAMES.some(name => name.toLowerCase() === cleanRole);
+}
+
 function isCurrentRoleAdmin() {
-  return /admin|administrator|principal/i.test(getCurrentTopbarRole());
+  return isProtectedRoleName(getCurrentTopbarRole()) || /admin|administrator|principal/i.test(getCurrentTopbarRole());
 }
 
 function canCurrentRoleAccessView(viewName = "") {
@@ -3190,16 +3198,17 @@ function renderHrSetup() {
   if (roleRows) {
     roleRows.innerHTML = roles.map((role, index) => {
       const staffCount = staffMembers.filter(staff => (staff.role || "").toLowerCase() === role.name.toLowerCase()).length;
+      const protectedRole = isProtectedRoleName(role.name);
       return `
         <tr>
-          <td><strong>${escapeHtml(role.name)}</strong></td>
+          <td><strong>${escapeHtml(role.name)}</strong>${protectedRole ? `<small class="system-lock-note">Protected</small>` : ""}</td>
           <td>${escapeHtml(role.description || "-")}</td>
           <td><span class="status-pill stable">${staffCount}</span></td>
           <td>
-            <button class="icon-action edit" type="button" data-edit-role="${index}" title="Edit role" aria-label="Edit role">
+            <button class="icon-action edit" type="button" data-edit-role="${index}" ${protectedRole ? "disabled" : ""} title="${protectedRole ? "Protected role cannot be edited" : "Edit role"}" aria-label="Edit role">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4.7L19.3 9.4a2.1 2.1 0 0 0 0-3L17.6 4.7a2.1 2.1 0 0 0-3 0L4 15.3V20Zm3.8-2H6v-1.8l8.5-8.5 1.8 1.8L7.8 18Zm7.9-11.5.4-.4 1.8 1.8-.4.4-1.8-1.8Z"/></svg>
             </button>
-            <button class="icon-action delete" type="button" data-delete-role="${index}" title="Delete role" aria-label="Delete role">
+            <button class="icon-action delete" type="button" data-delete-role="${index}" ${protectedRole ? "disabled" : ""} title="${protectedRole ? "Protected role cannot be deleted" : "Delete role"}" aria-label="Delete role">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 21c-.6 0-1.1-.2-1.5-.6S5 19.5 5 19V8H4V6h5V4h6v2h5v2h-1v11c0 .6-.2 1.1-.6 1.5s-.9.6-1.5.6H7ZM17 8H7v11h10V8Zm-8 9h2v-7H9v7Zm4 0h2v-7h-2v7Z"/></svg>
             </button>
           </td>
@@ -3233,7 +3242,7 @@ function renderHrSetup() {
 }
 
 function getDefaultRolePermission(roleName = "") {
-  const isAdmin = /admin|administrator|principal/i.test(roleName);
+  const isAdmin = isProtectedRoleName(roleName) || /admin|administrator|principal/i.test(roleName);
   return ACCESS_PERMISSION_MODULES.reduce((permissions, moduleId) => {
     permissions[moduleId] = ACCESS_ACTIONS.reduce((actions, action) => {
       actions[action] = isAdmin || action === "view";
@@ -3243,9 +3252,22 @@ function getDefaultRolePermission(roleName = "") {
   }, {});
 }
 
+function ensureProtectedRoles() {
+  PROTECTED_ROLE_NAMES.forEach(name => {
+    if (!roles.some(role => String(role.name || "").trim().toLowerCase() === name.toLowerCase())) {
+      roles.push({name, type: "System", description: "Protected full access role"});
+    }
+    rolePermissions[name] = getDefaultRolePermission(name);
+  });
+}
+
 function normalizeRolePermission(roleName = "") {
   const cleanRole = String(roleName || "").trim();
   if (!cleanRole) return {};
+  if (isProtectedRoleName(cleanRole)) {
+    rolePermissions[cleanRole] = getDefaultRolePermission(cleanRole);
+    return rolePermissions[cleanRole];
+  }
   if (!rolePermissions[cleanRole]) rolePermissions[cleanRole] = getDefaultRolePermission(cleanRole);
   ACCESS_PERMISSION_MODULES.forEach(moduleId => {
     if (!rolePermissions[cleanRole][moduleId]) rolePermissions[cleanRole][moduleId] = {};
@@ -3287,6 +3309,7 @@ function getStaffByStaffId(staffId = "") {
 function renderPermissionRows(roleName = "") {
   const tbody = document.getElementById("accessPermissionRows");
   const allTick = document.getElementById("accessPermissionAllTick");
+  const saveButton = document.querySelector("#accessPermissionForm button[type='submit']");
   if (!tbody) return;
   const cleanRole = String(roleName || "").trim();
   if (!cleanRole) {
@@ -3295,8 +3318,10 @@ function renderPermissionRows(roleName = "") {
       allTick.checked = false;
       allTick.disabled = true;
     }
+    if (saveButton) saveButton.disabled = false;
     return;
   }
+  const protectedRole = isProtectedRoleName(cleanRole);
   const permissions = normalizeRolePermission(cleanRole);
   tbody.innerHTML = ACCESS_PERMISSION_MODULES.map(moduleId => {
     const modulePermissions = permissions[moduleId] || {};
@@ -3306,7 +3331,7 @@ function renderPermissionRows(roleName = "") {
         ${ACCESS_ACTIONS.map(action => `
           <td>
             <label class="permission-check" title="${action} ${titleMap[moduleId] || moduleId}">
-              <input type="checkbox" name="${moduleId}.${action}" ${modulePermissions[action] ? "checked" : ""} />
+              <input type="checkbox" name="${moduleId}.${action}" ${modulePermissions[action] ? "checked" : ""} ${protectedRole ? "disabled" : ""} />
             </label>
           </td>
         `).join("")}
@@ -3315,19 +3340,22 @@ function renderPermissionRows(roleName = "") {
   }).join("");
   if (allTick) {
     const permissionInputs = [...tbody.querySelectorAll("input[type='checkbox']")];
-    allTick.disabled = false;
+    allTick.disabled = protectedRole;
     allTick.checked = permissionInputs.length > 0 && permissionInputs.every(input => input.checked);
   }
+  if (saveButton) saveButton.disabled = protectedRole;
 }
 
 function renderUserAccessRows() {
   const rows = document.getElementById("userAccessRows");
   const summary = document.getElementById("userAccessSummary");
   if (!rows) return;
-  rows.innerHTML = userAccessAccounts.map((account, index) => `
+  rows.innerHTML = userAccessAccounts.map((account, index) => {
+    const protectedAccount = isProtectedRoleName(account.role);
+    return `
     <tr>
       <td><strong>${escapeHtml(account.staffName || "-")}</strong><small>${escapeHtml(account.staffId || "")}</small></td>
-      <td>${escapeHtml(account.role || "-")}</td>
+      <td>${escapeHtml(account.role || "-")}${protectedAccount ? `<small class="system-lock-note">Protected</small>` : ""}</td>
       <td>${escapeHtml(account.loginId || "-")}</td>
       <td>${escapeHtml(account.password || "-")}</td>
       <td><span class="status-pill ${account.status === "Active" ? "stable" : "pending"}">${escapeHtml(account.status || "Active")}</span></td>
@@ -3336,16 +3364,17 @@ function renderUserAccessRows() {
           <button class="icon-action edit" type="button" data-edit-user-access="${index}" title="Edit user login" aria-label="Edit user login">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4.7L19.3 9.4a2.1 2.1 0 0 0 0-3L17.6 4.7a2.1 2.1 0 0 0-3 0L4 15.3V20Zm3.8-2H6v-1.8l8.5-8.5 1.8 1.8L7.8 18Zm7.9-11.5.4-.4 1.8 1.8-.4.4-1.8-1.8Z"/></svg>
           </button>
-          <button class="icon-action" type="button" data-toggle-user-access="${index}" title="${account.status === "Active" ? "Disable" : "Enable"} user" aria-label="${account.status === "Active" ? "Disable" : "Enable"} user">
+          <button class="icon-action" type="button" data-toggle-user-access="${index}" ${protectedAccount ? "disabled" : ""} title="${protectedAccount ? "Protected login cannot be disabled" : account.status === "Active" ? "Disable user" : "Enable user"}" aria-label="${account.status === "Active" ? "Disable" : "Enable"} user">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 22a10 10 0 1 1 0-20 10 10 0 0 1 0 20Zm0-2a8 8 0 0 0 6.3-12.9L7.1 18.3A8 8 0 0 0 12 20Zm-6.3-3.1L16.9 5.7A8 8 0 0 0 5.7 16.9Z"/></svg>
           </button>
-          <button class="icon-action delete" type="button" data-delete-user-access="${index}" title="Delete user login" aria-label="Delete user login">
+          <button class="icon-action delete" type="button" data-delete-user-access="${index}" ${protectedAccount ? "disabled" : ""} title="${protectedAccount ? "Protected login cannot be deleted" : "Delete user login"}" aria-label="Delete user login">
             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 21c-.6 0-1.1-.2-1.5-.6S5 19.5 5 19V8H4V6h5V4h6v2h5v2h-1v11c0 .6-.2 1.1-.6 1.5s-.9.6-1.5.6H7ZM17 8H7v11h10V8Zm-8 9h2v-7H9v7Zm4 0h2v-7h-2v7Z"/></svg>
           </button>
         </div>
       </td>
     </tr>
-  `).join("") || `<tr><td colspan="6">No user login saved yet.</td></tr>`;
+  `;
+  }).join("") || `<tr><td colspan="6">No user login saved yet.</td></tr>`;
   if (summary) summary.textContent = `${userAccessAccounts.length} users saved`;
 }
 
@@ -8344,11 +8373,15 @@ if (roleForm) {
       showToast("Role name required.");
       return;
     }
+    const oldName = editingRoleIndex >= 0 ? roles[editingRoleIndex].name : "";
+    if (isProtectedRoleName(role.name) || isProtectedRoleName(oldName)) {
+      showToast("Master Admin/Admin role is protected and cannot be edited here.");
+      return;
+    }
     if (roles.some((item, index) => index !== editingRoleIndex && item.name.toLowerCase() === role.name.toLowerCase())) {
       showToast(`${role.name} role already added.`);
       return;
     }
-    const oldName = editingRoleIndex >= 0 ? roles[editingRoleIndex].name : "";
     if (editingRoleIndex >= 0) {
       roles[editingRoleIndex] = role;
       staffMembers.forEach(staff => {
@@ -8666,6 +8699,9 @@ if (userAccessForm) {
       showToast("Role, Login ID and Password required.");
       return;
     }
+    if (isProtectedRoleName(account.role)) {
+      account.status = "Active";
+    }
     if (userAccessAccounts.some((item, index) => index !== editingUserAccessIndex && item.loginId.toLowerCase() === account.loginId.toLowerCase())) {
       showToast(`${account.loginId} Login ID already exists.`);
       return;
@@ -8718,6 +8754,13 @@ if (accessPermissionForm) {
     const roleName = String(document.getElementById("accessPermissionRole")?.value || "").trim();
     if (!roleName) {
       showToast("Select role first.");
+      return;
+    }
+    if (isProtectedRoleName(roleName)) {
+      rolePermissions[roleName] = getDefaultRolePermission(roleName);
+      saveAppState();
+      renderPermissionRows(roleName);
+      showToast("Master Admin/Admin permissions are locked with full access.");
       return;
     }
     const permissions = {};
@@ -9525,6 +9568,10 @@ document.body.addEventListener("click", event => {
     const index = Number(editRole.dataset.editRole);
     const role = roles[index];
     if (role) {
+      if (isProtectedRoleName(role.name)) {
+        showToast("Master Admin/Admin role is protected and cannot be edited.");
+        return;
+      }
       editingRoleIndex = index;
       roleForm.elements.name.value = role.name || "";
       roleForm.elements.description.value = role.description || "";
@@ -9561,6 +9608,10 @@ document.body.addEventListener("click", event => {
   if (deleteRole) {
     const index = Number(deleteRole.dataset.deleteRole);
     const role = roles[index];
+    if (role && isProtectedRoleName(role.name)) {
+      showToast("Master Admin/Admin role cannot be deleted.");
+      return;
+    }
     if (role && confirm(`Delete role ${role.name}?`)) {
       roles.splice(index, 1);
       delete rolePermissions[role.name];
@@ -9592,6 +9643,10 @@ document.body.addEventListener("click", event => {
     const index = Number(toggleUserAccess.dataset.toggleUserAccess);
     const account = userAccessAccounts[index];
     if (account) {
+      if (isProtectedRoleName(account.role)) {
+        showToast("Master Admin/Admin login cannot be disabled.");
+        return;
+      }
       account.status = account.status === "Active" ? "Disabled" : "Active";
       saveAppState();
       renderUserAccessSettings();
@@ -9601,6 +9656,10 @@ document.body.addEventListener("click", event => {
   if (deleteUserAccess) {
     const index = Number(deleteUserAccess.dataset.deleteUserAccess);
     const account = userAccessAccounts[index];
+    if (account && isProtectedRoleName(account.role)) {
+      showToast("Master Admin/Admin login cannot be deleted.");
+      return;
+    }
     if (account && confirm(`Delete login ${account.loginId}?`)) {
       userAccessAccounts.splice(index, 1);
       saveAppState();

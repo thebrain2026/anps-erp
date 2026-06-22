@@ -4850,6 +4850,28 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   font-weight: 900;
 }
 
+.system-lock-note {
+  display: inline-flex;
+  align-items: center;
+  min-height: 20px;
+  margin-left: 8px;
+  padding: 0 7px;
+  border-radius: 999px;
+  background: #fff3cd;
+  color: #8a5a00;
+  font-size: .68rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.icon-action:disabled,
+.primary-action:disabled,
+.ghost-action:disabled {
+  cursor: not-allowed;
+  opacity: .45;
+  filter: grayscale(.25);
+}
+
 .class-fee-panel .fee-master-form input,
 .class-fee-panel .fee-master-form select {
   width: 100%;
