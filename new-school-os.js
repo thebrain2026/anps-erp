@@ -1006,15 +1006,14 @@ function setTopbarNetworkStatus(status = navigator.onLine ? "checking" : "offlin
   const node = document.getElementById("topbarNetworkStatus");
   if (!node) return;
   const label = node.querySelector("strong");
-  node.classList.toggle("online", status === "online");
+  const visibleStatus = status === "checking" && navigator.onLine ? "online" : status;
+  node.classList.toggle("online", visibleStatus === "online");
   node.classList.toggle("offline", status === "offline");
   node.classList.toggle("checking", status === "checking");
-  if (label) label.textContent = status === "online" ? "Online" : status === "checking" ? "Checking" : "Offline";
-  node.title = status === "online"
+  if (label) label.textContent = visibleStatus === "online" ? "Online" : "Offline";
+  node.title = visibleStatus === "online"
     ? "Software is online and connected to server."
-    : status === "checking"
-      ? "Checking server connection..."
-      : "Software is offline or server connection is unavailable.";
+    : "Software is offline or server connection is unavailable.";
 }
 
 function markBackendOnline() {
