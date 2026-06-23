@@ -519,7 +519,7 @@ async function flushPendingBackendSnapshot() {
 }
 
 async function ensureBackendToken() {
-  if (localStorage.getItem(BACKEND_TOKEN_KEY) && getLoggedInBackendUser()) {
+  if (localStorage.getItem(BACKEND_TOKEN_KEY)) {
     try {
       const response = await fetch(backendApiUrl(`/api/session?v=${Date.now()}`), {
         cache: "no-store",
@@ -537,11 +537,8 @@ async function ensureBackendToken() {
         return false;
       }
     } catch (error) {
-      return true;
+      return Boolean(getLoggedInBackendUser());
     }
-  }
-  if (localStorage.getItem(BACKEND_TOKEN_KEY) && !getLoggedInBackendUser()) {
-    localStorage.removeItem(BACKEND_TOKEN_KEY);
   }
   if (localStorage.getItem(BACKEND_LOGGED_OUT_KEY) === "1") return false;
   return false;
@@ -10336,7 +10333,7 @@ renderStudentFeeCounter();
 renderFeeBook();
 setTopbarNetworkStatus();
 document.addEventListener("submit", blockOfflineWriteAction, true);
-if (localStorage.getItem(BACKEND_TOKEN_KEY) && getLoggedInBackendUser()) {
+if (localStorage.getItem(BACKEND_TOKEN_KEY)) {
   initializeBackendSync();
 } else {
   showLoginOverlay();

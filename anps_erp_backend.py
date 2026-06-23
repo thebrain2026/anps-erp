@@ -1962,7 +1962,7 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
 
     def end_headers(self):
         request_path = urlparse(self.path).path
-        if request_path in ("", "/", "/index.html", "/clear-erp-state.html", "/school-service-worker.js") or request_path.endswith(".html"):
+        if request_path in ("", "/", "/index.html", "/clear-erp-state.html", "/school-service-worker.js") or request_path.endswith((".html", ".js", ".css")):
             self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
             self.send_header("Pragma", "no-cache")
             self.send_header("Expires", "0")
