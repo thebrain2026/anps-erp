@@ -3699,6 +3699,14 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   min-width: 190px;
 }
 
+.permission-group-row td {
+  background: linear-gradient(135deg, #0f766e, #1d4ed8);
+  color: #fff;
+  font-weight: 900;
+  letter-spacing: .02em;
+  text-transform: uppercase;
+}
+
 .permission-check {
   display: inline-grid;
   place-items: center;

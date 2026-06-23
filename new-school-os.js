@@ -288,6 +288,21 @@ const titleMap = {
 const ACCESS_PERMISSION_MODULES = Object.keys(titleMap);
 
 const ACCESS_ACTIONS = ["view", "add", "edit", "delete", "print"];
+const ACCESS_PERMISSION_GROUPS = [
+  {name: "Dashboard", modules: ["dashboard"]},
+  {name: "Front Office", modules: ["admissionEnquiry", "complaintRegister", "complaintsDesk"]},
+  {name: "Student Information", modules: ["students", "studentAdmission", "disableStudent", "bulkDeleteStudent"]},
+  {name: "Fees Collection", modules: ["finance", "feeBook", "dueFeesSearch", "feeMaster", "feeGroup", "addClassSection", "tuitionFineSetup", "feeReminder"]},
+  {name: "Human Resources", modules: ["staffDetails", "staffAttendance", "applyLeave", "leaveType", "approveLeave", "teachersRating", "department", "designation", "disabledStaff"]},
+  {name: "Communication", modules: ["noticeBoard", "sendSms"]},
+  {name: "Homework", modules: ["addHomework", "dailyAssignment"]},
+  {name: "Reports", modules: ["reportStudentInformation", "dailyCollectionReport", "entireSchoolFeesReport"]},
+  {name: "Academic", modules: ["classTimetable", "teacherTimetable", "syllabus", "teacherComplaint", "holidayReport", "annualCalendar"]},
+  {name: "Certificate", modules: ["studentIdCard", "teacherIdCard"]},
+  {name: "Settings", modules: ["masterAdmin", "userAccessSettings", "studentUserLogin"]},
+  {name: "Security", modules: ["securityMaintenance"]},
+  {name: "Transport", modules: ["transportFeesMaster", "transportFineSetup", "transportPickupPoint", "transportRoute", "transportVehicle", "transportAssignVehicle", "transportRoutePickupPoint", "studentTransportFees"]}
+];
 
 const pageTitle = document.getElementById("pageTitle");
 const navButtons = [...document.querySelectorAll("[data-view]")];
@@ -1215,6 +1230,7 @@ function syncLocalGuardianFromParent(source = "") {
     input.checked = input.value === source && input.checked;
   });
   const selected = sourceInputs.find(input => input.checked)?.value || "";
+  updateLocalGuardianNameLabel(selected);
   if (selected === "Father") {
     admissionForm.elements.guardianName.value = admissionForm.elements.fatherName.value || "";
     admissionForm.elements.mobile.value = admissionForm.elements.fatherMobile.value || "";
@@ -1227,9 +1243,16 @@ function syncLocalGuardianFromParent(source = "") {
   }
 }
 
+function updateLocalGuardianNameLabel(source = "") {
+  const label = document.getElementById("localGuardianNameLabel");
+  if (!label) return;
+  label.textContent = source === "Father" ? "Father Name" : source === "Mother" ? "Mother Name" : "Guardian Name";
+}
+
 function openAdmissionForm() {
   editingAdmissionNo = "";
   admissionForm.reset();
+  updateLocalGuardianNameLabel("");
   setAdmissionNumberInputs();
   setAdmissionFeeFieldsLocked(false);
   renderAdmissionClassOptions();
@@ -1309,6 +1332,12 @@ function openStudentEditForm(admissionNo) {
   admissionForm.elements.guardianName.value = student.guardian || "";
   admissionForm.elements.mobile.value = student.mobile || "";
   admissionForm.elements.email.value = student.email || "";
+  const localGuardianSource = student.guardian && student.guardian === student.fatherName
+    ? "Father"
+    : student.guardian && student.guardian === student.motherName
+      ? "Mother"
+      : "";
+  updateLocalGuardianNameLabel(localGuardianSource);
   admissionForm.elements.route.value = student.route || "Self";
   admissionForm.elements.transportRequired.checked = Boolean(student.transportRequired);
   admissionForm.elements.fee.value = student.fee || "Due";
@@ -3540,27 +3569,49 @@ function renderPermissionRows(roleName = "") {
   }
   const protectedRole = isProtectedRoleName(cleanRole);
   const permissions = normalizeRolePermission(cleanRole);
-  tbody.innerHTML = ACCESS_PERMISSION_MODULES.map(moduleId => {
+  const renderedModules = new Set();
+  const renderModuleRow = moduleId => {
+    renderedModules.add(moduleId);
     const modulePermissions = permissions[moduleId] || {};
     return `
-      <tr>
-        <td><strong>${escapeHtml(titleMap[moduleId] || moduleId)}</strong></td>
-        ${ACCESS_ACTIONS.map(action => `
-          <td>
-            <label class="permission-check" title="${action} ${titleMap[moduleId] || moduleId}">
-              <input type="checkbox" name="${moduleId}.${action}" ${modulePermissions[action] ? "checked" : ""} ${protectedRole ? "disabled" : ""} />
-            </label>
-          </td>
-        `).join("")}
-      </tr>
+        <tr>
+          <td><strong>${escapeHtml(titleMap[moduleId] || moduleId)}</strong></td>
+          ${ACCESS_ACTIONS.map(action => `
+            <td>
+              <label class="permission-check" title="${action} ${titleMap[moduleId] || moduleId}">
+                <input type="checkbox" name="${moduleId}.${action}" ${modulePermissions[action] ? "checked" : ""} ${protectedRole ? "disabled" : ""} />
+              </label>
+            </td>
+          `).join("")}
+        </tr>
+      `;
+  };
+  tbody.innerHTML = ACCESS_PERMISSION_GROUPS.map(group => {
+    const rows = group.modules.filter(moduleId => ACCESS_PERMISSION_MODULES.includes(moduleId)).map(renderModuleRow).join("");
+    if (!rows) return "";
+    return `
+      <tr class="permission-group-row"><td colspan="6">${escapeHtml(group.name)}</td></tr>
+      ${rows}
     `;
-  }).join("");
+  }).join("") + ACCESS_PERMISSION_MODULES
+    .filter(moduleId => !renderedModules.has(moduleId))
+    .map(renderModuleRow)
+    .join("");
   if (allTick) {
-    const permissionInputs = [...tbody.querySelectorAll("input[type='checkbox']")];
     allTick.disabled = protectedRole;
-    allTick.checked = permissionInputs.length > 0 && permissionInputs.every(input => input.checked);
+    updateAccessPermissionAllTickState();
   }
   if (saveButton) saveButton.disabled = protectedRole;
+}
+
+function updateAccessPermissionAllTickState() {
+  const allTick = document.getElementById("accessPermissionAllTick");
+  if (!allTick) return;
+  const permissionInputs = [...document.querySelectorAll("#accessPermissionRows input[type='checkbox']")]
+    .filter(input => !input.disabled);
+  const checkedCount = permissionInputs.filter(input => input.checked).length;
+  allTick.checked = permissionInputs.length > 0 && checkedCount === permissionInputs.length;
+  allTick.indeterminate = checkedCount > 0 && checkedCount < permissionInputs.length;
 }
 
 function renderUserAccessRows() {
@@ -8494,16 +8545,18 @@ document.getElementById("accessPermissionRole")?.addEventListener("change", even
 });
 
 document.getElementById("accessPermissionAllTick")?.addEventListener("change", event => {
-  document.querySelectorAll("#accessPermissionRows input[type='checkbox']").forEach(input => {
+  if (event.target.id !== "accessPermissionAllTick") return;
+  event.stopPropagation();
+  document.querySelectorAll("#accessPermissionRows input[type='checkbox']:not(:disabled)").forEach(input => {
     input.checked = event.target.checked;
   });
+  event.target.indeterminate = false;
 });
 
 document.getElementById("accessPermissionRows")?.addEventListener("change", event => {
   if (!event.target.matches("input[type='checkbox']")) return;
-  const allTick = document.getElementById("accessPermissionAllTick");
-  const permissionInputs = [...document.querySelectorAll("#accessPermissionRows input[type='checkbox']")];
-  if (allTick) allTick.checked = permissionInputs.length > 0 && permissionInputs.every(input => input.checked);
+  event.stopPropagation();
+  updateAccessPermissionAllTickState();
 });
 
 noticeForm.addEventListener("submit", event => {

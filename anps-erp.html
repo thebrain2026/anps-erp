@@ -2474,7 +2474,7 @@
         <fieldset>
           <legend>Parents/Guardian Information</legend>
           <label>Father's Name
-            <input name="fatherName" placeholder="Enter father's name" required />
+            <input name="fatherName" placeholder="Enter father's name" />
           </label>
           <label>Father's Academic Qualification
             <input name="fatherQualification" placeholder="Highest qualification" />
@@ -2491,13 +2491,13 @@
             <input name="fatherAnnualIncome" type="number" min="0" placeholder="Annual income" />
           </label>
           <label>Father's Mobile Number
-            <input name="fatherMobile" inputmode="tel" placeholder="10 digit mobile" required />
+            <input name="fatherMobile" inputmode="tel" placeholder="10 digit mobile" />
           </label>
           <label>Father's Email Address
             <input name="fatherEmail" type="email" placeholder="father@email.com" />
           </label>
           <label>Mother's Name
-            <input name="motherName" placeholder="Enter mother's name" required />
+            <input name="motherName" placeholder="Enter mother's name" />
           </label>
           <label>Mother's Occupation
             <input name="motherOccupation" placeholder="Occupation" />
@@ -2517,7 +2517,7 @@
             <input name="motherAnnualIncome" type="number" min="0" placeholder="Annual income" />
           </label>
           <label>Mother's Mobile Number
-            <input name="motherMobile" inputmode="tel" placeholder="10 digit mobile" required />
+            <input name="motherMobile" inputmode="tel" placeholder="10 digit mobile" />
           </label>
           <label>Mother's Email Address
             <input name="motherEmail" type="email" placeholder="mother@email.com" />
@@ -2531,7 +2531,7 @@
             <label><input type="checkbox" name="localGuardianSame" value="Father" /> Father</label>
             <label><input type="checkbox" name="localGuardianSame" value="Mother" /> Mother</label>
           </div>
-          <label class="local-guardian-field">Guardian Name
+          <label class="local-guardian-field"><span id="localGuardianNameLabel">Guardian Name</span>
             <input name="guardianName" placeholder="Parent or guardian" required />
           </label>
           <label class="local-guardian-field">Mobile Number
@@ -2827,6 +2827,6 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="./new-school-os.js?v=20260623-session-reconnect"></script>
+  <script src="./new-school-os.js?v=20260623-local-guardian-label"></script>
 </body>
 </html>
