@@ -94,6 +94,7 @@ if (IS_PRODUCTION_RENDER && localStorage.getItem("school_api_base")) {
 }
 let backendSaveTimer = null;
 let backendAutoSyncTimer = null;
+let backendReconnectTimer = null;
 let backendSyncReady = false;
 let backendHydrating = false;
 let backendLastUpdatedAt = "";
@@ -1035,6 +1036,8 @@ function setTopbarNetworkStatus(status = navigator.onLine ? "checking" : "offlin
 
 function markBackendOnline() {
   backendNetworkFailCount = 0;
+  clearTimeout(backendReconnectTimer);
+  backendReconnectTimer = null;
   setTopbarNetworkStatus("online");
 }
 
@@ -1045,6 +1048,14 @@ function markBackendConnectionIssue() {
   } else {
     setTopbarNetworkStatus("checking");
   }
+}
+
+function scheduleBackendReconnect() {
+  if (backendReconnectTimer || !localStorage.getItem(BACKEND_TOKEN_KEY)) return;
+  backendReconnectTimer = setTimeout(() => {
+    backendReconnectTimer = null;
+    initializeBackendSync();
+  }, 3000);
 }
 
 function updateTopbarSystemStatus() {
@@ -7410,6 +7421,7 @@ async function pullBackendStateIfChanged(showMessage = false) {
     if (showMessage) showToast("Latest database data synced.");
   } catch (error) {
     markBackendConnectionIssue();
+    scheduleBackendReconnect();
     console.warn("Backend auto-sync skipped.", error);
   } finally {
     backendHydrating = false;
@@ -7453,6 +7465,7 @@ async function initializeBackendSync() {
   } catch (error) {
     markBackendConnectionIssue();
     backendSyncReady = false;
+    scheduleBackendReconnect();
   } finally {
     backendHydrating = false;
   }
