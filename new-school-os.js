@@ -538,12 +538,22 @@ async function putBackendState(snapshot, allowMergeRetry = true) {
 }
 
 function storePendingBackendSnapshot(snapshot = getAppStateSnapshot()) {
-  localStorage.removeItem(BACKEND_PENDING_STATE_KEY);
+  try {
+    localStorage.setItem(BACKEND_PENDING_STATE_KEY, JSON.stringify(snapshot));
+  } catch (error) {
+    console.warn("Could not keep pending backend snapshot.", error);
+  }
 }
 
 async function flushPendingBackendSnapshot() {
+  const rawPending = localStorage.getItem(BACKEND_PENDING_STATE_KEY);
+  if (!rawPending) return false;
+  const pendingState = JSON.parse(rawPending);
+  const result = await putBackendState(pendingState);
+  if (result?.updated_at) backendLastUpdatedAt = result.updated_at;
   localStorage.removeItem(BACKEND_PENDING_STATE_KEY);
-  return false;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(pendingState));
+  return true;
 }
 
 async function ensureBackendToken() {
@@ -631,9 +641,11 @@ function queueBackendSave(snapshot = getAppStateSnapshot(), rollbackRawState = "
       localStorage.removeItem(BACKEND_PENDING_STATE_KEY);
       setTopbarSaveStatus("saved");
     } catch (error) {
-      showNoInternetSaveWarning();
-      if (rollbackRawState) restoreStateFromRaw(rollbackRawState);
-      console.warn("Backend save blocked.", error);
+      markBackendConnectionIssue();
+      storePendingBackendSnapshot(snapshot);
+      scheduleBackendReconnect();
+      showToast("Server save delayed. Your change is kept and will retry.");
+      console.warn("Backend save delayed.", error);
       setTopbarSaveStatus("saved");
     }
   }, BACKEND_SAVE_DEBOUNCE_MS);
@@ -2001,7 +2013,7 @@ function renderStudents() {
       return `
     <tr>
       <td>${escapeHtml(student.admissionNo || "-")}</td>
-      <td><button class="student-name-link" type="button" data-open-admission-preview="${admissionAttr}"><strong>${escapeHtml(student.name || "-")}</strong></button></td>
+      <td><button class="student-name-link" type="button" data-open-fee-book="${admissionAttr}"><strong>${escapeHtml(student.name || "-")}</strong></button></td>
       <td>${escapeHtml(classInfo.klass || "-")}</td>
       <td>${escapeHtml(classInfo.section || "-")}</td>
       <td>${escapeHtml(getStudentGuardianName(student) || "-")}</td>
