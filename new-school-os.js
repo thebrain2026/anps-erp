@@ -100,10 +100,13 @@ let backendHydrating = false;
 let backendLastUpdatedAt = "";
 let backendLastLocalSaveAt = 0;
 let backendNetworkFailCount = 0;
+let backendLastHealthOkAt = 0;
 const BACKEND_SAVE_DEBOUNCE_MS = 250;
 const BACKEND_AUTO_SYNC_INTERVAL_MS = 3000;
 const BACKEND_LOCAL_SAVE_GUARD_MS = 5000;
 const BACKEND_OFFLINE_FAIL_THRESHOLD = 3;
+const BACKEND_HEALTH_GRACE_MS = 30000;
+const BACKEND_FETCH_TIMEOUT_MS = 8000;
 const ACADEMIC_MONTHS = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
 const DEFAULT_ADMISSION_CLASSES = ["Nursery", "Class I", "Class II", "Class III", "Class IV", "Class V", "Class VI", "Class VII", "Class VIII", "Class IX", "Class X", "Class XI", "Class XII"];
 const DEFAULT_ADMISSION_SECTIONS = ["Amber", "Ruby", "A", "B", "C", "IGCSE", "IB", "Science", "Commerce"];
@@ -422,6 +425,16 @@ function backendHeaders(extra = {}) {
   return token ? {...extra, Authorization: `Bearer ${token}`} : extra;
 }
 
+async function backendFetch(path, options = {}, timeoutMs = BACKEND_FETCH_TIMEOUT_MS) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(backendApiUrl(path), {...options, signal: controller.signal});
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
 function mergePrimitiveList(remoteList = [], localList = []) {
   const merged = [];
   [...remoteList, ...localList].forEach(item => {
@@ -501,7 +514,7 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
 }
 
 async function putBackendState(snapshot, allowMergeRetry = true) {
-  const response = await fetch(backendApiUrl("/api/state"), {
+  const response = await backendFetch("/api/state", {
     method: "PUT",
     headers: backendHeaders({"Content-Type": "application/json"}),
     body: JSON.stringify({state: snapshot, base_updated_at: backendLastUpdatedAt || ""})
@@ -512,7 +525,7 @@ async function putBackendState(snapshot, allowMergeRetry = true) {
     backendLastUpdatedAt = conflict?.updated_at || backendLastUpdatedAt;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(mergedState));
     applySavedState(mergedState);
-    const retryResponse = await fetch(backendApiUrl("/api/state"), {
+    const retryResponse = await backendFetch("/api/state", {
       method: "PUT",
       headers: backendHeaders({"Content-Type": "application/json"}),
       body: JSON.stringify({state: mergedState, base_updated_at: backendLastUpdatedAt || ""})
@@ -536,7 +549,7 @@ async function flushPendingBackendSnapshot() {
 async function ensureBackendToken() {
   if (localStorage.getItem(BACKEND_TOKEN_KEY)) {
     try {
-      const response = await fetch(backendApiUrl(`/api/session?v=${Date.now()}`), {
+      const response = await backendFetch(`/api/session?v=${Date.now()}`, {
         cache: "no-store",
         headers: backendHeaders()
       });
@@ -561,7 +574,7 @@ async function ensureBackendToken() {
 
 function canSaveOnlineNow() {
   return navigator.onLine
-    && backendSyncReady
+    && (backendSyncReady || Date.now() - backendLastHealthOkAt < BACKEND_HEALTH_GRACE_MS)
     && backendNetworkFailCount < BACKEND_OFFLINE_FAIL_THRESHOLD
     && Boolean(localStorage.getItem(BACKEND_TOKEN_KEY))
     && Boolean(getLoggedInBackendUser());
@@ -952,7 +965,7 @@ function ensureLoginOverlay() {
     const username = String(form.elements.username.value || "").trim();
     const password = String(form.elements.password.value || "");
     try {
-      const response = await fetch(backendApiUrl("/api/login"), {
+      const response = await backendFetch("/api/login", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({username, password})
@@ -1036,10 +1049,10 @@ function setTopbarNetworkStatus(status = navigator.onLine ? "checking" : "offlin
   const node = document.getElementById("topbarNetworkStatus");
   if (!node) return;
   const label = node.querySelector("strong");
-  const visibleStatus = status === "checking" && navigator.onLine ? "online" : status;
+  const visibleStatus = navigator.onLine && status !== "offline" ? "online" : "offline";
   node.classList.toggle("online", visibleStatus === "online");
-  node.classList.toggle("offline", status === "offline");
-  node.classList.toggle("checking", status === "checking");
+  node.classList.toggle("offline", visibleStatus === "offline");
+  node.classList.toggle("checking", false);
   if (label) label.textContent = visibleStatus === "online" ? "Online" : "Offline";
   node.title = visibleStatus === "online"
     ? "Software is online and connected to server."
@@ -1048,6 +1061,7 @@ function setTopbarNetworkStatus(status = navigator.onLine ? "checking" : "offlin
 
 function markBackendOnline() {
   backendNetworkFailCount = 0;
+  backendLastHealthOkAt = Date.now();
   clearTimeout(backendReconnectTimer);
   backendReconnectTimer = null;
   setTopbarNetworkStatus("online");
@@ -1055,7 +1069,8 @@ function markBackendOnline() {
 
 function markBackendConnectionIssue() {
   backendNetworkFailCount += 1;
-  if (!navigator.onLine || backendNetworkFailCount >= BACKEND_OFFLINE_FAIL_THRESHOLD) {
+  const hasRecentBackendHealth = Date.now() - backendLastHealthOkAt < BACKEND_HEALTH_GRACE_MS;
+  if (!navigator.onLine || (backendNetworkFailCount >= BACKEND_OFFLINE_FAIL_THRESHOLD && !hasRecentBackendHealth)) {
     setTopbarNetworkStatus("offline");
   } else {
     setTopbarNetworkStatus("checking");
@@ -7447,13 +7462,14 @@ async function pullBackendStateIfChanged(showMessage = false) {
     setTopbarNetworkStatus(navigator.onLine ? "checking" : "offline");
     const hasToken = await ensureBackendToken();
     if (!hasToken) return;
-    const healthResponse = await fetch(backendApiUrl(`/api/health?v=${Date.now()}`), {cache: "no-store"});
+    const healthResponse = await backendFetch(`/api/health?v=${Date.now()}`, {cache: "no-store"});
     if (!healthResponse.ok) throw new Error(`Backend health failed ${healthResponse.status}`);
     markBackendOnline();
+    backendSyncReady = true;
     const health = await healthResponse.json();
     const serverUpdatedAt = health?.updated_at || "";
     if (serverUpdatedAt && backendLastUpdatedAt && serverUpdatedAt === backendLastUpdatedAt) return;
-    const stateResponse = await fetch(backendApiUrl(`/api/state?v=${Date.now()}`), {
+    const stateResponse = await backendFetch(`/api/state?v=${Date.now()}`, {
       cache: "no-store",
       headers: backendHeaders()
     });
@@ -7484,13 +7500,14 @@ function startBackendAutoSync() {
 async function initializeBackendSync() {
   try {
     setTopbarNetworkStatus(navigator.onLine ? "checking" : "offline");
-    const healthResponse = await fetch(backendApiUrl("/api/health"), {cache: "no-store"});
+    const healthResponse = await backendFetch("/api/health", {cache: "no-store"});
     if (!healthResponse.ok) throw new Error(`Backend health failed ${healthResponse.status}`);
     markBackendOnline();
+    backendSyncReady = true;
     const hasToken = await ensureBackendToken();
     if (!hasToken) return;
     const flushedPending = await flushPendingBackendSnapshot();
-    const stateResponse = await fetch(backendApiUrl(`/api/state?v=${Date.now()}`), {
+    const stateResponse = await backendFetch(`/api/state?v=${Date.now()}`, {
       cache: "no-store",
       headers: backendHeaders()
     });
@@ -7498,7 +7515,6 @@ async function initializeBackendSync() {
     const payload = await stateResponse.json();
     const backendState = payload?.state || {};
     backendLastUpdatedAt = payload?.updated_at || "";
-    backendSyncReady = true;
     if (!flushedPending && backendState && Object.keys(backendState).length) {
       backendHydrating = true;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(backendState));
@@ -9651,7 +9667,7 @@ document.getElementById("topbarAlerts")?.addEventListener("click", () => {
 document.getElementById("topbarLogout")?.addEventListener("click", () => {
   const roleName = getCurrentTopbarRole();
   saveAppState();
-  fetch(backendApiUrl("/api/logout"), {
+  backendFetch("/api/logout", {
     method: "POST",
     headers: backendHeaders({"Content-Type": "application/json"}),
     body: JSON.stringify({logout: true})
@@ -9691,7 +9707,7 @@ document.getElementById("sendSmsButton").addEventListener("click", async () => {
   }
   try {
     if (statusBox) statusBox.textContent = "Sending WhatsApp message...";
-    const response = await fetch(backendApiUrl("/api/whatsapp/send"), {
+    const response = await backendFetch("/api/whatsapp/send", {
       method: "POST",
       headers: backendHeaders({"Content-Type": "application/json"}),
       body: JSON.stringify(payload)
