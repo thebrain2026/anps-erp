@@ -1099,6 +1099,71 @@ function updateTopbarSystemStatus() {
   }
 }
 
+function renderDashboardOnly() {
+  renderBars();
+  renderTasks();
+  renderModules();
+  renderSessions();
+  renderFinanceSession(false);
+  updateTopbarSystemStatus();
+}
+
+function renderActiveView(viewName = document.querySelector(".view.active")?.id || "dashboard") {
+  if (viewName === "dashboard") {
+    renderDashboardOnly();
+    return;
+  }
+  if (viewName === "students") renderStudents();
+  if (viewName === "studentAdmission") {
+    renderAdmissionVillageTownOptions();
+    renderAdmissionSectionOptions();
+    renderFeeMasterClassOptions();
+  }
+  if (viewName === "finance") {
+    renderFinanceSession(true);
+    renderStudentFeeCounter();
+  }
+  if (viewName === "feeBook") {
+    renderFeeBookStudentOptions();
+    renderFeeBook();
+  }
+  if (viewName === "dueFeesSearch") renderDueFeesSearch();
+  if (viewName === "feeMaster") renderFeeMaster();
+  if (viewName === "feeGroup") renderFeeGroups();
+  if (viewName === "addClassSection") renderClassSectionSetup();
+  if (viewName === "tuitionFineSetup") renderTuitionFineSetup();
+  if (viewName === "transportPickupPoint") renderTransportVillages();
+  if (viewName === "transportRoute") renderTransportRoutes();
+  if (viewName === "transportVehicle") renderTransportVehicles();
+  if (viewName === "transportAssignVehicle") renderTransportVehicleAssignments();
+  if (viewName === "transportRoutePickupPoint") renderTransportRoutePickupPoints();
+  if (viewName === "transportFineSetup") renderTransportFineSetup();
+  if (viewName === "studentTransportFees") renderStudentTransportFees();
+  if (viewName === "staffDetails") renderStaffDetails();
+  if (viewName === "department") renderHrSetup();
+  if (viewName === "staffAttendance") renderStaffAttendance();
+  if (viewName === "disableStudent") renderDisabledStudents();
+  if (viewName === "noticeBoard") renderNoticeBoard();
+  if (viewName === "complaintsDesk") renderComplaintsDesk();
+  if (viewName === "admissionEnquiry") renderAdmissionEnquiryModule();
+  if (viewName === "classTimetable") renderClassTimetable();
+  if (viewName === "teacherTimetable") renderTeacherTimetable();
+  if (viewName === "syllabus") renderSyllabusModule();
+  if (viewName === "holidayReport") renderHolidayReport();
+  if (viewName === "annualCalendar") renderAnnualCalendar();
+  if (viewName === "studentIdCard") renderStudentIdCardModule();
+  if (viewName === "teacherIdCard") renderTeacherIdCardModule();
+  if (viewName === "userAccessSettings") renderUserAccessSettings();
+  if (viewName === "studentUserLogin") renderStudentUserLogin();
+  if (viewName === "securityMaintenance") renderSecurityMaintenance();
+  if (viewName === "masterAdmin") renderMasterAdminSettings();
+  if (viewName === "reportStudentInformation") {
+    renderClassSectionReport();
+    renderStudentGenderRatioReport();
+    renderStudentTeacherRatioReport();
+  }
+}
+
 function setView(viewName) {
   if (!canCurrentRoleAccessView(viewName)) {
     showToast(`${getCurrentTopbarRole()} role does not have access to ${titleMap[viewName] || viewName}.`);
@@ -1107,6 +1172,7 @@ function setView(viewName) {
   views.forEach(view => view.classList.toggle("active", view.id === viewName));
   navButtons.forEach(button => button.classList.toggle("active", button.dataset.view === viewName));
   pageTitle.textContent = titleMap[viewName] || "Dashboard";
+  renderActiveView(viewName);
   if (viewName === "admissionEnquiry") {
     renderAdmissionEnquiryModule();
   }
@@ -4194,7 +4260,7 @@ function renderSessions() {
   sessionSelect.value = activeSession;
 }
 
-function renderFinanceSession() {
+function renderFinanceSession(includeTables = true) {
   const session = financeSessions[activeSession];
   const dashboardMonthly = getDashboardMonthlyFeeCollectionSummary();
   document.getElementById("academicYearText").textContent = `Academic year ${activeSession}`;
@@ -4203,6 +4269,8 @@ function renderFinanceSession() {
   document.getElementById("kpiFeesNote").textContent = `${dashboardMonthly.percent}% monthly fees collected, Annual Fee excluded`;
   document.getElementById("kpiFollowUps").textContent = String(session.followUps).padStart(2, "0");
   document.getElementById("kpiFollowUpsNote").textContent = `${session.highPriority} high priority`;
+  document.getElementById("studentCount").textContent = getActiveStudents().length.toLocaleString("en-IN");
+  if (!includeTables) return;
   resetFeeMasterEditing();
   resetFeeGroupEditing();
   renderFeeMaster();
@@ -7400,51 +7468,12 @@ function showSecurityBackupReminder() {
 
 function refreshAllAfterSecurityClean() {
   setNextReceiptNo();
-  renderBars();
-  renderTasks();
-  renderModules();
-  renderSessions();
-  renderFinanceSession();
-  renderDues();
-  renderDueFeesSearch();
-  renderAdmissionEnquiryModule();
-  renderComplaintsDesk();
-  renderNoticeBoard();
-  renderStaffDetails();
-  renderHrSetup();
-  renderTeacherIdCardModule();
-  renderUserAccessSettings();
-  renderStudentUserLogin();
-  renderSecurityMaintenance();
-  updateTopbarSystemStatus();
+  renderDashboardOnly();
+  renderActiveView();
   renderStaffTeachingSubjectField();
   renderStaffBiometricDevice();
-  renderStaffAttendance();
   setNextStaffId();
   renderStaffPhotoPreview();
-  renderLearning();
-  renderTransportVillages();
-  renderTransportRoutes();
-  renderTransportVehicles();
-  renderTransportVehicleAssignments();
-  renderTransportRoutePickupPoints();
-  renderStudentTransportFees();
-  renderTuitionFineSetup();
-  renderTransportFineSetup();
-  renderAdmissionVillageTownOptions();
-  renderAdmissionSectionOptions();
-  renderFeeMasterClassOptions();
-  renderClassSectionSetup();
-  renderStudents();
-  renderClassTimetable();
-  renderSyllabusModule();
-  renderHolidayReport();
-  renderAnnualCalendar();
-  renderStudentIdCardModule();
-  renderDisabledStudents();
-  renderFeeBookStudentOptions();
-  renderStudentFeeCounter();
-  renderFeeBook();
 }
 
 function isBackendAutoSyncPaused() {
@@ -10353,53 +10382,16 @@ document.body.addEventListener("click", event => {
 loadAppState();
 applyProductionCleanSeedOnce();
 setNextReceiptNo();
-renderBars();
-renderTasks();
-renderModules();
-renderSessions();
-renderFinanceSession();
-renderDues();
-renderDueFeesSearch();
-renderAdmissionEnquiryModule();
-renderComplaintsDesk();
+renderDashboardOnly();
 if (complaintRegisterForm) complaintRegisterForm.elements.date.value = toDateInputValue(new Date());
 if (teacherComplaintForm) teacherComplaintForm.elements.date.value = toDateInputValue(new Date());
-renderNoticeBoard();
-renderStaffDetails();
-renderHrSetup();
-renderTeacherIdCardModule();
-renderUserAccessSettings();
-renderStudentUserLogin();
-renderSecurityMaintenance();
-updateTopbarSystemStatus();
 renderStaffTeachingSubjectField();
 renderStaffBiometricDevice();
-renderStaffAttendance();
 setNextStaffId();
 renderStaffPhotoPreview();
-renderLearning();
-renderTransportVillages();
-renderTransportRoutes();
-renderTransportVehicles();
-renderTransportVehicleAssignments();
-renderTransportRoutePickupPoints();
-renderStudentTransportFees();
-renderTuitionFineSetup();
-renderTransportFineSetup();
 renderAdmissionVillageTownOptions();
 renderAdmissionSectionOptions();
 renderFeeMasterClassOptions();
-renderClassSectionSetup();
-renderStudents();
-renderClassTimetable();
-renderSyllabusModule();
-renderHolidayReport();
-renderAnnualCalendar();
-renderStudentIdCardModule();
-renderDisabledStudents();
-renderFeeBookStudentOptions();
-renderStudentFeeCounter();
-renderFeeBook();
 setTopbarNetworkStatus();
 document.addEventListener("submit", blockOfflineWriteAction, true);
 if (localStorage.getItem(BACKEND_TOKEN_KEY)) {
