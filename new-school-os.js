@@ -509,41 +509,12 @@ async function putBackendState(snapshot, allowMergeRetry = true) {
 }
 
 function storePendingBackendSnapshot(snapshot = getAppStateSnapshot()) {
-  try {
-    localStorage.setItem(BACKEND_PENDING_STATE_KEY, JSON.stringify({
-      savedAt: new Date().toISOString(),
-      state: snapshot
-    }));
-  } catch (error) {
-    console.warn("Could not store pending backend snapshot.", error);
-  }
+  localStorage.removeItem(BACKEND_PENDING_STATE_KEY);
 }
 
 async function flushPendingBackendSnapshot() {
-  const raw = localStorage.getItem(BACKEND_PENDING_STATE_KEY);
-  if (!raw) return false;
-  try {
-    const pending = JSON.parse(raw);
-    const snapshot = pending?.state;
-    if (!snapshot || typeof snapshot !== "object") {
-      localStorage.removeItem(BACKEND_PENDING_STATE_KEY);
-      return false;
-    }
-    const hasToken = await ensureBackendToken();
-    if (!hasToken) return false;
-    setTopbarSaveStatus("saving");
-    const result = await putBackendState(snapshot);
-    if (result?.updated_at) backendLastUpdatedAt = result.updated_at;
-    backendLastLocalSaveAt = Date.now();
-    localStorage.removeItem(BACKEND_PENDING_STATE_KEY);
-    setTopbarSaveStatus("saved");
-    markBackendOnline();
-    return true;
-  } catch (error) {
-    markBackendConnectionIssue();
-    console.warn("Pending backend save still waiting.", error);
-    return false;
-  }
+  localStorage.removeItem(BACKEND_PENDING_STATE_KEY);
+  return false;
 }
 
 async function ensureBackendToken() {
@@ -575,14 +546,48 @@ async function ensureBackendToken() {
   return false;
 }
 
-function queueBackendSave(snapshot = getAppStateSnapshot()) {
-  if (backendHydrating) return;
-  backendLastLocalSaveAt = Date.now();
-  storePendingBackendSnapshot(snapshot);
-  if (!backendSyncReady) {
-    markBackendConnectionIssue();
-    return;
+function canSaveOnlineNow() {
+  return navigator.onLine
+    && backendSyncReady
+    && backendNetworkFailCount < BACKEND_OFFLINE_FAIL_THRESHOLD
+    && Boolean(localStorage.getItem(BACKEND_TOKEN_KEY))
+    && Boolean(getLoggedInBackendUser());
+}
+
+function showNoInternetSaveWarning() {
+  markBackendConnectionIssue();
+  showToast("No internet connection. Entry not saved.");
+}
+
+function restoreStateFromRaw(rawState = "") {
+  try {
+    if (rawState) {
+      localStorage.setItem(STORAGE_KEY, rawState);
+      applySavedState(JSON.parse(rawState));
+    }
+    refreshAllAfterSecurityClean();
+  } catch (error) {
+    console.warn("Could not restore previous saved data.", error);
   }
+}
+
+function blockOfflineWriteAction(event) {
+  const form = event.target.closest?.("form");
+  if (form?.id === "loginOverlayForm") return;
+  if (canSaveOnlineNow()) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  showNoInternetSaveWarning();
+}
+
+function queueBackendSave(snapshot = getAppStateSnapshot(), rollbackRawState = "") {
+  if (backendHydrating) return false;
+  if (!canSaveOnlineNow()) {
+    showNoInternetSaveWarning();
+    if (rollbackRawState) restoreStateFromRaw(rollbackRawState);
+    return false;
+  }
+  backendLastLocalSaveAt = Date.now();
   clearTimeout(backendSaveTimer);
   backendSaveTimer = setTimeout(async () => {
     backendSaveTimer = null;
@@ -590,8 +595,8 @@ function queueBackendSave(snapshot = getAppStateSnapshot()) {
       setTopbarSaveStatus("saving");
       const hasToken = await ensureBackendToken();
       if (!hasToken) {
-        storePendingBackendSnapshot(snapshot);
-        setTopbarSaveStatus("saved");
+        showNoInternetSaveWarning();
+        if (rollbackRawState) restoreStateFromRaw(rollbackRawState);
         return;
       }
       const result = await putBackendState(snapshot);
@@ -600,26 +605,34 @@ function queueBackendSave(snapshot = getAppStateSnapshot()) {
       localStorage.removeItem(BACKEND_PENDING_STATE_KEY);
       setTopbarSaveStatus("saved");
     } catch (error) {
-      storePendingBackendSnapshot(snapshot);
-      markBackendConnectionIssue();
-      console.warn("Backend sync pending.", error);
+      showNoInternetSaveWarning();
+      if (rollbackRawState) restoreStateFromRaw(rollbackRawState);
+      console.warn("Backend save blocked.", error);
       setTopbarSaveStatus("saved");
     }
   }, BACKEND_SAVE_DEBOUNCE_MS);
+  return true;
 }
 
 function saveAppState() {
   try {
+    if (!canSaveOnlineNow()) {
+      showNoInternetSaveWarning();
+      restoreStateFromRaw(localStorage.getItem(STORAGE_KEY) || "");
+      return false;
+    }
     setTopbarSaveStatus("saving");
     normalizeStudentUserLoginIds();
     normalizeStudentContactFields();
     const snapshot = getAppStateSnapshot();
+    const rollbackRawState = localStorage.getItem(STORAGE_KEY) || "";
     localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
     setTopbarSaveStatus("saved");
     updateTopbarSystemStatus();
-    queueBackendSave(snapshot);
+    return queueBackendSave(snapshot, rollbackRawState);
   } catch (error) {
     console.warn("Could not save school data.", error);
+    return false;
   }
 }
 
@@ -10309,6 +10322,7 @@ renderFeeBookStudentOptions();
 renderStudentFeeCounter();
 renderFeeBook();
 setTopbarNetworkStatus();
+document.addEventListener("submit", blockOfflineWriteAction, true);
 if (localStorage.getItem(BACKEND_TOKEN_KEY) && getLoggedInBackendUser()) {
   initializeBackendSync();
 } else {
