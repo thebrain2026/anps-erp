@@ -1047,6 +1047,16 @@ function updateRoleBasedNavigation() {
     button.hidden = !isAllowed;
     button.disabled = !isAllowed;
   });
+  document.querySelectorAll(".nav-group").forEach(group => {
+    const childButtons = [...group.querySelectorAll("[data-view]")];
+    const hasVisibleChild = childButtons.some(button => !button.hidden && !button.disabled);
+    const toggle = group.querySelector(".nav-group-title");
+    group.hidden = !hasVisibleChild;
+    if (!hasVisibleChild) {
+      group.classList.remove("open");
+      toggle?.setAttribute("aria-expanded", "false");
+    }
+  });
 }
 
 function setTopbarSaveStatus(status = "saved") {
