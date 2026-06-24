@@ -5553,6 +5553,26 @@ body.modal-open {
   font-weight: 850;
 }
 
+.calendar-input-shell {
+  position: relative;
+  display: block;
+}
+
+.calendar-input-shell input {
+  padding-right: 36px;
+}
+
+.calendar-input-icon {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  width: 18px;
+  height: 18px;
+  transform: translateY(-50%);
+  fill: #0f766e;
+  pointer-events: none;
+}
+
 .combined-remarks-field {
   display: grid;
   gap: 6px;

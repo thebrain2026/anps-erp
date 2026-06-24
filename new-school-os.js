@@ -6722,6 +6722,7 @@ function openCombinedCollectionPopup(admissionNo, month, options = {}) {
   }
   combinedCollectionForm.reset();
   delete combinedCollectionForm.dataset.editPaymentReceipt;
+  delete combinedCollectionForm.dataset.singleCollection;
   combinedCollectionForm.dataset.includePriorTuitionDue = options.includePriorTuitionDue ? "1" : "";
   combinedCollectionForm.querySelector("button[type='submit']").textContent = "Save Combined Receipt";
   combinedCollectionForm.elements.admissionNo.value = student.admissionNo || "";
@@ -6751,6 +6752,7 @@ function openSingleCollectionPopup(admissionNo, feeHead, amount = 0, fine = 0) {
   combinedCollectionForm.reset();
   delete combinedCollectionForm.dataset.editPaymentReceipt;
   delete combinedCollectionForm.dataset.includePriorTuitionDue;
+  combinedCollectionForm.dataset.singleCollection = "1";
   combinedCollectionForm.querySelector("button[type='submit']").textContent = "Save Receipt";
   combinedCollectionForm.elements.admissionNo.value = student.admissionNo || "";
   combinedCollectionForm.elements.month.value = "";
@@ -6770,6 +6772,7 @@ function openCombinedCollectionEditPopup(student, payment) {
   const month = (payment.allocations || []).map(allocation => allocation.month).find(Boolean) || "";
   combinedCollectionForm.reset();
   combinedCollectionForm.dataset.editPaymentReceipt = payment.receipt || "";
+  delete combinedCollectionForm.dataset.singleCollection;
   delete combinedCollectionForm.dataset.includePriorTuitionDue;
   combinedCollectionForm.querySelector("button[type='submit']").textContent = "Update Combined Receipt";
   combinedCollectionForm.elements.admissionNo.value = student.admissionNo || "";
@@ -6794,6 +6797,7 @@ function closeCombinedCollectionPopup() {
   combinedCollectionModal.setAttribute("aria-hidden", "true");
   delete combinedCollectionForm.dataset.editPaymentReceipt;
   delete combinedCollectionForm.dataset.includePriorTuitionDue;
+  delete combinedCollectionForm.dataset.singleCollection;
   combinedCollectionForm.querySelector("button[type='submit']").textContent = "Save Combined Receipt";
   document.body.classList.remove("modal-open");
 }
@@ -9723,7 +9727,13 @@ document.addEventListener("keydown", event => {
 
 combinedCollectionForm.addEventListener("change", event => {
   if (event.target.matches("[data-combined-fee]")) updateCombinedCollectionTotals();
-  if (event.target.name === "date" && !combinedCollectionForm.dataset.editPaymentReceipt) renderCombinedCollectionItems();
+  if (
+    event.target.name === "date"
+    && !combinedCollectionForm.dataset.editPaymentReceipt
+    && combinedCollectionForm.dataset.singleCollection !== "1"
+  ) {
+    renderCombinedCollectionItems();
+  }
 });
 
 combinedCollectionForm.addEventListener("input", event => {
