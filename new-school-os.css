@@ -6684,6 +6684,18 @@ body.modal-open {
   transition: border-color .16s ease, box-shadow .16s ease, background .16s ease;
 }
 
+.admission-form fieldset input[type="number"] {
+  color: #111827;
+  font-size: 15px;
+  font-weight: 800;
+}
+
+.admission-form fieldset input[type="number"]::placeholder {
+  color: #9aa6b2;
+  font-weight: 700;
+  opacity: 1;
+}
+
 .admission-form .service-checks input[type="checkbox"] {
   box-sizing: border-box;
   flex: 0 0 18px;
