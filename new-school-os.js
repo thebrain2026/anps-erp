@@ -3663,7 +3663,7 @@ function renderPermissionRows(roleName = "") {
   const protectedRole = isProtectedRoleName(cleanRole);
   const permissions = normalizeRolePermission(cleanRole);
   const renderedModules = new Set();
-  const renderModuleRow = moduleId => {
+  const renderModuleRow = (moduleId, groupName = "") => {
     renderedModules.add(moduleId);
     const modulePermissions = permissions[moduleId] || {};
     return `
@@ -3672,7 +3672,7 @@ function renderPermissionRows(roleName = "") {
           ${ACCESS_ACTIONS.map(action => `
             <td>
               <label class="permission-check" title="${action} ${titleMap[moduleId] || moduleId}">
-                <input type="checkbox" name="${moduleId}.${action}" ${modulePermissions[action] ? "checked" : ""} ${protectedRole ? "disabled" : ""} />
+                <input type="checkbox" name="${moduleId}.${action}" data-permission-module="${escapeHtml(moduleId)}" data-permission-action="${escapeHtml(action)}" data-permission-group="${escapeHtml(groupName)}" ${modulePermissions[action] ? "checked" : ""} ${protectedRole ? "disabled" : ""} />
               </label>
             </td>
           `).join("")}
@@ -3680,15 +3680,23 @@ function renderPermissionRows(roleName = "") {
       `;
   };
   tbody.innerHTML = ACCESS_PERMISSION_GROUPS.map(group => {
-    const rows = group.modules.filter(moduleId => ACCESS_PERMISSION_MODULES.includes(moduleId)).map(renderModuleRow).join("");
+    const groupModules = group.modules.filter(moduleId => ACCESS_PERMISSION_MODULES.includes(moduleId));
+    const rows = groupModules.map(moduleId => renderModuleRow(moduleId, group.name)).join("");
     if (!rows) return "";
     return `
-      <tr class="permission-group-row"><td colspan="6">${escapeHtml(group.name)}</td></tr>
+      <tr class="permission-group-row">
+        <td>${escapeHtml(group.name)}</td>
+        <td colspan="5">
+          <label class="permission-group-toggle">All Tick
+            <input type="checkbox" data-permission-group-toggle="${escapeHtml(group.name)}" ${protectedRole ? "disabled" : ""} />
+          </label>
+        </td>
+      </tr>
       ${rows}
     `;
   }).join("") + ACCESS_PERMISSION_MODULES
     .filter(moduleId => !renderedModules.has(moduleId))
-    .map(renderModuleRow)
+    .map(moduleId => renderModuleRow(moduleId, "Other"))
     .join("");
   if (allTick) {
     allTick.disabled = protectedRole;
@@ -3700,11 +3708,47 @@ function renderPermissionRows(roleName = "") {
 function updateAccessPermissionAllTickState() {
   const allTick = document.getElementById("accessPermissionAllTick");
   if (!allTick) return;
-  const permissionInputs = [...document.querySelectorAll("#accessPermissionRows input[type='checkbox']")]
+  const permissionInputs = [...document.querySelectorAll("#accessPermissionRows input[data-permission-module]")]
     .filter(input => !input.disabled);
   const checkedCount = permissionInputs.filter(input => input.checked).length;
   allTick.checked = permissionInputs.length > 0 && checkedCount === permissionInputs.length;
   allTick.indeterminate = checkedCount > 0 && checkedCount < permissionInputs.length;
+  updateAccessPermissionGroupTickStates();
+}
+
+function updateAccessPermissionGroupTickStates() {
+  const permissionInputs = [...document.querySelectorAll("#accessPermissionRows input[data-permission-module]")]
+    .filter(input => !input.disabled);
+  document.querySelectorAll("#accessPermissionRows input[data-permission-group-toggle]").forEach(toggle => {
+    const groupName = toggle.dataset.permissionGroupToggle || "";
+    const groupInputs = permissionInputs.filter(input => input.dataset.permissionGroup === groupName);
+    const checkedCount = groupInputs.filter(input => input.checked).length;
+    toggle.checked = groupInputs.length > 0 && checkedCount === groupInputs.length;
+    toggle.indeterminate = checkedCount > 0 && checkedCount < groupInputs.length;
+  });
+}
+
+function persistRolePermissionLocally() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(getAppStateSnapshot()));
+  } catch (error) {
+    console.warn("Could not persist permission draft locally.", error);
+  }
+}
+
+function syncPermissionInputsToRole(roleName = document.getElementById("accessPermissionRole")?.value || "") {
+  const cleanRole = String(roleName || "").trim();
+  if (!cleanRole || isProtectedRoleName(cleanRole)) return;
+  const permissions = normalizeRolePermission(cleanRole);
+  document.querySelectorAll("#accessPermissionRows input[data-permission-module]").forEach(input => {
+    const moduleId = input.dataset.permissionModule;
+    const action = input.dataset.permissionAction;
+    if (!moduleId || !action) return;
+    if (!permissions[moduleId]) permissions[moduleId] = {};
+    permissions[moduleId][action] = Boolean(input.checked);
+  });
+  rolePermissions[cleanRole] = permissions;
+  persistRolePermissionLocally();
 }
 
 function renderUserAccessRows() {
@@ -6508,16 +6552,27 @@ function renderFeeBook(admissionNo = activeLedgerAdmissionNo) {
   updatePaymentQuickTotal();
 }
 
-function getCombinedCollectionItems(student, month, paymentDate = new Date()) {
+function getCombinedCollectionItems(student, month, paymentDate = new Date(), includePriorTuitionDue = false) {
   if (!student || !month) return [];
+  const selectedMonthIndex = ACADEMIC_MONTHS.indexOf(month);
   return getLedgerRows(student)
     .filter(row => Array.isArray(row.months) && row.months.includes(month))
-    .map(row => {
+    .flatMap(row => {
+      const collectMonths = row.name === "Tuition Fee" && includePriorTuitionDue && selectedMonthIndex >= 0
+        ? row.months.filter(rowMonth => {
+          const rowMonthIndex = ACADEMIC_MONTHS.indexOf(rowMonth);
+          return rowMonthIndex >= 0 && rowMonthIndex <= selectedMonthIndex;
+        })
+        : [month];
       if (row.name === "Tuition Fee") {
-        const paid = getTuitionMonthPaidInfo(student, row, month);
-        const amount = Math.max(Number(row.monthlyAmount || 0) - Number(paid.tuition || 0), 0);
-        const fine = getTuitionMonthCollectFineDue(student, row, month, parseDateDDMMYYYY(paymentDate));
-        return {head: row.name, month, amount, fine, total: amount + fine, partial: Number(paid.tuition || 0) > 0 && amount > 0};
+        return collectMonths.map(collectMonth => {
+          const paid = getTuitionMonthPaidInfo(student, row, collectMonth);
+          const amount = Math.max(Number(row.monthlyAmount || 0) - Number(paid.tuition || 0), 0);
+          const fine = getTuitionMonthCollectFineDue(student, row, collectMonth, parseDateDDMMYYYY(paymentDate));
+          return amount + fine > 0
+            ? {head: row.name, month: collectMonth, amount, fine, total: amount + fine, partial: Number(paid.tuition || 0) > 0 && amount > 0}
+            : null;
+        });
       }
       if (row.name === "Transport Fees") {
         const paid = getTransportMonthPaidInfo(student, row, month);
@@ -6557,12 +6612,13 @@ function renderCombinedCollectionItems() {
   const month = combinedCollectionForm.elements.month.value;
   const student = findActiveStudentByAdmissionNo(admissionNo);
   const date = combinedCollectionForm.elements.date.value || new Date();
-  const items = getCombinedCollectionItems(student, month, date);
+  const includePriorTuitionDue = combinedCollectionForm.dataset.includePriorTuitionDue === "1";
+  const items = getCombinedCollectionItems(student, month, date, includePriorTuitionDue);
   document.getElementById("combinedFeeItems").innerHTML = items.map((item, index) => `
     <div class="combined-fee-row ${item.partial ? "partial-fee-row" : ""}">
       <label>
         <input data-combined-fee type="checkbox" value="${index}" data-head="${escapeHtml(item.head)}" data-month="${escapeHtml(item.month)}" data-amount="${item.amount}" data-fine="${item.fine}" data-total="${item.total}" checked />
-        <span>${escapeHtml(item.head)}</span>
+        <span>${escapeHtml(item.head)}${item.month ? ` (${escapeHtml(item.month)})` : ""}</span>
       </label>
       <span>${formatRs(item.amount)}</span>
       <span>${formatRs(item.fine)}</span>
@@ -6600,7 +6656,7 @@ function renderCombinedCollectionEditItems(payment) {
     <div class="combined-fee-row partial-fee-row">
       <label>
         <input data-combined-fee type="checkbox" value="${index}" data-head="${escapeHtml(item.head)}" data-month="${escapeHtml(item.month)}" data-amount="${item.amount}" data-fine="${item.fine}" data-total="${item.total}" checked />
-        <span>${escapeHtml(item.head)}</span>
+        <span>${escapeHtml(item.head)}${item.month ? ` (${escapeHtml(item.month)})` : ""}</span>
       </label>
       <span>${formatRs(item.amount)}</span>
       <span>${formatRs(item.fine)}</span>
@@ -6625,7 +6681,7 @@ function renderSingleCollectionItem(item) {
   updateCombinedCollectionTotals();
 }
 
-function openCombinedCollectionPopup(admissionNo, month) {
+function openCombinedCollectionPopup(admissionNo, month, options = {}) {
   const student = findActiveStudentByAdmissionNo(admissionNo);
   if (!student || !month) {
     showToast("Monthly collection data not found.");
@@ -6633,6 +6689,7 @@ function openCombinedCollectionPopup(admissionNo, month) {
   }
   combinedCollectionForm.reset();
   delete combinedCollectionForm.dataset.editPaymentReceipt;
+  combinedCollectionForm.dataset.includePriorTuitionDue = options.includePriorTuitionDue ? "1" : "";
   combinedCollectionForm.querySelector("button[type='submit']").textContent = "Save Combined Receipt";
   combinedCollectionForm.elements.admissionNo.value = student.admissionNo || "";
   combinedCollectionForm.elements.month.value = month;
@@ -6642,7 +6699,9 @@ function openCombinedCollectionPopup(admissionNo, month) {
   document.getElementById("combinedStudentName").textContent = student.name || "-";
   document.getElementById("combinedStudentClass").textContent = student.klass || "-";
   document.getElementById("combinedFeeMonth").textContent = month;
-  document.getElementById("combinedCollectionSubtitle").textContent = `${student.name || "Student"} | ${month} monthly fees`;
+  document.getElementById("combinedCollectionSubtitle").textContent = options.includePriorTuitionDue
+    ? `${student.name || "Student"} | Tuition due up to ${month}`
+    : `${student.name || "Student"} | ${month} monthly fees`;
   renderCombinedCollectionItems();
   combinedCollectionModal.setAttribute("aria-hidden", "false");
   document.body.classList.add("modal-open");
@@ -6658,6 +6717,7 @@ function openSingleCollectionPopup(admissionNo, feeHead, amount = 0, fine = 0) {
   }
   combinedCollectionForm.reset();
   delete combinedCollectionForm.dataset.editPaymentReceipt;
+  delete combinedCollectionForm.dataset.includePriorTuitionDue;
   combinedCollectionForm.querySelector("button[type='submit']").textContent = "Save Receipt";
   combinedCollectionForm.elements.admissionNo.value = student.admissionNo || "";
   combinedCollectionForm.elements.month.value = "";
@@ -6677,6 +6737,7 @@ function openCombinedCollectionEditPopup(student, payment) {
   const month = (payment.allocations || []).map(allocation => allocation.month).find(Boolean) || "";
   combinedCollectionForm.reset();
   combinedCollectionForm.dataset.editPaymentReceipt = payment.receipt || "";
+  delete combinedCollectionForm.dataset.includePriorTuitionDue;
   combinedCollectionForm.querySelector("button[type='submit']").textContent = "Update Combined Receipt";
   combinedCollectionForm.elements.admissionNo.value = student.admissionNo || "";
   combinedCollectionForm.elements.month.value = month;
@@ -6699,6 +6760,7 @@ function openCombinedCollectionEditPopup(student, payment) {
 function closeCombinedCollectionPopup() {
   combinedCollectionModal.setAttribute("aria-hidden", "true");
   delete combinedCollectionForm.dataset.editPaymentReceipt;
+  delete combinedCollectionForm.dataset.includePriorTuitionDue;
   combinedCollectionForm.querySelector("button[type='submit']").textContent = "Save Combined Receipt";
   document.body.classList.remove("modal-open");
 }
@@ -8604,15 +8666,26 @@ document.getElementById("accessPermissionRole")?.addEventListener("change", even
 document.getElementById("accessPermissionAllTick")?.addEventListener("change", event => {
   if (event.target.id !== "accessPermissionAllTick") return;
   event.stopPropagation();
-  document.querySelectorAll("#accessPermissionRows input[type='checkbox']:not(:disabled)").forEach(input => {
+  document.querySelectorAll("#accessPermissionRows input[data-permission-module]:not(:disabled)").forEach(input => {
     input.checked = event.target.checked;
   });
   event.target.indeterminate = false;
+  syncPermissionInputsToRole();
+  updateAccessPermissionAllTickState();
 });
 
 document.getElementById("accessPermissionRows")?.addEventListener("change", event => {
   if (!event.target.matches("input[type='checkbox']")) return;
   event.stopPropagation();
+  const groupToggle = event.target.closest("[data-permission-group-toggle]");
+  if (groupToggle) {
+    const groupName = groupToggle.dataset.permissionGroupToggle || "";
+    document.querySelectorAll("#accessPermissionRows input[data-permission-module]:not(:disabled)").forEach(input => {
+      if (input.dataset.permissionGroup === groupName) input.checked = groupToggle.checked;
+    });
+    groupToggle.indeterminate = false;
+  }
+  syncPermissionInputsToRole();
   updateAccessPermissionAllTickState();
 });
 
@@ -10232,7 +10305,9 @@ document.body.addEventListener("click", event => {
     }
     const sourceView = getSourceView(studentFees);
     if ((sourceView === "feeBook" || sourceView === "dueFeesSearch") && feeMonth) {
-      openCombinedCollectionPopup(admissionNo, feeMonth);
+      openCombinedCollectionPopup(admissionNo, feeMonth, {
+        includePriorTuitionDue: sourceView === "dueFeesSearch" && feeHead === "Tuition Fee"
+      });
       return;
     }
     if (feeHead && !feeMonth) {
