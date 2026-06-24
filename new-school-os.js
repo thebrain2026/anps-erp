@@ -4403,7 +4403,14 @@ function formatRs(amount) {
 
 function formatDateDDMMYYYY(value = new Date()) {
   if (!value) return "";
-  if (typeof value === "string" && /^\d{2}-\d{2}-\d{4}$/.test(value.trim())) return value.trim();
+  if (typeof value === "string") {
+    const normalized = normalizeCollectionHistoryDateValue(value);
+    if (/^\d{2}-\d{2}-\d{4}$/.test(normalized)) return normalized;
+    if (/^\d{2}-\d{2}-\d{2}$/.test(normalized)) {
+      const [day, month, year] = normalized.split("-");
+      return `${day}-${month}-20${year}`;
+    }
+  }
   if (typeof value === "string" && /^\d{2}-\d{2}-\d{2}$/.test(value.trim())) {
     const [day, month, year] = value.trim().split("-");
     return `${day}-${month}-20${year}`;
@@ -4418,7 +4425,7 @@ function formatDateDDMMYYYY(value = new Date()) {
 
 function parseDateDDMMYYYY(value = new Date()) {
   if (value instanceof Date) return new Date(value.getFullYear(), value.getMonth(), value.getDate());
-  const clean = String(value || "").trim();
+  const clean = normalizeCollectionHistoryDateValue(value);
   const match = clean.match(/^(\d{2})-(\d{2})-(\d{2}|\d{4})$/);
   if (match) {
     const year = match[3].length === 2 ? Number(`20${match[3]}`) : Number(match[3]);
@@ -4427,6 +4434,80 @@ function parseDateDDMMYYYY(value = new Date()) {
   }
   const date = new Date(value);
   return Number.isNaN(date.getTime()) ? new Date() : new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+function toDateInputValue(value = new Date()) {
+  const date = parseDateDDMMYYYY(value);
+  const year = String(date.getFullYear());
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function dateInputValueToDisplay(value = "") {
+  const clean = String(value || "").trim();
+  const match = clean.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return formatDateDDMMYYYY(new Date());
+  return `${match[3]}-${match[2]}-${match[1]}`;
+}
+
+let activeCalendarTextInput = null;
+
+function ensureDatePickerPopover() {
+  let popover = document.getElementById("datePickerPopover");
+  if (popover) return popover;
+  popover = document.createElement("div");
+  popover.id = "datePickerPopover";
+  popover.className = "date-picker-popover";
+  popover.hidden = true;
+  popover.innerHTML = `
+    <strong>Select payment date</strong>
+    <input type="date" data-date-picker-input />
+    <div class="date-picker-actions">
+      <button class="ghost" type="button" data-date-picker-today>Today</button>
+      <button class="primary" type="button" data-date-picker-apply>Apply</button>
+    </div>
+  `;
+  document.body.appendChild(popover);
+  return popover;
+}
+
+function applyDatePickerValue() {
+  const popover = ensureDatePickerPopover();
+  const pickerInput = popover.querySelector("[data-date-picker-input]");
+  if (!activeCalendarTextInput || !pickerInput?.value) return;
+  activeCalendarTextInput.value = dateInputValueToDisplay(pickerInput.value);
+  activeCalendarTextInput.dispatchEvent(new Event("change", {bubbles: true}));
+  closeDatePickerPopover();
+}
+
+function closeDatePickerPopover() {
+  const popover = document.getElementById("datePickerPopover");
+  if (popover) popover.hidden = true;
+  activeCalendarTextInput = null;
+}
+
+function openDatePickerPopover(textInput, anchor) {
+  if (!textInput || !anchor) return;
+  activeCalendarTextInput = textInput;
+  const popover = ensureDatePickerPopover();
+  const pickerInput = popover.querySelector("[data-date-picker-input]");
+  pickerInput.value = toDateInputValue(textInput.value || new Date());
+  popover.hidden = false;
+  const rect = anchor.getBoundingClientRect();
+  const width = Math.min(260, window.innerWidth - 32);
+  const left = Math.max(16, Math.min(rect.right - width, window.innerWidth - width - 16));
+  const top = Math.min(rect.bottom + 8, window.innerHeight - 170);
+  popover.style.left = `${left}px`;
+  popover.style.top = `${Math.max(16, top)}px`;
+  pickerInput.focus();
+  if (typeof pickerInput.showPicker === "function") {
+    try {
+      pickerInput.showPicker();
+    } catch (error) {
+      // Some browsers only allow showPicker from direct user activation.
+    }
+  }
 }
 
 function parseOptionalDateDDMMYYYY(value) {
@@ -6795,6 +6876,7 @@ function openCombinedCollectionEditPopup(student, payment) {
 
 function closeCombinedCollectionPopup() {
   combinedCollectionModal.setAttribute("aria-hidden", "true");
+  closeDatePickerPopover();
   delete combinedCollectionForm.dataset.editPaymentReceipt;
   delete combinedCollectionForm.dataset.includePriorTuitionDue;
   delete combinedCollectionForm.dataset.singleCollection;
@@ -9709,6 +9791,32 @@ combinedCollectionModal.addEventListener("click", event => {
   if (event.target === combinedCollectionModal) closeCombinedCollectionPopup();
 });
 
+document.addEventListener("click", event => {
+  const dateButton = event.target.closest("[data-open-combined-date-picker]");
+  if (dateButton) {
+    const shell = dateButton.closest(".calendar-input-shell");
+    openDatePickerPopover(shell?.querySelector("input[name='date']"), dateButton);
+    return;
+  }
+  const todayButton = event.target.closest("[data-date-picker-today]");
+  if (todayButton) {
+    const popover = ensureDatePickerPopover();
+    const pickerInput = popover.querySelector("[data-date-picker-input]");
+    pickerInput.value = toDateInputValue(new Date());
+    applyDatePickerValue();
+    return;
+  }
+  const applyButton = event.target.closest("[data-date-picker-apply]");
+  if (applyButton) {
+    applyDatePickerValue();
+    return;
+  }
+  const popover = document.getElementById("datePickerPopover");
+  if (popover && !popover.hidden && !event.target.closest("#datePickerPopover")) {
+    closeDatePickerPopover();
+  }
+});
+
 disableReasonForm.addEventListener("submit", event => {
   event.preventDefault();
   const admissionNo = disableReasonForm.elements.admissionNo.value;
@@ -9723,10 +9831,12 @@ document.addEventListener("keydown", event => {
   if (event.key === "Escape" && disableReasonModal.getAttribute("aria-hidden") === "false") closeDisableReasonModal();
   if (event.key === "Escape" && receiptPreviewModal.getAttribute("aria-hidden") === "false") closeReceiptPreview();
   if (event.key === "Escape" && combinedCollectionModal.getAttribute("aria-hidden") === "false") closeCombinedCollectionPopup();
+  if (event.key === "Escape") closeDatePickerPopover();
 });
 
 combinedCollectionForm.addEventListener("change", event => {
   if (event.target.matches("[data-combined-fee]")) updateCombinedCollectionTotals();
+  if (event.target.name === "date") event.target.value = formatDateDDMMYYYY(event.target.value || new Date());
   if (
     event.target.name === "date"
     && !combinedCollectionForm.dataset.editPaymentReceipt
@@ -9734,6 +9844,10 @@ combinedCollectionForm.addEventListener("change", event => {
   ) {
     renderCombinedCollectionItems();
   }
+});
+
+document.addEventListener("change", event => {
+  if (event.target.matches("[data-date-picker-input]")) applyDatePickerValue();
 });
 
 combinedCollectionForm.addEventListener("input", event => {
