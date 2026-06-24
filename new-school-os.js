@@ -69,6 +69,7 @@ let activeSession = "2026-27";
 let activeFeeStudentAdmissionNo = "";
 let activeLedgerAdmissionNo = "";
 let activeFeeReturnView = "finance";
+const viewHistoryStack = [];
 const collectedPayments = {};
 const selectedHistoryPayments = new Set();
 let receiptSerial = 1;
@@ -1186,10 +1187,15 @@ function renderActiveView(viewName = document.querySelector(".view.active")?.id 
   }
 }
 
-function setView(viewName) {
+function setView(viewName, options = {}) {
   if (!canCurrentRoleAccessView(viewName)) {
     showToast(`${getCurrentTopbarRole()} role does not have access to ${titleMap[viewName] || viewName}.`);
     return;
+  }
+  const currentView = document.querySelector(".view.active")?.id || "";
+  if (!options.skipHistory && currentView && currentView !== viewName) {
+    viewHistoryStack.push(currentView);
+    if (viewHistoryStack.length > 25) viewHistoryStack.shift();
   }
   views.forEach(view => view.classList.toggle("active", view.id === viewName));
   navButtons.forEach(button => button.classList.toggle("active", button.dataset.view === viewName));
@@ -1256,6 +1262,23 @@ function setView(viewName) {
     renderStudentTransportFees();
   }
   document.body.classList.remove("nav-open");
+}
+
+function openPreviousViewFromHistory() {
+  while (viewHistoryStack.length) {
+    const previousView = viewHistoryStack.pop();
+    if (previousView && previousView !== "feeBook" && canCurrentRoleAccessView(previousView)) {
+      setView(previousView, {skipHistory: true});
+      showToast(`${titleMap[previousView] || "Previous page"} opened.`);
+      return true;
+    }
+  }
+  if (canCurrentRoleAccessView("dashboard")) {
+    setView("dashboard", {skipHistory: true});
+    showToast("Dashboard opened.");
+    return true;
+  }
+  return false;
 }
 
 function setClassTimetableBuilderVisible(isVisible) {
@@ -7790,6 +7813,57 @@ navGroups.forEach(([groupId, toggleId]) => {
     setNavGroupOpen(groupId, toggleId, shouldOpen);
   });
 });
+
+const feeBookView = document.getElementById("feeBook");
+let feeBookSwipeStart = null;
+let feeBookWheelSwipeAt = 0;
+
+function isFeeBookActive() {
+  return feeBookView?.classList.contains("active");
+}
+
+function getTouchCenter(touches) {
+  const touchList = [...touches];
+  if (!touchList.length) return null;
+  const total = touchList.reduce((sum, touch) => ({
+    x: sum.x + touch.clientX,
+    y: sum.y + touch.clientY
+  }), {x: 0, y: 0});
+  return {x: total.x / touchList.length, y: total.y / touchList.length};
+}
+
+feeBookView?.addEventListener("touchstart", event => {
+  if (!isFeeBookActive() || event.touches.length < 2) {
+    feeBookSwipeStart = null;
+    return;
+  }
+  const center = getTouchCenter(event.touches);
+  feeBookSwipeStart = center ? {...center, time: Date.now()} : null;
+}, {passive: true});
+
+feeBookView?.addEventListener("touchend", event => {
+  if (!isFeeBookActive() || !feeBookSwipeStart) return;
+  const center = getTouchCenter(event.changedTouches);
+  if (!center) return;
+  const dx = center.x - feeBookSwipeStart.x;
+  const dy = center.y - feeBookSwipeStart.y;
+  const elapsed = Date.now() - feeBookSwipeStart.time;
+  feeBookSwipeStart = null;
+  if (dx > 80 && Math.abs(dy) < 90 && elapsed < 1200) {
+    openPreviousViewFromHistory();
+  }
+}, {passive: true});
+
+feeBookView?.addEventListener("wheel", event => {
+  if (!isFeeBookActive()) return;
+  const now = Date.now();
+  const isRightSwipe = event.deltaX < -70 && Math.abs(event.deltaX) > Math.abs(event.deltaY) * 1.4;
+  if (isRightSwipe && now - feeBookWheelSwipeAt > 900) {
+    feeBookWheelSwipeAt = now;
+    event.preventDefault();
+    openPreviousViewFromHistory();
+  }
+}, {passive: false});
 
 document.querySelectorAll("[data-view-jump]").forEach(button => {
   button.addEventListener("click", () => {
