@@ -4460,7 +4460,7 @@ function renderDueFeesSearch() {
     const openStudentKey = escapeHtml(student.admissionNo || student.name || "");
     return `
     <tr class="due-student-row due-student-tone-${tone}${separatorClass}">
-      <td>${isNewStudentGroup ? `<button class="student-name-link" type="button" data-open-fee-book="${openStudentKey}"><strong>${student.admissionNo || "-"}</strong></button>` : `<span class="repeat-student-cell">same student</span>`}</td>
+      <td>${isNewStudentGroup ? `<button class="student-name-link" type="button" data-open-student-details="${openStudentKey}"><strong>${student.admissionNo || "-"}</strong></button>` : `<span class="repeat-student-cell">same student</span>`}</td>
       <td>${isNewStudentGroup ? `<button class="student-name-link" type="button" data-open-fee-book="${openStudentKey}"><strong>${student.name || "-"}</strong></button>` : `<span class="repeat-student-cell">-</span>`}</td>
       <td><strong>${row.name}</strong></td>
       <td>${renderPeriodCell(row, student)}</td>
@@ -10265,6 +10265,7 @@ document.body.addEventListener("click", event => {
   const savedReceiptPreview = event.target.closest("[data-preview-saved-receipt]");
   const selectedPaymentPreview = event.target.closest("[data-preview-selected-payments]");
   const classSectionDetail = event.target.closest("[data-view-class-section]");
+  const openStudentDetails = event.target.closest("[data-open-student-details]");
   const openFeeBook = event.target.closest("[data-open-fee-book]");
   const disableStudent = event.target.closest("[data-disable-student]");
   const enableStudent = event.target.closest("[data-enable-student]");
@@ -10632,6 +10633,19 @@ document.body.addEventListener("click", event => {
       resetSubjectSetupEditing();
       showToast(`${subjectName} subject deleted.`);
     }
+  }
+  if (openStudentDetails) {
+    const admissionNo = openStudentDetails.dataset.openStudentDetails;
+    const student = findActiveStudentByAdmissionOrName(admissionNo);
+    if (!student) {
+      showToast("Student is disabled or not found.");
+      return;
+    }
+    feeBookReturnStudentAdmissionNo = student.admissionNo || "";
+    setView("students");
+    renderStudents();
+    focusReturnedStudentRow();
+    showToast(`${student.name || admissionNo} opened in Student Details.`);
   }
   if (openFeeBook) {
     const admissionNo = openFeeBook.dataset.openFeeBook;
