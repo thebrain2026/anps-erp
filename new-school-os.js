@@ -5060,6 +5060,10 @@ function mergePaymentsForReceipt(admissionNo, receiptNo) {
   };
 }
 
+function getPaymentPrimaryDate(payment = {}) {
+  return (payment.allocations || []).map(allocation => allocation.date).find(Boolean) || payment.date;
+}
+
 function buildLedgerPaymentRow(student, payment) {
   const allocations = payment.allocations || [];
   const feeHeads = [...new Set(allocations
@@ -5074,7 +5078,7 @@ function buildLedgerPaymentRow(student, payment) {
   const savedCash = Number(payment.cashAmount || 0);
   const split = savedBank || savedCash ? {bank: savedBank, cash: savedCash} : getPaymentSplitForAmount(payment, total);
   return {
-    date: payment.date,
+    date: getPaymentPrimaryDate(payment),
     receipt: payment.receipt,
     admissionNo: student.admissionNo || "",
     head: feeHeads.length ? feeHeads.join(", ") : "Tuition Fee",
@@ -5204,15 +5208,16 @@ function getLedgerPaymentDetails(student, row) {
   if (!student || !row) return [];
   const matchingHeads = getFeeHeadMatchingHeads(row.name);
   return getSessionPayments(student.admissionNo).map(payment => {
-    const amount = payment.allocations
-      .filter(allocation => matchingHeads.includes(allocation.head))
+    const matchingAllocations = payment.allocations
+      .filter(allocation => matchingHeads.includes(allocation.head));
+    const amount = matchingAllocations
       .reduce((sum, allocation) => sum + allocation.amount, 0);
     const fineHead = getLateFineHeadForFee(row.name);
     const fine = ["Tuition Fee", "Transport Fees"].includes(row.name) ? payment.allocations
       .filter(allocation => allocation.head === fineHead)
       .reduce((sum, allocation) => sum + allocation.amount, 0) : 0;
     return amount > 0 ? {
-      date: payment.date,
+      date: matchingAllocations.map(allocation => allocation.date).find(Boolean) || payment.date,
       receipt: payment.receipt,
       amount,
       fine,
@@ -6662,14 +6667,15 @@ function collectCombinedStudentPayment(student, items, date, receiptNo = "", pay
     if (remainingAmount <= 0) return;
     const amount = Number(item.amount || 0);
     const fine = Number(item.fine || 0);
+    const allocationDate = formatDateDDMMYYYY(item.date || date || new Date());
     const finePaid = Math.min(fine, remainingAmount);
     if (finePaid > 0) {
-      allocations.push({head: getLateFineHeadForFee(item.head), amount: finePaid, month: item.month || undefined});
+      allocations.push({head: getLateFineHeadForFee(item.head), amount: finePaid, month: item.month || undefined, date: allocationDate});
       remainingAmount -= finePaid;
     }
     const feePaid = Math.min(amount, remainingAmount);
     if (feePaid > 0) {
-      allocations.push({head: item.head, amount: feePaid, month: item.month || undefined});
+      allocations.push({head: item.head, amount: feePaid, month: item.month || undefined, date: allocationDate});
       remainingAmount -= feePaid;
     }
   });
@@ -6861,6 +6867,44 @@ function updateCombinedCollectionTotals() {
   document.getElementById("combinedBalance").textContent = formatRs(Math.max(payable - paidNow, 0));
 }
 
+function calculateCombinedItemFineForDate(student, item, rowDate) {
+  if (!student || !item || !["Tuition Fee", "Transport Fees"].includes(item.head)) return 0;
+  const paymentDate = parseDateDDMMYYYY(rowDate || combinedCollectionForm.elements.date.value || new Date());
+  const row = getLedgerRows(student).find(entry => entry.name === item.head && (!item.month || (entry.months || []).includes(item.month)));
+  if (!row || !item.month) return 0;
+  return item.head === "Transport Fees"
+    ? getTransportMonthCollectFineDue(student, row, item.month, paymentDate)
+    : getTuitionMonthCollectFineDue(student, row, item.month, paymentDate);
+}
+
+function updateCombinedRowDateFee(row) {
+  if (!row) return;
+  const input = row.querySelector("[data-combined-fee]");
+  const dateInput = row.querySelector("[data-combined-row-date]");
+  if (!input) return;
+  if (combinedCollectionForm.dataset.editPaymentReceipt) {
+    if (dateInput?.value) {
+      const rowDate = formatDateDDMMYYYY(dateInput.value);
+      dateInput.value = rowDate;
+      input.dataset.paymentDate = rowDate;
+    }
+    return;
+  }
+  const student = findActiveStudentByAdmissionNo(combinedCollectionForm.elements.admissionNo.value);
+  const rowDate = dateInput?.value ? formatDateDDMMYYYY(dateInput.value) : "";
+  if (dateInput && dateInput.value) dateInput.value = rowDate;
+  const amount = Number(input.dataset.amount || 0);
+  const item = {head: input.dataset.head, month: input.dataset.month, amount};
+  const fine = calculateCombinedItemFineForDate(student, item, rowDate);
+  const total = amount + fine;
+  input.dataset.fine = fine;
+  input.dataset.total = total;
+  input.dataset.paymentDate = rowDate;
+  row.querySelector("[data-combined-fine-display]").textContent = formatRs(fine);
+  row.querySelector("[data-combined-total-display]").textContent = formatRs(total);
+  updateCombinedCollectionTotals();
+}
+
 function renderCombinedCollectionItems() {
   const admissionNo = combinedCollectionForm.elements.admissionNo.value;
   const month = combinedCollectionForm.elements.month.value;
@@ -6874,11 +6918,12 @@ function renderCombinedCollectionItems() {
         <input data-combined-fee type="checkbox" value="${index}" data-head="${escapeHtml(item.head)}" data-month="${escapeHtml(item.month)}" data-amount="${item.amount}" data-fine="${item.fine}" data-total="${item.total}" checked />
         <span>${escapeHtml(item.head)}${item.month ? ` (${escapeHtml(item.month)})` : ""}</span>
       </label>
+      <input class="combined-row-date" data-combined-row-date type="text" placeholder="Main date" inputmode="numeric" aria-label="${escapeHtml(item.head)} ${escapeHtml(item.month || "")} payment date" />
       <span>${formatRs(item.amount)}</span>
-      <span>${formatRs(item.fine)}</span>
-      <strong>${formatRs(item.total)}</strong>
+      <span data-combined-fine-display>${formatRs(item.fine)}</span>
+      <strong data-combined-total-display>${formatRs(item.total)}</strong>
     </div>
-  `).join("") || `<div class="combined-fee-row"><span>No monthly dues found for ${escapeHtml(month)}.</span><span>-</span><span>-</span><strong>Rs. 0</strong></div>`;
+  `).join("") || `<div class="combined-fee-row"><span>No monthly dues found for ${escapeHtml(month)}.</span><span>-</span><span>-</span><span>-</span><strong>Rs. 0</strong></div>`;
   updateCombinedCollectionTotals();
 }
 
@@ -6891,6 +6936,7 @@ function renderCombinedCollectionEditItems(payment) {
       if (!itemsByKey[tuitionKey]) itemsByKey[tuitionKey] = {head: "Tuition Fee", month, amount: 0, fine: 0, total: 0};
       itemsByKey[tuitionKey].fine += Number(allocation.amount || 0);
       itemsByKey[tuitionKey].total += Number(allocation.amount || 0);
+      itemsByKey[tuitionKey].date = allocation.date || itemsByKey[tuitionKey].date || "";
       return;
     }
     if (allocation.head === "Transport Late Fine") {
@@ -6898,12 +6944,14 @@ function renderCombinedCollectionEditItems(payment) {
       if (!itemsByKey[transportKey]) itemsByKey[transportKey] = {head: "Transport Fees", month, amount: 0, fine: 0, total: 0};
       itemsByKey[transportKey].fine += Number(allocation.amount || 0);
       itemsByKey[transportKey].total += Number(allocation.amount || 0);
+      itemsByKey[transportKey].date = allocation.date || itemsByKey[transportKey].date || "";
       return;
     }
     const key = `${allocation.head}__${month}`;
     if (!itemsByKey[key]) itemsByKey[key] = {head: allocation.head, month, amount: 0, fine: 0, total: 0};
     itemsByKey[key].amount += Number(allocation.amount || 0);
     itemsByKey[key].total += Number(allocation.amount || 0);
+    itemsByKey[key].date = allocation.date || itemsByKey[key].date || "";
   });
   const items = Object.values(itemsByKey).filter(item => item.total > 0);
   document.getElementById("combinedFeeItems").innerHTML = items.map((item, index) => `
@@ -6912,11 +6960,12 @@ function renderCombinedCollectionEditItems(payment) {
         <input data-combined-fee type="checkbox" value="${index}" data-head="${escapeHtml(item.head)}" data-month="${escapeHtml(item.month)}" data-amount="${item.amount}" data-fine="${item.fine}" data-total="${item.total}" checked />
         <span>${escapeHtml(item.head)}${item.month ? ` (${escapeHtml(item.month)})` : ""}</span>
       </label>
+      <input class="combined-row-date" data-combined-row-date type="text" placeholder="Main date" inputmode="numeric" value="${escapeHtml(item.date ? formatDateDDMMYYYY(item.date) : "")}" />
       <span>${formatRs(item.amount)}</span>
-      <span>${formatRs(item.fine)}</span>
-      <strong>${formatRs(item.total)}</strong>
+      <span data-combined-fine-display>${formatRs(item.fine)}</span>
+      <strong data-combined-total-display>${formatRs(item.total)}</strong>
     </div>
-  `).join("") || `<div class="combined-fee-row"><span>No payment rows found.</span><span>-</span><span>-</span><strong>Rs. 0</strong></div>`;
+  `).join("") || `<div class="combined-fee-row"><span>No payment rows found.</span><span>-</span><span>-</span><span>-</span><strong>Rs. 0</strong></div>`;
   updateCombinedCollectionTotals();
 }
 
@@ -6927,9 +6976,10 @@ function renderSingleCollectionItem(item) {
         <input data-combined-fee type="checkbox" value="0" data-head="${escapeHtml(item.head)}" data-month="" data-amount="${item.amount}" data-fine="${item.fine || 0}" data-total="${item.total}" checked />
         <span>${escapeHtml(item.head)}</span>
       </label>
+      <input class="combined-row-date" data-combined-row-date type="text" placeholder="Main date" inputmode="numeric" />
       <span>${formatRs(item.amount)}</span>
-      <span>${formatRs(item.fine || 0)}</span>
-      <strong>${formatRs(item.total)}</strong>
+      <span data-combined-fine-display>${formatRs(item.fine || 0)}</span>
+      <strong data-combined-total-display>${formatRs(item.total)}</strong>
     </div>
   `;
   updateCombinedCollectionTotals();
@@ -9977,6 +10027,7 @@ document.addEventListener("keydown", event => {
 
 combinedCollectionForm.addEventListener("change", event => {
   if (event.target.matches("[data-combined-fee]")) updateCombinedCollectionTotals();
+  if (event.target.matches("[data-combined-row-date]")) updateCombinedRowDateFee(event.target.closest(".combined-fee-row"));
   if (event.target.name === "date") event.target.value = formatDateDDMMYYYY(event.target.value || new Date());
   if (
     event.target.name === "date"
@@ -10005,13 +10056,21 @@ combinedCollectionForm.addEventListener("submit", event => {
   event.preventDefault();
   const form = event.currentTarget;
   const student = findActiveStudentByAdmissionNo(form.elements.admissionNo.value);
-  const selected = [...form.querySelectorAll("[data-combined-fee]:checked")].map(input => ({
-    head: input.dataset.head,
-    month: input.dataset.month,
-    amount: Number(input.dataset.amount || 0),
-    fine: Number(input.dataset.fine || 0),
-    total: Number(input.dataset.total || 0)
-  }));
+  if (!form.dataset.editPaymentReceipt) {
+    form.querySelectorAll("[data-combined-row-date]").forEach(input => updateCombinedRowDateFee(input.closest(".combined-fee-row")));
+  }
+  const selected = [...form.querySelectorAll("[data-combined-fee]:checked")].map(input => {
+    const rowDate = input.closest(".combined-fee-row")?.querySelector("[data-combined-row-date]")?.value || "";
+    const appliedDate = formatDateDDMMYYYY(rowDate || form.elements.date.value || new Date());
+    return {
+      head: input.dataset.head,
+      month: input.dataset.month,
+      amount: Number(input.dataset.amount || 0),
+      fine: Number(input.dataset.fine || 0),
+      total: Number(input.dataset.total || 0),
+      date: appliedDate
+    };
+  });
   const total = selected.reduce((sum, item) => sum + item.total, 0);
   const bankAmount = Number(form.elements.bankAmount.value || 0);
   const cashAmount = Number(form.elements.cashAmount.value || 0);
