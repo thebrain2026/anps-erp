@@ -586,6 +586,64 @@ def money(value):
     return int("".join(ch for ch in str(value or "") if ch.isdigit()) or "0")
 
 
+def payment_merge_key(payment):
+    if not isinstance(payment, dict):
+        return ""
+    receipt = str(payment.get("receipt") or "").strip().lower()
+    if receipt:
+        return f"receipt:{receipt}"
+    return "|".join(
+        str(payment.get(key) or "").strip().lower()
+        for key in ("date", "head", "month", "amount", "bankAmount", "cashAmount")
+    )
+
+
+def merge_payment_lists(server_payments, incoming_payments):
+    merged = []
+    index_by_key = {}
+    for payment in list(server_payments or []) + list(incoming_payments or []):
+        if not isinstance(payment, dict):
+            continue
+        key = payment_merge_key(payment)
+        if key not in index_by_key:
+            index_by_key[key] = len(merged)
+            merged.append(dict(payment))
+            continue
+        merged[index_by_key[key]].update(payment)
+    return merged
+
+
+def merge_collected_payments(server_collected, incoming_collected):
+    if not isinstance(server_collected, dict):
+        server_collected = {}
+    if not isinstance(incoming_collected, dict):
+        incoming_collected = {}
+    merged = {}
+    for session in sorted(set(server_collected) | set(incoming_collected)):
+        server_session = server_collected.get(session) if isinstance(server_collected.get(session), dict) else {}
+        incoming_session = incoming_collected.get(session) if isinstance(incoming_collected.get(session), dict) else {}
+        merged[session] = {}
+        for admission_no in sorted(set(server_session) | set(incoming_session)):
+            merged[session][admission_no] = merge_payment_lists(
+                server_session.get(admission_no) or [],
+                incoming_session.get(admission_no) or [],
+            )
+    return merged
+
+
+def merge_state_without_losing_receipts(server_state, incoming_state):
+    if not isinstance(server_state, dict):
+        server_state = {}
+    if not isinstance(incoming_state, dict):
+        incoming_state = {}
+    merged = dict(incoming_state)
+    merged["collectedPayments"] = merge_collected_payments(
+        server_state.get("collectedPayments") or {},
+        incoming_state.get("collectedPayments") or {},
+    )
+    return merged
+
+
 def full_name(form):
     return " ".join(
         str(form.get(k) or "").strip()
@@ -2175,14 +2233,15 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             base_updated_at = payload.get("base_updated_at") or payload.get("baseUpdatedAt")
             current_record = read_state_record()
             if current_record and current_record.get("updated_at") and base_updated_at != current_record.get("updated_at"):
+                state = merge_state_without_losing_receipts(current_record.get("state") or {}, state)
                 return self.json_response({
                     "ok": False,
                     "error": "state_conflict",
                     "updated_at": current_record.get("updated_at"),
-                    "state": current_record.get("state"),
+                    "state": state,
                 }, status=409)
             updated_at = write_state(state)
-            self.json_response({"ok": True, "updated_at": updated_at})
+            self.json_response({"ok": True, "updated_at": updated_at, "state": state})
         except Exception as exc:
             self.json_response({"ok": False, "error": str(exc)}, status=400)
 

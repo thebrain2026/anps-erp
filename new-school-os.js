@@ -469,6 +469,50 @@ function mergeObjectListByKey(remoteList = [], localList = [], keyFields = []) {
   return merged;
 }
 
+function getPaymentMergeKey(payment = {}) {
+  const receipt = String(payment.receipt || "").trim().toLowerCase();
+  if (receipt) return `receipt:${receipt}`;
+  return [
+    payment.date || "",
+    payment.head || "",
+    payment.month || "",
+    payment.amount || "",
+    payment.bankAmount || "",
+    payment.cashAmount || ""
+  ].join("|").toLowerCase();
+}
+
+function mergePaymentList(remotePayments = [], localPayments = []) {
+  const merged = [];
+  const indexByKey = new Map();
+  [...(Array.isArray(remotePayments) ? remotePayments : []), ...(Array.isArray(localPayments) ? localPayments : [])].forEach(payment => {
+    if (!payment || typeof payment !== "object") return;
+    const key = getPaymentMergeKey(payment);
+    if (!indexByKey.has(key)) {
+      indexByKey.set(key, merged.length);
+      merged.push(payment);
+      return;
+    }
+    merged[indexByKey.get(key)] = {...merged[indexByKey.get(key)], ...payment};
+  });
+  return merged;
+}
+
+function mergeCollectedPayments(remoteCollected = {}, localCollected = {}) {
+  const merged = {};
+  const sessions = new Set([...Object.keys(remoteCollected || {}), ...Object.keys(localCollected || {})]);
+  sessions.forEach(session => {
+    const remoteSession = remoteCollected?.[session] || {};
+    const localSession = localCollected?.[session] || {};
+    const admissionNos = new Set([...Object.keys(remoteSession || {}), ...Object.keys(localSession || {})]);
+    merged[session] = {};
+    admissionNos.forEach(admissionNo => {
+      merged[session][admissionNo] = mergePaymentList(remoteSession[admissionNo] || [], localSession[admissionNo] || []);
+    });
+  });
+  return merged;
+}
+
 function mergeStateSnapshots(remoteState = {}, localState = {}) {
   const merged = {...remoteState, ...localState};
   const primitiveKeys = [
@@ -509,7 +553,7 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
   merged.transportVillageFees = {...(remoteState.transportVillageFees || {}), ...(localState.transportVillageFees || {})};
   merged.rolePermissions = {...(remoteState.rolePermissions || {}), ...(localState.rolePermissions || {})};
   merged.classSubjectAssignments = {...(remoteState.classSubjectAssignments || {}), ...(localState.classSubjectAssignments || {})};
-  merged.collectedPayments = {...(remoteState.collectedPayments || {}), ...(localState.collectedPayments || {})};
+  merged.collectedPayments = mergeCollectedPayments(remoteState.collectedPayments || {}, localState.collectedPayments || {});
   merged.financeSessions = {...(remoteState.financeSessions || {}), ...(localState.financeSessions || {})};
   return merged;
 }
@@ -532,10 +576,20 @@ async function putBackendState(snapshot, allowMergeRetry = true) {
       body: JSON.stringify({state: mergedState, base_updated_at: backendLastUpdatedAt || ""})
     });
     if (!retryResponse.ok) throw new Error(`Backend merge save failed ${retryResponse.status}`);
-    return retryResponse.json().catch(() => ({}));
+    const retryResult = await retryResponse.json().catch(() => ({}));
+    if (retryResult?.state && typeof retryResult.state === "object") {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(retryResult.state));
+      applySavedState(retryResult.state);
+    }
+    return retryResult;
   }
   if (!response.ok) throw new Error(`Backend save failed ${response.status}`);
-  return response.json().catch(() => ({}));
+  const result = await response.json().catch(() => ({}));
+  if (result?.state && typeof result.state === "object") {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(result.state));
+    applySavedState(result.state);
+  }
+  return result;
 }
 
 function storePendingBackendSnapshot(snapshot = getAppStateSnapshot()) {
@@ -549,12 +603,8 @@ function storePendingBackendSnapshot(snapshot = getAppStateSnapshot()) {
 async function flushPendingBackendSnapshot() {
   const rawPending = localStorage.getItem(BACKEND_PENDING_STATE_KEY);
   if (!rawPending) return false;
-  const pendingState = JSON.parse(rawPending);
-  const result = await putBackendState(pendingState);
-  if (result?.updated_at) backendLastUpdatedAt = result.updated_at;
   localStorage.removeItem(BACKEND_PENDING_STATE_KEY);
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(pendingState));
-  return true;
+  return false;
 }
 
 async function ensureBackendToken() {
@@ -643,10 +693,11 @@ function queueBackendSave(snapshot = getAppStateSnapshot(), rollbackRawState = "
       setTopbarSaveStatus("saved");
     } catch (error) {
       markBackendConnectionIssue();
-      storePendingBackendSnapshot(snapshot);
+      localStorage.removeItem(BACKEND_PENDING_STATE_KEY);
+      if (rollbackRawState) restoreStateFromRaw(rollbackRawState);
       scheduleBackendReconnect();
-      showToast("Server save delayed. Your change is kept and will retry.");
-      console.warn("Backend save delayed.", error);
+      showToast("No internet/server connection. Entry not saved.");
+      console.warn("Backend save failed; local change rolled back.", error);
       setTopbarSaveStatus("saved");
     }
   }, BACKEND_SAVE_DEBOUNCE_MS);
