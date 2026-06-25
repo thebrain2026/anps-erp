@@ -4913,6 +4913,7 @@ function getTuitionMonthFineDue(student, row, month, paymentDate = new Date()) {
 
 function getTuitionMonthCollectFineDue(student, row, month, paymentDate = new Date()) {
   const paid = getTuitionMonthPaidInfo(student, row, month);
+  if (paid.isSettled) return 0;
   return Math.max(calculateTuitionFineForMonth(month, paymentDate) - Number(paid.fine || 0), 0);
 }
 
@@ -4924,6 +4925,7 @@ function getTransportMonthFineDue(student, row, month, paymentDate = new Date())
 
 function getTransportMonthCollectFineDue(student, row, month, paymentDate = new Date()) {
   const paid = getTransportMonthPaidInfo(student, row, month);
+  if (paid.isSettled) return 0;
   return Math.max(calculateTransportFineForMonth(month, paymentDate) - Number(paid.fine || 0), 0);
 }
 
