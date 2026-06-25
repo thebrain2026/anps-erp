@@ -470,6 +470,61 @@ function mergeObjectListByKey(remoteList = [], localList = [], keyFields = []) {
   return merged;
 }
 
+function getRecordUpdatedTime(item = {}) {
+  const raw = item.updatedAt || item.modifiedAt || item.savedAt || item.createdAt || "";
+  if (typeof raw === "number") return raw;
+  const parsed = Date.parse(raw);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function mergeStudentServicesForLegacyConflict(primary = {}, secondary = {}) {
+  const services = new Set([
+    ...(Array.isArray(primary.otherServices) ? primary.otherServices : []),
+    ...(Array.isArray(secondary.otherServices) ? secondary.otherServices : [])
+  ]);
+  const hasTransport = Boolean(primary.transportRequired || secondary.transportRequired || services.has("Transport"));
+  const hasSpecial = services.has("Special/Custom");
+  if (hasSpecial) services.delete("Transport");
+  else if (hasTransport) services.add("Transport");
+  return [...services];
+}
+
+function mergeStudentRecord(existing = {}, incoming = {}) {
+  const existingTime = getRecordUpdatedTime(existing);
+  const incomingTime = getRecordUpdatedTime(incoming);
+  if (existingTime || incomingTime) {
+    const newer = incomingTime >= existingTime ? incoming : existing;
+    const older = newer === incoming ? existing : incoming;
+    return {...older, ...newer};
+  }
+  const merged = {...existing, ...incoming};
+  merged.otherServices = mergeStudentServicesForLegacyConflict(existing, incoming);
+  merged.transportRequired = merged.otherServices.includes("Transport") && !merged.otherServices.includes("Special/Custom");
+  if (!Number(merged.transportFee || 0)) {
+    merged.transportFee = Number(incoming.transportFee || existing.transportFee || 0);
+  }
+  return merged;
+}
+
+function mergeStudentList(remoteList = [], localList = []) {
+  const merged = [];
+  const indexByKey = new Map();
+  const getKey = student => normalizeAdmissionNo(student?.admissionNo || "") || String(student?.name || "").trim().toLowerCase();
+  [...(Array.isArray(remoteList) ? remoteList : []), ...(Array.isArray(localList) ? localList : [])].forEach(student => {
+    if (!student || typeof student !== "object") return;
+    const key = getKey(student);
+    if (!key) return;
+    if (!indexByKey.has(key)) {
+      indexByKey.set(key, merged.length);
+      merged.push(student);
+      return;
+    }
+    const index = indexByKey.get(key);
+    merged[index] = mergeStudentRecord(merged[index], student);
+  });
+  return merged;
+}
+
 function getPaymentMergeKey(payment = {}) {
   const receipt = String(payment.receipt || "").trim().toLowerCase();
   if (receipt) return `receipt:${receipt}`;
@@ -527,7 +582,6 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
     merged[key] = mergePrimitiveList(remoteState[key] || [], localState[key] || []);
   });
   const objectRules = {
-    students: ["admissionNo", "name"],
     disabledStudents: ["admissionNo", "name"],
     staffMembers: ["staffId", "email", "phone", "name"],
     departments: ["name"],
@@ -547,6 +601,7 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
     transportRoutePickupPoints: ["routeName", "villageName", "shift"],
     notices: ["id", "title"]
   };
+  merged.students = mergeStudentList(remoteState.students || [], localState.students || []);
   Object.entries(objectRules).forEach(([key, fields]) => {
     merged[key] = mergeObjectListByKey(remoteState[key] || [], localState[key] || [], fields);
   });
@@ -1526,7 +1581,7 @@ function openStudentEditForm(admissionNo) {
       : "";
   updateLocalGuardianNameLabel(localGuardianSource);
   admissionForm.elements.route.value = student.route || "Self";
-  admissionForm.elements.transportRequired.checked = Boolean(student.transportRequired);
+  admissionForm.elements.transportRequired.checked = studentTakesTransport(student);
   admissionForm.elements.fee.value = student.fee || "Due";
   admissionForm.elements.address.value = student.address || "";
   admissionForm.elements.medicalConditions.value = student.medicalConditions || "";
@@ -1545,7 +1600,7 @@ function openStudentEditForm(admissionNo) {
   admissionForm.elements.roboticsFee.value = student.roboticsFee || "";
   admissionForm.elements.othersFee.value = student.othersFee || "";
   setCheckedValues("otherServices", student.otherServices || []);
-  admissionForm.elements.transportRequired.checked = Boolean(student.transportRequired || (student.otherServices || []).includes("Transport"));
+  admissionForm.elements.transportRequired.checked = studentTakesTransport(student);
   syncTransportServiceCheckbox(admissionForm.elements.transportRequired.checked);
   syncExclusiveTransportServices((student.otherServices || []).includes("Special/Custom") ? "Special/Custom" : "Transport");
   updateAdmissionTransportFee();
@@ -6203,7 +6258,8 @@ function studentTakesTransport(student = {}) {
   return Boolean(
     student.transportRequired ||
     services.includes("Transport") ||
-    services.includes("Special/Custom")
+    services.includes("Special/Custom") ||
+    Number(student.transportFee || 0) > 0
   );
 }
 
@@ -9782,7 +9838,8 @@ admissionForm.addEventListener("submit", event => {
     roboticsMonths: getCheckedMonths("roboticsMonths"),
     othersFee: selectedOtherServices.includes("Tiffin") ? Number(data.get("othersFee") || 0) : 0,
     othersMonths: getCheckedMonths("othersMonths"),
-    photo: currentAdmissionPhoto
+    photo: currentAdmissionPhoto,
+    updatedAt: new Date().toISOString()
   };
 
   const editIndex = students.findIndex(student => normalizeAdmissionNo(student.admissionNo) === normalizeAdmissionNo(editingAdmissionNo));
