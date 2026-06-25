@@ -4873,13 +4873,50 @@ function getTuitionMonthPayments(admissionNo) {
   }, {});
 }
 
+function getMonthlyFeePaidAmount(student, row, month) {
+  if (!student || !row || !month || !Array.isArray(row.months)) return 0;
+  const monthlyAmount = Number(row.monthlyAmount || 0);
+  const payments = getSessionPayments(student.admissionNo);
+  const exactMonthAmounts = row.months.reduce((totals, itemMonth) => {
+    totals[itemMonth] = payments.reduce((sum, payment) => {
+      return sum + (payment.allocations || [])
+        .filter(allocation => allocation.head === row.name && allocation.month === itemMonth)
+        .reduce((allocationSum, allocation) => allocationSum + Number(allocation.amount || 0), 0);
+    }, 0);
+    return totals;
+  }, {});
+  const exact = Number(exactMonthAmounts[month] || 0);
+  if (!monthlyAmount || exact >= monthlyAmount) return exact;
+  const chunks = [];
+  payments.slice().reverse().forEach(payment => {
+    (payment.allocations || [])
+      .filter(allocation => allocation.head === row.name && !allocation.month)
+      .forEach(allocation => chunks.push(Number(allocation.amount || 0)));
+  });
+  for (const itemMonth of row.months) {
+    let needed = Math.max(monthlyAmount - Number(exactMonthAmounts[itemMonth] || 0), 0);
+    let applied = 0;
+    while (needed > 0 && chunks.length) {
+      const used = Math.min(needed, chunks[0]);
+      if (itemMonth === month) applied += used;
+      chunks[0] -= used;
+      needed -= used;
+      if (chunks[0] <= 0) chunks.shift();
+    }
+    if (itemMonth === month) return exact + applied;
+  }
+  return exact;
+}
+
 function getTuitionMonthPaidInfo(student, row, month) {
   const paid = getTuitionMonthPayments(student.admissionNo)[month] || {tuition: 0, fine: 0};
   const monthlyAmount = Number(row?.monthlyAmount || student.tuitionFee || 0);
+  const tuition = Math.max(Number(paid.tuition || 0), getMonthlyFeePaidAmount(student, row, month));
   return {
     ...paid,
+    tuition,
     monthlyAmount,
-    isSettled: monthlyAmount > 0 && Number(paid.tuition || 0) >= monthlyAmount
+    isSettled: monthlyAmount > 0 && tuition >= monthlyAmount
   };
 }
 
@@ -4898,10 +4935,12 @@ function getTransportMonthPayments(admissionNo) {
 function getTransportMonthPaidInfo(student, row, month) {
   const paid = getTransportMonthPayments(student.admissionNo)[month] || {transport: 0, fine: 0};
   const monthlyAmount = Number(row?.monthlyAmount || student.transportFee || 0);
+  const transport = Math.max(Number(paid.transport || 0), getMonthlyFeePaidAmount(student, row, month));
   return {
     ...paid,
+    transport,
     monthlyAmount,
-    isSettled: monthlyAmount > 0 && Number(paid.transport || 0) >= monthlyAmount
+    isSettled: monthlyAmount > 0 && transport >= monthlyAmount
   };
 }
 
