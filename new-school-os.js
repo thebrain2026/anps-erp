@@ -5275,6 +5275,9 @@ function renderLedgerPeriodCell(student, row) {
                 <button class="payment-receipt-action" type="button" data-preview-payment-receipt="${student.admissionNo || ""}" data-fee-head="${row.name}" data-receipt-no="${payment.receipt}" title="Receipt preview" aria-label="Preview receipt ${payment.receipt} for ${student.name || "student"}">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 2h9l5 5v15H6a2 2 0 0 1-2-2V4c0-1.1.9-2 2-2Zm8 2H6v16h12V8h-4V4Zm-5 8h6v2H9v-2Zm0 4h6v2H9v-2Zm0-8h3v2H9V8Z"/></svg>
                 </button>
+                <button class="payment-edit-action" type="button" data-edit-payment="${student.admissionNo || ""}" data-payment-receipt="${payment.receipt}" title="Edit payment" aria-label="Edit receipt ${payment.receipt} for ${student.name || "student"}">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4.7L19.3 9.4a2.1 2.1 0 0 0 0-3L17.6 4.7a2.1 2.1 0 0 0-3 0L4 15.3V20Zm3.8-2H6v-1.8l8.5-8.5 1.8 1.8L7.8 18Zm7.9-11.5.4-.4 1.8 1.8-.4.4-1.8-1.8Z"/></svg>
+                </button>
               </span>
             </div>
           `).join("")}
@@ -6627,6 +6630,7 @@ function renderFeeBook(admissionNo = activeLedgerAdmissionNo) {
   );
   document.getElementById("ledgerPaymentRows").innerHTML = ledgerPayments.map(payment => {
     const paymentAdmissionNo = payment.admissionNo || student.admissionNo || "";
+    const paymentStudent = findStudentByAdmissionNo(paymentAdmissionNo) || student || {};
     const totalAmount = Number(payment.bank || 0) + Number(payment.cash || 0);
     const selectionKey = getPaymentSelectionKey(payment);
     const isSelected = selectedHistoryPayments.has(selectionKey);
@@ -6634,6 +6638,7 @@ function renderFeeBook(admissionNo = activeLedgerAdmissionNo) {
     <tr class="${isSelected ? "selected-payment-row" : ""}">
       <td>${formatDateDDMMYYYY(payment.date)}</td>
       <td>${payment.receipt}</td>
+      <td><strong>${escapeHtml(paymentStudent.name || "-")}</strong></td>
       <td>${escapeHtml(paymentAdmissionNo || "-")}</td>
       <td>${payment.head}</td>
       <td>${formatRs(payment.bank)}</td>
@@ -6662,7 +6667,7 @@ function renderFeeBook(admissionNo = activeLedgerAdmissionNo) {
       </td>
     </tr>
   `;
-  }).join("") || `<tr><td colspan="11">${hasHistoryFilter ? "No payment history found in selected filter." : "No payment history yet."}</td></tr>`;
+  }).join("") || `<tr><td colspan="12">${hasHistoryFilter ? "No payment history found in selected filter." : "No payment history yet."}</td></tr>`;
   updatePaymentQuickTotal();
 }
 
