@@ -5712,7 +5712,7 @@ body.modal-open {
 .combined-fee-head,
 .combined-fee-row {
   display: grid;
-  grid-template-columns: minmax(170px, 1.45fr) minmax(120px, .9fr) .8fr .8fr .8fr;
+  grid-template-columns: minmax(160px, 1.35fr) minmax(112px, .8fr) minmax(112px, .8fr) .75fr .75fr .8fr;
   gap: 10px;
   align-items: center;
   padding: 10px 12px;
@@ -5745,7 +5745,8 @@ body.modal-open {
   accent-color: #d92332;
 }
 
-.combined-row-date {
+.combined-row-date,
+.combined-row-payment-type {
   width: 100%;
   min-width: 0;
   border: 1px solid #d7e3ea;
@@ -5759,6 +5760,11 @@ body.modal-open {
 }
 
 .combined-row-date:focus {
+  outline: 2px solid rgba(20, 94, 140, .2);
+  border-color: #2e7bb2;
+}
+
+.combined-row-payment-type:focus {
   outline: 2px solid rgba(20, 94, 140, .2);
   border-color: #2e7bb2;
 }
@@ -7106,7 +7112,7 @@ body.modal-open {
   .combined-total-card { grid-template-columns: 1fr; }
   .combined-fee-head,
   .combined-fee-row {
-    grid-template-columns: minmax(120px, 1.2fr) minmax(96px, .9fr) .75fr .75fr .85fr;
+    grid-template-columns: minmax(110px, 1.1fr) minmax(86px, .8fr) minmax(82px, .8fr) .7fr .7fr .8fr;
     gap: 6px;
     font-size: .74rem;
   }

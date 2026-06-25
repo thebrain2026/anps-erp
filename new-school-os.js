@@ -6668,14 +6668,15 @@ function collectCombinedStudentPayment(student, items, date, receiptNo = "", pay
     const amount = Number(item.amount || 0);
     const fine = Number(item.fine || 0);
     const allocationDate = formatDateDDMMYYYY(item.date || date || new Date());
+    const paymentType = item.paymentType || undefined;
     const finePaid = Math.min(fine, remainingAmount);
     if (finePaid > 0) {
-      allocations.push({head: getLateFineHeadForFee(item.head), amount: finePaid, month: item.month || undefined, date: allocationDate});
+      allocations.push({head: getLateFineHeadForFee(item.head), amount: finePaid, month: item.month || undefined, date: allocationDate, paymentType});
       remainingAmount -= finePaid;
     }
     const feePaid = Math.min(amount, remainingAmount);
     if (feePaid > 0) {
-      allocations.push({head: item.head, amount: feePaid, month: item.month || undefined, date: allocationDate});
+      allocations.push({head: item.head, amount: feePaid, month: item.month || undefined, date: allocationDate, paymentType});
       remainingAmount -= feePaid;
     }
   });
@@ -6812,13 +6813,13 @@ function renderFeeBook(admissionNo = activeLedgerAdmissionNo) {
   updatePaymentQuickTotal();
 }
 
-function getCombinedCollectionItems(student, month, paymentDate = new Date(), includePriorTuitionDue = false) {
+function getCombinedCollectionItems(student, month, paymentDate = new Date(), includePriorMonthlyDue = false) {
   if (!student || !month) return [];
   const selectedMonthIndex = ACADEMIC_MONTHS.indexOf(month);
   return getLedgerRows(student)
     .filter(row => Array.isArray(row.months) && row.months.includes(month))
     .flatMap(row => {
-      const collectMonths = row.name === "Tuition Fee" && includePriorTuitionDue && selectedMonthIndex >= 0
+      const collectMonths = ["Tuition Fee", "Transport Fees"].includes(row.name) && includePriorMonthlyDue && selectedMonthIndex >= 0
         ? row.months.filter(rowMonth => {
           const rowMonthIndex = ACADEMIC_MONTHS.indexOf(rowMonth);
           return rowMonthIndex >= 0 && rowMonthIndex <= selectedMonthIndex;
@@ -6835,10 +6836,14 @@ function getCombinedCollectionItems(student, month, paymentDate = new Date(), in
         });
       }
       if (row.name === "Transport Fees") {
-        const paid = getTransportMonthPaidInfo(student, row, month);
-        const amount = Math.max(Number(row.monthlyAmount || 0) - Number(paid.transport || 0), 0);
-        const fine = getTransportMonthCollectFineDue(student, row, month, parseDateDDMMYYYY(paymentDate));
-        return amount + fine > 0 ? {head: row.name, month, amount, fine, total: amount + fine, partial: Number(paid.transport || 0) > 0 && amount > 0} : null;
+        return collectMonths.map(collectMonth => {
+          const paid = getTransportMonthPaidInfo(student, row, collectMonth);
+          const amount = Math.max(Number(row.monthlyAmount || 0) - Number(paid.transport || 0), 0);
+          const fine = getTransportMonthCollectFineDue(student, row, collectMonth, parseDateDDMMYYYY(paymentDate));
+          return amount + fine > 0
+            ? {head: row.name, month: collectMonth, amount, fine, total: amount + fine, partial: Number(paid.transport || 0) > 0 && amount > 0}
+            : null;
+        });
       }
       const paidMonths = getPaidLedgerMonths(student, row);
       if (paidMonths.has(month)) return null;
@@ -6919,11 +6924,16 @@ function renderCombinedCollectionItems() {
         <span>${escapeHtml(item.head)}${item.month ? ` (${escapeHtml(item.month)})` : ""}</span>
       </label>
       <input class="combined-row-date" data-combined-row-date type="text" placeholder="Main date" inputmode="numeric" aria-label="${escapeHtml(item.head)} ${escapeHtml(item.month || "")} payment date" />
+      <select class="combined-row-payment-type" data-combined-row-payment-type aria-label="${escapeHtml(item.head)} payment type">
+        <option value="">Type</option>
+        <option value="Bank">Bank</option>
+        <option value="Cash">Cash</option>
+      </select>
       <span>${formatRs(item.amount)}</span>
       <span data-combined-fine-display>${formatRs(item.fine)}</span>
       <strong data-combined-total-display>${formatRs(item.total)}</strong>
     </div>
-  `).join("") || `<div class="combined-fee-row"><span>No monthly dues found for ${escapeHtml(month)}.</span><span>-</span><span>-</span><span>-</span><strong>Rs. 0</strong></div>`;
+  `).join("") || `<div class="combined-fee-row"><span>No monthly dues found for ${escapeHtml(month)}.</span><span>-</span><span>-</span><span>-</span><span>-</span><strong>Rs. 0</strong></div>`;
   updateCombinedCollectionTotals();
 }
 
@@ -6937,6 +6947,7 @@ function renderCombinedCollectionEditItems(payment) {
       itemsByKey[tuitionKey].fine += Number(allocation.amount || 0);
       itemsByKey[tuitionKey].total += Number(allocation.amount || 0);
       itemsByKey[tuitionKey].date = allocation.date || itemsByKey[tuitionKey].date || "";
+      itemsByKey[tuitionKey].paymentType = allocation.paymentType || itemsByKey[tuitionKey].paymentType || "";
       return;
     }
     if (allocation.head === "Transport Late Fine") {
@@ -6945,6 +6956,7 @@ function renderCombinedCollectionEditItems(payment) {
       itemsByKey[transportKey].fine += Number(allocation.amount || 0);
       itemsByKey[transportKey].total += Number(allocation.amount || 0);
       itemsByKey[transportKey].date = allocation.date || itemsByKey[transportKey].date || "";
+      itemsByKey[transportKey].paymentType = allocation.paymentType || itemsByKey[transportKey].paymentType || "";
       return;
     }
     const key = `${allocation.head}__${month}`;
@@ -6952,6 +6964,7 @@ function renderCombinedCollectionEditItems(payment) {
     itemsByKey[key].amount += Number(allocation.amount || 0);
     itemsByKey[key].total += Number(allocation.amount || 0);
     itemsByKey[key].date = allocation.date || itemsByKey[key].date || "";
+    itemsByKey[key].paymentType = allocation.paymentType || itemsByKey[key].paymentType || "";
   });
   const items = Object.values(itemsByKey).filter(item => item.total > 0);
   document.getElementById("combinedFeeItems").innerHTML = items.map((item, index) => `
@@ -6961,11 +6974,16 @@ function renderCombinedCollectionEditItems(payment) {
         <span>${escapeHtml(item.head)}${item.month ? ` (${escapeHtml(item.month)})` : ""}</span>
       </label>
       <input class="combined-row-date" data-combined-row-date type="text" placeholder="Main date" inputmode="numeric" value="${escapeHtml(item.date ? formatDateDDMMYYYY(item.date) : "")}" />
+      <select class="combined-row-payment-type" data-combined-row-payment-type>
+        <option value="">Type</option>
+        <option value="Bank" ${item.paymentType === "Bank" ? "selected" : ""}>Bank</option>
+        <option value="Cash" ${item.paymentType === "Cash" ? "selected" : ""}>Cash</option>
+      </select>
       <span>${formatRs(item.amount)}</span>
       <span data-combined-fine-display>${formatRs(item.fine)}</span>
       <strong data-combined-total-display>${formatRs(item.total)}</strong>
     </div>
-  `).join("") || `<div class="combined-fee-row"><span>No payment rows found.</span><span>-</span><span>-</span><span>-</span><strong>Rs. 0</strong></div>`;
+  `).join("") || `<div class="combined-fee-row"><span>No payment rows found.</span><span>-</span><span>-</span><span>-</span><span>-</span><strong>Rs. 0</strong></div>`;
   updateCombinedCollectionTotals();
 }
 
@@ -6977,6 +6995,11 @@ function renderSingleCollectionItem(item) {
         <span>${escapeHtml(item.head)}</span>
       </label>
       <input class="combined-row-date" data-combined-row-date type="text" placeholder="Main date" inputmode="numeric" />
+      <select class="combined-row-payment-type" data-combined-row-payment-type>
+        <option value="">Type</option>
+        <option value="Bank">Bank</option>
+        <option value="Cash">Cash</option>
+      </select>
       <span>${formatRs(item.amount)}</span>
       <span data-combined-fine-display>${formatRs(item.fine || 0)}</span>
       <strong data-combined-total-display>${formatRs(item.total)}</strong>
@@ -7005,7 +7028,7 @@ function openCombinedCollectionPopup(admissionNo, month, options = {}) {
   document.getElementById("combinedStudentClass").textContent = student.klass || "-";
   document.getElementById("combinedFeeMonth").textContent = month;
   document.getElementById("combinedCollectionSubtitle").textContent = options.includePriorTuitionDue
-    ? `${student.name || "Student"} | Tuition due up to ${month}`
+    ? `${student.name || "Student"} | Monthly dues up to ${month}`
     : `${student.name || "Student"} | ${month} monthly fees`;
   renderCombinedCollectionItems();
   combinedCollectionModal.setAttribute("aria-hidden", "false");
@@ -10060,7 +10083,9 @@ combinedCollectionForm.addEventListener("submit", event => {
     form.querySelectorAll("[data-combined-row-date]").forEach(input => updateCombinedRowDateFee(input.closest(".combined-fee-row")));
   }
   const selected = [...form.querySelectorAll("[data-combined-fee]:checked")].map(input => {
-    const rowDate = input.closest(".combined-fee-row")?.querySelector("[data-combined-row-date]")?.value || "";
+    const row = input.closest(".combined-fee-row");
+    const rowDate = row?.querySelector("[data-combined-row-date]")?.value || "";
+    const paymentType = row?.querySelector("[data-combined-row-payment-type]")?.value || "";
     const appliedDate = formatDateDDMMYYYY(rowDate || form.elements.date.value || new Date());
     return {
       head: input.dataset.head,
@@ -10068,14 +10093,26 @@ combinedCollectionForm.addEventListener("submit", event => {
       amount: Number(input.dataset.amount || 0),
       fine: Number(input.dataset.fine || 0),
       total: Number(input.dataset.total || 0),
-      date: appliedDate
+      date: appliedDate,
+      paymentType
     };
   });
   const total = selected.reduce((sum, item) => sum + item.total, 0);
-  const bankAmount = Number(form.elements.bankAmount.value || 0);
-  const cashAmount = Number(form.elements.cashAmount.value || 0);
+  let bankAmount = Number(form.elements.bankAmount.value || 0);
+  let cashAmount = Number(form.elements.cashAmount.value || 0);
   const discountAmount = Math.min(Number(form.elements.discountAmount?.value || 0), total);
   const payableAmount = Math.max(total - discountAmount, 0);
+  if (bankAmount + cashAmount <= 0) {
+    bankAmount = selected
+      .filter(item => item.paymentType === "Bank")
+      .reduce((sum, item) => sum + Number(item.total || 0), 0);
+    cashAmount = selected
+      .filter(item => item.paymentType === "Cash")
+      .reduce((sum, item) => sum + Number(item.total || 0), 0);
+    form.elements.bankAmount.value = bankAmount || "";
+    form.elements.cashAmount.value = cashAmount || "";
+    updateCombinedCollectionTotals();
+  }
   if (!student || !selected.length || total <= 0) {
     showToast("Select at least one fee.");
     return;
@@ -10734,7 +10771,7 @@ document.body.addEventListener("click", event => {
     const sourceView = getSourceView(studentFees);
     if ((sourceView === "feeBook" || sourceView === "dueFeesSearch") && feeMonth) {
       openCombinedCollectionPopup(admissionNo, feeMonth, {
-        includePriorTuitionDue: sourceView === "dueFeesSearch" && feeHead === "Tuition Fee"
+        includePriorTuitionDue: sourceView === "dueFeesSearch" && ["Tuition Fee", "Transport Fees"].includes(feeHead)
       });
       return;
     }
