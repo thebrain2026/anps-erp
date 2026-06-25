@@ -637,10 +637,90 @@ def merge_state_without_losing_receipts(server_state, incoming_state):
     if not isinstance(incoming_state, dict):
         incoming_state = {}
     merged = dict(incoming_state)
+    merged["students"] = merge_student_lists(
+        server_state.get("students") or [],
+        incoming_state.get("students") or [],
+    )
     merged["collectedPayments"] = merge_collected_payments(
         server_state.get("collectedPayments") or {},
         incoming_state.get("collectedPayments") or {},
     )
+    return merged
+
+
+def normalize_admission_no(value):
+    return "".join(ch.lower() for ch in str(value or "") if ch.isalnum())
+
+
+def record_updated_time(item):
+    raw = ""
+    if isinstance(item, dict):
+        raw = item.get("updatedAt") or item.get("modifiedAt") or item.get("savedAt") or item.get("createdAt") or ""
+    if isinstance(raw, (int, float)):
+        return float(raw)
+    if not raw:
+        return 0
+    try:
+        text = str(raw).replace("Z", "+00:00")
+        return datetime.fromisoformat(text).timestamp()
+    except Exception:
+        return 0
+
+
+def merge_student_services(primary, secondary):
+    primary_services = primary.get("otherServices") if isinstance(primary.get("otherServices"), list) else []
+    secondary_services = secondary.get("otherServices") if isinstance(secondary.get("otherServices"), list) else []
+    services = list(dict.fromkeys([*primary_services, *secondary_services]))
+    has_transport = (
+        bool(primary.get("transportRequired"))
+        or bool(secondary.get("transportRequired"))
+        or "Transport" in services
+    )
+    has_special = "Special/Custom" in services
+    if has_special:
+        services = [service for service in services if service != "Transport"]
+    elif has_transport and "Transport" not in services:
+        services.append("Transport")
+    return services
+
+
+def merge_student_record(server_student, incoming_student):
+    server_time = record_updated_time(server_student)
+    incoming_time = record_updated_time(incoming_student)
+    if server_time or incoming_time:
+        if incoming_time >= server_time:
+            return {**server_student, **incoming_student}
+        return {**incoming_student, **server_student}
+    merged = {**server_student, **incoming_student}
+    merged["otherServices"] = merge_student_services(server_student, incoming_student)
+    merged["transportRequired"] = "Transport" in merged["otherServices"] and "Special/Custom" not in merged["otherServices"]
+    if not numeric_value(merged.get("transportFee")):
+        merged["transportFee"] = incoming_student.get("transportFee") or server_student.get("transportFee") or 0
+    return merged
+
+
+def numeric_value(value):
+    try:
+        return float(value or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def merge_student_lists(server_students, incoming_students):
+    merged = []
+    index_by_key = {}
+    for student in [*(server_students if isinstance(server_students, list) else []), *(incoming_students if isinstance(incoming_students, list) else [])]:
+        if not isinstance(student, dict):
+            continue
+        key = normalize_admission_no(student.get("admissionNo")) or str(student.get("name") or "").strip().lower()
+        if not key:
+            continue
+        if key not in index_by_key:
+            index_by_key[key] = len(merged)
+            merged.append(student)
+            continue
+        index = index_by_key[key]
+        merged[index] = merge_student_record(merged[index], student)
     return merged
 
 
