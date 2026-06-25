@@ -69,6 +69,7 @@ let activeSession = "2026-27";
 let activeFeeStudentAdmissionNo = "";
 let activeLedgerAdmissionNo = "";
 let activeFeeReturnView = "finance";
+let feeBookReturnStudentAdmissionNo = "";
 const viewHistoryStack = [];
 const collectedPayments = {};
 const selectedHistoryPayments = new Set();
@@ -1332,6 +1333,15 @@ function openPreviousViewFromHistory() {
   return false;
 }
 
+function openFeeBookReturnPage() {
+  if (feeBookReturnStudentAdmissionNo && canCurrentRoleAccessView("students")) {
+    setView("students", {skipHistory: true});
+    showToast("Student Details opened.");
+    return true;
+  }
+  return openPreviousViewFromHistory();
+}
+
 function setClassTimetableBuilderVisible(isVisible) {
   const panel = document.getElementById("classTimetableBuilderPanel");
   const overview = document.getElementById("classTimetableOverviewPanel");
@@ -2094,8 +2104,9 @@ function renderStudents() {
     ${(() => {
       const classInfo = splitStudentClassSection(student.klass || "");
       const admissionAttr = escapeHtml(student.admissionNo || "");
+      const isReturnStudent = normalizeAdmissionNo(student.admissionNo) === normalizeAdmissionNo(feeBookReturnStudentAdmissionNo);
       return `
-    <tr>
+    <tr class="${isReturnStudent ? "student-return-highlight" : ""}" data-student-row-admission="${admissionAttr}">
       <td>${escapeHtml(student.admissionNo || "-")}</td>
       <td><button class="student-name-link" type="button" data-open-fee-book="${admissionAttr}"><strong>${escapeHtml(student.name || "-")}</strong></button></td>
       <td>${escapeHtml(classInfo.klass || "-")}</td>
@@ -2128,6 +2139,21 @@ function renderStudents() {
   renderStudentGenderRatioReport();
   renderStudentTeacherRatioReport();
   renderTransportRoutePickupPoints();
+  focusReturnedStudentRow();
+}
+
+function focusReturnedStudentRow() {
+  if (!feeBookReturnStudentAdmissionNo) return;
+  if (!document.getElementById("students")?.classList.contains("active")) return;
+  const row = [...document.querySelectorAll("[data-student-row-admission]")].find(item =>
+    normalizeAdmissionNo(item.dataset.studentRowAdmission) === normalizeAdmissionNo(feeBookReturnStudentAdmissionNo)
+  );
+  if (!row) return;
+  setTimeout(() => {
+    row.scrollIntoView({block: "center", behavior: "smooth"});
+    row.classList.add("student-return-highlight-pulse");
+    setTimeout(() => row.classList.remove("student-return-highlight-pulse"), 1600);
+  }, 80);
 }
 
 function renderStudentClassFilter() {
@@ -6612,6 +6638,8 @@ function renderFeeBook(admissionNo = activeLedgerAdmissionNo) {
   const activeStudents = getActiveStudents();
   const requestedAdmissionNo = String(admissionNo || "").trim();
   const student = requestedAdmissionNo ? findActiveStudentByAdmissionOrName(requestedAdmissionNo) : activeStudents[0];
+  const feeBookBackButton = document.getElementById("feeBookBackToStudent");
+  feeBookBackButton?.classList.toggle("hidden", !feeBookReturnStudentAdmissionNo);
   if (!student) {
     activeLedgerAdmissionNo = "";
     feeBookStudentSelect.value = "";
@@ -6627,7 +6655,7 @@ function renderFeeBook(admissionNo = activeLedgerAdmissionNo) {
     document.getElementById("ledgerDiscount").textContent = formatRs(0);
     document.getElementById("ledgerDue").textContent = formatRs(0);
     document.getElementById("ledgerFeeRows").innerHTML = `<tr><td colspan="10">No student selected. Add a student admission first.</td></tr>`;
-    document.getElementById("ledgerPaymentRows").innerHTML = `<tr><td colspan="11">No payment history yet.</td></tr>`;
+    document.getElementById("ledgerPaymentRows").innerHTML = `<tr><td colspan="12">No payment history yet.</td></tr>`;
     return;
   }
   activeLedgerAdmissionNo = student.admissionNo;
@@ -7992,7 +8020,7 @@ feeBookView?.addEventListener("touchend", event => {
   const elapsed = Date.now() - feeBookSwipeStart.time;
   feeBookSwipeStart = null;
   if (dx > 80 && Math.abs(dy) < 90 && elapsed < 1200) {
-    openPreviousViewFromHistory();
+    openFeeBookReturnPage();
   }
 }, {passive: true});
 
@@ -8003,7 +8031,7 @@ feeBookView?.addEventListener("wheel", event => {
   if (isRightSwipe && now - feeBookWheelSwipeAt > 900) {
     feeBookWheelSwipeAt = now;
     event.preventDefault();
-    openPreviousViewFromHistory();
+    openFeeBookReturnPage();
   }
 }, {passive: false});
 
@@ -10118,6 +10146,10 @@ document.getElementById("feeBookMonthlyReportBtn").addEventListener("click", () 
   openFeeBookMonthlyReport(activeLedgerAdmissionNo || feeBookStudentSelect.value);
 });
 
+document.getElementById("feeBookBackToStudent")?.addEventListener("click", () => {
+  openFeeBookReturnPage();
+});
+
 document.getElementById("tuitionFineForm").addEventListener("submit", event => {
   event.preventDefault();
   const data = new FormData(event.currentTarget);
@@ -10551,6 +10583,8 @@ document.body.addEventListener("click", event => {
       showToast("Student is disabled or not found.");
       return;
     }
+    const sourceView = document.querySelector(".view.active")?.id || "";
+    feeBookReturnStudentAdmissionNo = sourceView === "students" ? student.admissionNo || "" : "";
     activeLedgerAdmissionNo = student.admissionNo || "";
     renderFeeBook(student.admissionNo);
     setView("feeBook");

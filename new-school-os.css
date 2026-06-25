@@ -4277,6 +4277,24 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   flex-wrap: wrap;
 }
 
+.fee-book-back-action.hidden {
+  display: none;
+}
+
+#studentTable tr.student-return-highlight td {
+  background: #fff7db;
+  box-shadow: inset 0 0 0 9999px rgba(251, 191, 36, .12);
+}
+
+#studentTable tr.student-return-highlight-pulse td {
+  animation: studentReturnPulse 1.4s ease;
+}
+
+@keyframes studentReturnPulse {
+  0% { box-shadow: inset 0 0 0 9999px rgba(34, 197, 94, .24); }
+  100% { box-shadow: inset 0 0 0 9999px rgba(251, 191, 36, .12); }
+}
+
 .ledger-payment-select {
   width: 14px;
   height: 14px;
