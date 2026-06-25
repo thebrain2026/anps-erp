@@ -244,7 +244,6 @@ const titleMap = {
   disableStudent: "Disable Student",
   bulkDeleteStudent: "Bulk Delete",
   finance: "Collect Fees",
-  bulkFeeEntry: "Bulk Fee Entry",
   feeBook: "Fee Book",
   dueFeesSearch: "Search Due Fees",
   feeMaster: "Fee Master",
@@ -298,7 +297,7 @@ const ACCESS_PERMISSION_GROUPS = [
   {name: "Dashboard", modules: ["dashboard"]},
   {name: "Front Office", modules: ["admissionEnquiry", "complaintRegister", "complaintsDesk"]},
   {name: "Student Information", modules: ["students", "studentAdmission", "disableStudent", "bulkDeleteStudent"]},
-  {name: "Fees Collection", modules: ["finance", "bulkFeeEntry", "feeBook", "dueFeesSearch", "feeMaster", "feeGroup", "addClassSection", "tuitionFineSetup", "feeReminder"]},
+  {name: "Fees Collection", modules: ["finance", "feeBook", "dueFeesSearch", "feeMaster", "feeGroup", "addClassSection", "tuitionFineSetup", "feeReminder"]},
   {name: "Human Resources", modules: ["staffDetails", "staffAttendance", "applyLeave", "leaveType", "approveLeave", "teachersRating", "department", "designation", "disabledStaff"]},
   {name: "Communication", modules: ["noticeBoard", "sendSms"]},
   {name: "Homework", modules: ["addHomework", "dailyAssignment"]},
@@ -1199,7 +1198,6 @@ function renderActiveView(viewName = document.querySelector(".view.active")?.id 
     renderFinanceSession(true);
     renderStudentFeeCounter();
   }
-  if (viewName === "bulkFeeEntry") renderBulkFeeEntry();
   if (viewName === "feeBook") {
     renderFeeBookStudentOptions();
     renderFeeBook();
@@ -2168,164 +2166,6 @@ function renderStudentClassFilter() {
   ])].sort((a, b) => a.localeCompare(b, undefined, {numeric: true}));
   select.innerHTML = `<option value="">All Classes</option>${classes.map(className => `<option value="${escapeHtml(className)}">${escapeHtml(className)}</option>`).join("")}`;
   if (current && classes.includes(current)) select.value = current;
-}
-
-function getBulkFeeClasses() {
-  return [...new Set(getActiveStudents()
-    .map(student => splitStudentClassSection(student.klass || "").klass)
-    .filter(Boolean))]
-    .sort((a, b) => a.localeCompare(b, undefined, {numeric: true}));
-}
-
-function isMonthlyBulkFeeHead(feeHead = "") {
-  return ["Tuition Fee", "Transport Fees", "Day Boarding Fees", "Tiffin Fees", "Robotics Fees"].includes(feeHead);
-}
-
-function getBulkFeeDueInfo(student, feeHead, month, dateValue) {
-  const row = getLedgerRows(student).find(item => item.name === feeHead);
-  if (!row || Number(row.due || 0) <= 0) return null;
-  if (!isMonthlyBulkFeeHead(feeHead) || !month) {
-    return {row, amount: Number(row.due || 0), fine: 0, total: Number(row.due || 0), month: ""};
-  }
-  if (!Array.isArray(row.months) || !row.months.includes(month)) return null;
-  const monthlyAmount = Number(row.monthlyAmount || 0);
-  if (monthlyAmount <= 0) return null;
-  const paymentDate = parseDateDDMMYYYY(dateValue || new Date());
-  let paidAmount = 0;
-  let fine = 0;
-  if (feeHead === "Tuition Fee") {
-    const paid = getTuitionMonthPaidInfo(student, row, month);
-    paidAmount = Number(paid.tuition || 0);
-    fine = getTuitionMonthCollectFineDue(student, row, month, paymentDate);
-  } else if (feeHead === "Transport Fees") {
-    const paid = getTransportMonthPaidInfo(student, row, month);
-    paidAmount = Number(paid.transport || 0);
-    fine = getTransportMonthCollectFineDue(student, row, month, paymentDate);
-  } else {
-    paidAmount = getLedgerMonthPaidAmount(student, row, month);
-  }
-  const amount = Math.max(monthlyAmount - paidAmount, 0);
-  if (amount <= 0 && fine <= 0) return null;
-  return {row, amount, fine, total: amount + fine, month};
-}
-
-function getBulkFeeVisibleStudents() {
-  const selectedClass = String(document.getElementById("bulkFeeClassFilter")?.value || "").trim();
-  return getActiveStudents().filter(student => {
-    const classInfo = splitStudentClassSection(student.klass || "");
-    return !selectedClass || classInfo.klass === selectedClass;
-  });
-}
-
-function renderBulkFeeEntry() {
-  const classSelect = document.getElementById("bulkFeeClassFilter");
-  const monthSelect = document.getElementById("bulkFeeMonth");
-  const feeHeadSelect = document.getElementById("bulkFeeHead");
-  const dateInput = document.getElementById("bulkFeeDate");
-  const rows = document.getElementById("bulkFeeRows");
-  if (!classSelect || !monthSelect || !feeHeadSelect || !dateInput || !rows) return;
-  const currentClass = classSelect.value;
-  const classes = getBulkFeeClasses();
-  classSelect.innerHTML = `<option value="">All Classes</option>${classes.map(className => `<option value="${escapeHtml(className)}">${escapeHtml(className)}</option>`).join("")}`;
-  if (currentClass && classes.includes(currentClass)) classSelect.value = currentClass;
-  const currentMonth = monthSelect.value || ACADEMIC_MONTHS[getAcademicMonthIndexForDate(new Date())] || ACADEMIC_MONTHS[0];
-  monthSelect.innerHTML = ACADEMIC_MONTHS.map(month => `<option value="${month}">${month}</option>`).join("");
-  monthSelect.value = ACADEMIC_MONTHS.includes(currentMonth) ? currentMonth : ACADEMIC_MONTHS[0];
-  if (!dateInput.value) dateInput.value = formatDateDDMMYYYY(new Date());
-  const feeHead = feeHeadSelect.value || "Tuition Fee";
-  monthSelect.disabled = !isMonthlyBulkFeeHead(feeHead);
-  const dateValue = dateInput.value;
-  let totalDue = 0;
-  let totalFine = 0;
-  let payableRows = 0;
-  rows.innerHTML = getBulkFeeVisibleStudents().map(student => {
-    const due = getBulkFeeDueInfo(student, feeHead, monthSelect.value, dateValue);
-    if (!due) return "";
-    payableRows += 1;
-    totalDue += Number(due.amount || 0);
-    totalFine += Number(due.fine || 0);
-    const classInfo = splitStudentClassSection(student.klass || "");
-    const admissionAttr = escapeHtml(student.admissionNo || "");
-    const total = Number(due.total || 0);
-    return `
-      <tr data-bulk-fee-row="${admissionAttr}" data-fee-head="${escapeHtml(feeHead)}" data-fee-month="${escapeHtml(due.month || "")}" data-due-amount="${Number(due.amount || 0)}">
-        <td><input class="bulk-fee-select" type="checkbox" checked ${total <= 0 ? "disabled" : ""} /></td>
-        <td>${escapeHtml(student.admissionNo || "-")}</td>
-        <td><strong>${escapeHtml(student.name || "-")}</strong></td>
-        <td>${escapeHtml([classInfo.klass, classInfo.section].filter(Boolean).join(" ") || "-")}</td>
-        <td><strong>${formatRs(due.amount)}</strong></td>
-        <td><input class="bulk-fee-bank" type="number" min="0" value="0" /></td>
-        <td><input class="bulk-fee-cash" type="number" min="0" value="${total}" /></td>
-        <td><input class="bulk-fee-fine" type="number" min="0" value="${Number(due.fine || 0)}" /></td>
-        <td><input class="bulk-fee-discount" type="number" min="0" value="0" /></td>
-        <td><input class="bulk-fee-remarks" placeholder="Optional" /></td>
-      </tr>
-    `;
-  }).join("") || `<tr><td colspan="10">No due students found for selected class/fee/month.</td></tr>`;
-  document.getElementById("bulkFeeSummary").innerHTML = `
-    <article><span>Rows</span><strong>${payableRows}</strong></article>
-    <article><span>Fee Due</span><strong>${formatRs(totalDue)}</strong></article>
-    <article><span>Fine</span><strong>${formatRs(totalFine)}</strong></article>
-    <article><span>Total</span><strong>${formatRs(totalDue + totalFine)}</strong></article>
-  `;
-}
-
-function updateBulkFeeRowCash(row) {
-  if (!row) return;
-  const dueAmount = Number(row.dataset.dueAmount || 0);
-  const fine = Number(row.querySelector(".bulk-fee-fine")?.value || 0);
-  const discount = Number(row.querySelector(".bulk-fee-discount")?.value || 0);
-  const bank = Number(row.querySelector(".bulk-fee-bank")?.value || 0);
-  const cashInput = row.querySelector(".bulk-fee-cash");
-  const expected = Math.max(dueAmount + fine - discount - bank, 0);
-  if (cashInput) cashInput.value = expected;
-}
-
-function saveBulkFeeEntries() {
-  const dateInput = document.getElementById("bulkFeeDate");
-  normalizeCollectionHistoryDateInput(dateInput);
-  const date = dateInput?.value || formatDateDDMMYYYY(new Date());
-  const selectedRows = [...document.querySelectorAll("#bulkFeeRows tr[data-bulk-fee-row]")]
-    .filter(row => row.querySelector(".bulk-fee-select")?.checked);
-  let savedCount = 0;
-  selectedRows.forEach(row => {
-    const student = findActiveStudentByAdmissionNo(row.dataset.bulkFeeRow || "");
-    if (!student) return;
-    const feeHead = row.dataset.feeHead || "";
-    const month = row.dataset.feeMonth || "";
-    const amount = Number(row.dataset.dueAmount || 0);
-    const fine = Number(row.querySelector(".bulk-fee-fine")?.value || 0);
-    const bankAmount = Number(row.querySelector(".bulk-fee-bank")?.value || 0);
-    const cashAmount = Number(row.querySelector(".bulk-fee-cash")?.value || 0);
-    const discountAmount = Number(row.querySelector(".bulk-fee-discount")?.value || 0);
-    if (amount + fine <= 0 || bankAmount + cashAmount + discountAmount <= 0) return;
-    const payment = collectCombinedStudentPayment(student, [{
-      head: feeHead,
-      amount,
-      fine,
-      total: amount + fine,
-      month: month || undefined
-    }], date, getNextReceiptNo(), {
-      bankAmount,
-      cashAmount,
-      discountAmount,
-      remarks: row.querySelector(".bulk-fee-remarks")?.value || ""
-    });
-    if (payment) {
-      savedCount += 1;
-      receiptSerial += 1;
-    }
-  });
-  if (!savedCount) {
-    showToast("Select at least one row with payment amount.");
-    return;
-  }
-  if (!saveAppState()) return;
-  renderBulkFeeEntry();
-  renderFinanceSession();
-  renderFeeBook(activeLedgerAdmissionNo);
-  renderDueFeesSearch();
-  showToast(`${savedCount} bulk fee receipt saved.`);
 }
 
 function getClassSectionGroups() {
@@ -8540,17 +8380,6 @@ feeMasterForm.addEventListener("submit", event => {
 
 feeBookStudentSelect.addEventListener("change", () => {
   renderFeeBook(feeBookStudentSelect.value);
-});
-
-["bulkFeeClassFilter", "bulkFeeHead", "bulkFeeMonth", "bulkFeeDate"].forEach(id => {
-  document.getElementById(id)?.addEventListener("change", () => renderBulkFeeEntry());
-});
-document.getElementById("bulkFeeRefreshBtn")?.addEventListener("click", renderBulkFeeEntry);
-document.getElementById("bulkFeeSaveBtn")?.addEventListener("click", saveBulkFeeEntries);
-document.getElementById("bulkFeeRows")?.addEventListener("input", event => {
-  if (event.target.closest(".bulk-fee-bank, .bulk-fee-fine, .bulk-fee-discount")) {
-    updateBulkFeeRowCash(event.target.closest("tr[data-bulk-fee-row]"));
-  }
 });
 
 document.getElementById("dueFeesMonthFilter").addEventListener("change", renderDueFeesSearch);
