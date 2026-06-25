@@ -589,9 +589,37 @@ def money(value):
 def payment_merge_key(payment):
     if not isinstance(payment, dict):
         return ""
+    payment_id = str(payment.get("id") or "").strip()
+    if payment_id:
+        return f"id:{payment_id}"
     receipt = str(payment.get("receipt") or "").strip().lower()
     if receipt:
-        return f"receipt:{receipt}"
+        allocations = []
+        for allocation in payment.get("allocations") or []:
+            if not isinstance(allocation, dict):
+                continue
+            allocations.append(
+                {
+                    "head": str(allocation.get("head") or "").strip(),
+                    "month": str(allocation.get("month") or "").strip(),
+                    "amount": money(allocation.get("amount")),
+                    "date": str(allocation.get("date") or "").strip(),
+                    "paymentType": str(allocation.get("paymentType") or "").strip(),
+                }
+            )
+        signature = json.dumps(
+            {
+                "date": str(payment.get("date") or "").strip(),
+                "amount": money(payment.get("amount")),
+                "bankAmount": money(payment.get("bankAmount")),
+                "cashAmount": money(payment.get("cashAmount")),
+                "discountAmount": money(payment.get("discountAmount")),
+                "allocations": allocations,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ).lower()
+        return f"receipt:{receipt}:{signature}"
     return "|".join(
         str(payment.get(key) or "").strip().lower()
         for key in ("date", "head", "month", "amount", "bankAmount", "cashAmount")

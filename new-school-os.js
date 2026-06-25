@@ -525,9 +525,34 @@ function mergeStudentList(remoteList = [], localList = []) {
   return merged;
 }
 
+function createPaymentId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return `pay-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function getPaymentAllocationSignature(payment = {}) {
+  const allocations = (payment.allocations || []).map(allocation => ({
+    head: String(allocation.head || "").trim(),
+    month: String(allocation.month || "").trim(),
+    amount: Number(allocation.amount || 0),
+    date: String(allocation.date || "").trim(),
+    paymentType: String(allocation.paymentType || "").trim()
+  }));
+  return JSON.stringify({
+    date: String(payment.date || "").trim(),
+    amount: Number(payment.amount || 0),
+    bankAmount: Number(payment.bankAmount || 0),
+    cashAmount: Number(payment.cashAmount || 0),
+    discountAmount: Number(payment.discountAmount || 0),
+    allocations
+  });
+}
+
 function getPaymentMergeKey(payment = {}) {
+  const id = String(payment.id || "").trim();
+  if (id) return `id:${id}`;
   const receipt = String(payment.receipt || "").trim().toLowerCase();
-  if (receipt) return `receipt:${receipt}`;
+  if (receipt) return `receipt:${receipt}:${getPaymentAllocationSignature(payment).toLowerCase()}`;
   return [
     payment.date || "",
     payment.head || "",
@@ -5156,6 +5181,7 @@ function openPaymentEdit(admissionNo, receiptNo) {
 function resetPaymentEditMode() {
   const feeForm = document.getElementById("feeForm");
   delete feeForm.dataset.editPaymentReceipt;
+  delete feeForm.dataset.editPaymentId;
   feeForm.querySelector("button[type='submit']").textContent = "Generate Receipt";
 }
 
@@ -5165,11 +5191,15 @@ function resetFeeDateToToday() {
   updateFeeFineAmountFromPaymentDate();
 }
 
-function deletePaymentByReceipt(admissionNo, receiptNo) {
+function deletePaymentByReceipt(admissionNo, receiptNo, paymentId = "") {
   const payments = getSessionPayments(admissionNo);
   const before = payments.length;
   for (let index = payments.length - 1; index >= 0; index -= 1) {
-    if (payments[index].receipt === receiptNo) payments.splice(index, 1);
+    if (paymentId && payments[index].id === paymentId) {
+      payments.splice(index, 1);
+      continue;
+    }
+    if (!paymentId && payments[index].receipt === receiptNo) payments.splice(index, 1);
   }
   return payments.length !== before;
 }
@@ -6638,6 +6668,7 @@ function collectStudentPayment(student, amount, date, mode, preferredHead = "", 
   if (remainingAmount > 0) allocations.push({head: "Advance Payment", amount: remainingAmount});
   if (fine > 0) allocations.push({head: getLateFineHeadForFee(preferredHead), amount: fine, month: preferredMonth || undefined});
   const payment = {
+    id: paymentBreakdown.paymentId || createPaymentId(),
     date: formatDateDDMMYYYY(date || new Date()),
     receipt: receiptNo || getNextReceiptNo(),
     mode,
@@ -6682,6 +6713,7 @@ function collectCombinedStudentPayment(student, items, date, receiptNo = "", pay
   });
   if (!allocations.length) return null;
   const payment = {
+    id: paymentBreakdown.paymentId || createPaymentId(),
     date: formatDateDDMMYYYY(date || new Date()),
     receipt: receiptNo || getNextReceiptNo(),
     mode: bankAmount > 0 && cashAmount > 0 ? "Bank + Cash" : bankAmount > 0 ? "Bank" : "Cash",
@@ -7066,6 +7098,7 @@ function openCombinedCollectionEditPopup(student, payment) {
   const month = (payment.allocations || []).map(allocation => allocation.month).find(Boolean) || "";
   combinedCollectionForm.reset();
   combinedCollectionForm.dataset.editPaymentReceipt = payment.receipt || "";
+  combinedCollectionForm.dataset.editPaymentId = payment.id || "";
   delete combinedCollectionForm.dataset.singleCollection;
   delete combinedCollectionForm.dataset.includePriorTuitionDue;
   combinedCollectionForm.querySelector("button[type='submit']").textContent = "Update Combined Receipt";
@@ -7091,6 +7124,7 @@ function closeCombinedCollectionPopup() {
   combinedCollectionModal.setAttribute("aria-hidden", "true");
   closeDatePickerPopover();
   delete combinedCollectionForm.dataset.editPaymentReceipt;
+  delete combinedCollectionForm.dataset.editPaymentId;
   delete combinedCollectionForm.dataset.includePriorTuitionDue;
   delete combinedCollectionForm.dataset.singleCollection;
   combinedCollectionForm.querySelector("button[type='submit']").textContent = "Save Combined Receipt";
@@ -10127,12 +10161,14 @@ combinedCollectionForm.addEventListener("submit", event => {
   }
   const receiptNo = String(form.elements.receiptNo.value || "").trim() || getNextReceiptNo();
   const editingReceipt = form.dataset.editPaymentReceipt || "";
-  if (editingReceipt) deletePaymentByReceipt(student.admissionNo, editingReceipt);
+  const editingPaymentId = form.dataset.editPaymentId || "";
+  if (editingReceipt) deletePaymentByReceipt(student.admissionNo, editingReceipt, editingPaymentId);
   const payment = collectCombinedStudentPayment(student, selected, form.elements.date.value, receiptNo, {
     bankAmount,
     cashAmount,
     discountAmount,
-    remarks: form.elements.remarks?.value || ""
+    remarks: form.elements.remarks?.value || "",
+    paymentId: editingPaymentId || undefined
   });
   if (!payment) {
     showToast("Combined payment could not be saved.");
@@ -10169,13 +10205,14 @@ document.getElementById("feeForm").addEventListener("submit", event => {
   const fineAmount = ["Tuition Fee", "Transport Fees"].includes(feeHead) ? Number(data.get("fineAmount") || event.currentTarget.dataset.fineAmount || 0) : 0;
   const feeMonth = event.currentTarget.dataset.feeMonth || "";
   const editingReceipt = event.currentTarget.dataset.editPaymentReceipt || "";
+  const editingPaymentId = event.currentTarget.dataset.editPaymentId || "";
   event.currentTarget.elements.amount.value = rawAmount;
   if (rawAmount <= 0) {
     showToast("Enter bank or cash payment amount.");
     return;
   }
-  if (editingReceipt) deletePaymentByReceipt(student.admissionNo, editingReceipt);
-  const payment = collectStudentPayment(student, rawAmount, date, mode, feeHead, fineAmount, feeMonth, receiptNo, {bankAmount, cashAmount});
+  if (editingReceipt) deletePaymentByReceipt(student.admissionNo, editingReceipt, editingPaymentId);
+  const payment = collectStudentPayment(student, rawAmount, date, mode, feeHead, fineAmount, feeMonth, receiptNo, {bankAmount, cashAmount, paymentId: editingPaymentId || undefined});
   if (!payment) {
     showToast("Payment could not be saved.");
     return;
