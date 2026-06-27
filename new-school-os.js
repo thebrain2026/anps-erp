@@ -6592,7 +6592,7 @@ function renderStudentTransportFees() {
     return `
       <tr>
         <td><strong>${escapeHtml(student.admissionNo || "-")}</strong></td>
-        <td>${escapeHtml(student.name || "-")}</td>
+        <td><button class="student-name-link" type="button" data-open-fee-book="${escapeHtml(student.admissionNo || "")}"><strong>${escapeHtml(student.name || "-")}</strong></button></td>
         <td>${escapeHtml(classInfo.klass || "-")}</td>
         <td>${escapeHtml(classInfo.section || "-")}</td>
         <td>${escapeHtml(student.villageTown || "-")}</td>
