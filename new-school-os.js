@@ -6649,9 +6649,14 @@ function renderNonTransportStudents() {
         <td>${escapeHtml(student.villageTown || "-")}</td>
         <td>${escapeHtml(getStudentGuardianName(student) || "-")}</td>
         <td>${escapeHtml(getStudentContactMobile(student) || "-")}</td>
+        <td>
+          <button class="icon-action edit" type="button" data-edit-student-transport="${escapeHtml(student.admissionNo || "")}" title="Edit transport details" aria-label="Edit transport details for ${escapeHtml(student.name || "student")}">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4.7L19.3 9.4a2.1 2.1 0 0 0 0-3L17.6 4.7a2.1 2.1 0 0 0-3 0L4 15.3V20Zm3.8-2H6v-1.8l8.5-8.5 1.8 1.8L7.8 18Zm7.9-11.5.4-.4 1.8 1.8-.4.4-1.8-1.8Z"/></svg>
+          </button>
+        </td>
       </tr>
     `;
-  }).join("") || `<tr><td colspan="7">No non-transport students found.</td></tr>`;
+  }).join("") || `<tr><td colspan="8">No non-transport students found.</td></tr>`;
   const summary = document.getElementById("nonTransportStudentSummary");
   if (summary) summary.textContent = `Non transport students: ${nonTransportStudents.length}`;
 }
