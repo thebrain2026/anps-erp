@@ -581,16 +581,58 @@ function mergePaymentList(remotePayments = [], localPayments = []) {
   return merged;
 }
 
+function getNextAvailableReceiptForMerge(session = activeSession, usedReceipts = new Set(), nextSerialRef = {value: 1}) {
+  const receiptYear = String(session || new Date().getFullYear()).split("-")[0] || String(new Date().getFullYear());
+  let candidate = "";
+  do {
+    candidate = `ANPS/${receiptYear}-${String(nextSerialRef.value).padStart(3, "0")}`;
+    nextSerialRef.value += 1;
+  } while (usedReceipts.has(candidate));
+  usedReceipts.add(candidate);
+  return candidate;
+}
+
 function mergeCollectedPayments(remoteCollected = {}, localCollected = {}) {
   const merged = {};
   const sessions = new Set([...Object.keys(remoteCollected || {}), ...Object.keys(localCollected || {})]);
   sessions.forEach(session => {
     const remoteSession = remoteCollected?.[session] || {};
     const localSession = localCollected?.[session] || {};
+    const receiptOwners = new Map();
+    const usedReceipts = new Set();
+    const receiptYear = String(session || "").split("-")[0];
+    const nextSerialRef = {value: 1};
+    const addReceiptOwner = (receipt = "", admissionNo = "") => {
+      const cleanReceipt = String(receipt || "").trim();
+      if (!cleanReceipt) return;
+      const owner = normalizeAdmissionNo(admissionNo);
+      usedReceipts.add(cleanReceipt);
+      nextSerialRef.value = Math.max(nextSerialRef.value, getReceiptSerial(cleanReceipt, receiptYear) + 1);
+      if (!receiptOwners.has(cleanReceipt)) receiptOwners.set(cleanReceipt, new Set());
+      receiptOwners.get(cleanReceipt).add(owner);
+    };
+    Object.entries(remoteSession).forEach(([admissionNo, payments]) => {
+      (payments || []).forEach(payment => addReceiptOwner(payment.receipt, admissionNo));
+    });
+    const prepareLocalPayments = (admissionNo = "", payments = []) => {
+      const owner = normalizeAdmissionNo(admissionNo);
+      return (payments || []).map(payment => {
+        const receipt = String(payment?.receipt || "").trim();
+        const owners = receiptOwners.get(receipt);
+        const belongsToOtherAdmission = owners && [...owners].some(existingOwner => existingOwner !== owner);
+        if (receipt && belongsToOtherAdmission) {
+          const nextReceipt = getNextAvailableReceiptForMerge(session, usedReceipts, nextSerialRef);
+          addReceiptOwner(nextReceipt, admissionNo);
+          return {...payment, receipt: nextReceipt};
+        }
+        addReceiptOwner(receipt, admissionNo);
+        return payment;
+      });
+    };
     const admissionNos = new Set([...Object.keys(remoteSession || {}), ...Object.keys(localSession || {})]);
     merged[session] = {};
     admissionNos.forEach(admissionNo => {
-      merged[session][admissionNo] = mergePaymentList(remoteSession[admissionNo] || [], localSession[admissionNo] || []);
+      merged[session][admissionNo] = mergePaymentList(remoteSession[admissionNo] || [], prepareLocalPayments(admissionNo, localSession[admissionNo] || []));
     });
   });
   return merged;
@@ -1063,12 +1105,73 @@ function applyProductionCleanSeedOnce() {
 
 function getNextReceiptNo() {
   const receiptYear = String(activeSession || new Date().getFullYear()).split("-")[0] || String(new Date().getFullYear());
+  const highestUsedSerial = getHighestReceiptSerialForActiveSession(receiptYear);
+  if (highestUsedSerial >= receiptSerial) receiptSerial = highestUsedSerial + 1;
   return `ANPS/${receiptYear}-${String(receiptSerial).padStart(3, "0")}`;
 }
 
 function setNextReceiptNo() {
   const receiptInput = document.querySelector("#feeForm [name='receiptNo']");
   if (receiptInput) receiptInput.value = getNextReceiptNo();
+}
+
+function getReceiptSerial(receiptNo = "", receiptYear = String(activeSession || "").split("-")[0]) {
+  const match = String(receiptNo || "").trim().match(/^ANPS\/(\d{4})-(\d+)$/i);
+  if (!match || (receiptYear && match[1] !== String(receiptYear))) return 0;
+  return Number(match[2] || 0);
+}
+
+function getHighestReceiptSerialForActiveSession(receiptYear = String(activeSession || "").split("-")[0]) {
+  const sessionPayments = collectedPayments[activeSession] || {};
+  return Object.values(sessionPayments).reduce((max, payments) => {
+    return Math.max(max, ...(payments || []).map(payment => getReceiptSerial(payment.receipt, receiptYear)));
+  }, 0);
+}
+
+function isReceiptNoUsed(receiptNo = "", ignoredPaymentId = "") {
+  const cleanReceipt = String(receiptNo || "").trim();
+  if (!cleanReceipt) return false;
+  const sessionPayments = collectedPayments[activeSession] || {};
+  return Object.values(sessionPayments).some(payments => (payments || []).some(payment =>
+    String(payment.receipt || "").trim() === cleanReceipt &&
+    (!ignoredPaymentId || String(payment.id || "") !== String(ignoredPaymentId))
+  ));
+}
+
+function getReceiptAdmissions(receiptNo = "", ignoredPaymentId = "") {
+  const cleanReceipt = String(receiptNo || "").trim();
+  const sessionPayments = collectedPayments[activeSession] || {};
+  const admissions = new Set();
+  Object.entries(sessionPayments).forEach(([admissionNo, payments]) => {
+    (payments || []).forEach(payment => {
+      if (String(payment.receipt || "").trim() !== cleanReceipt) return;
+      if (ignoredPaymentId && String(payment.id || "") === String(ignoredPaymentId)) return;
+      admissions.add(normalizeAdmissionNo(admissionNo));
+    });
+  });
+  return admissions;
+}
+
+function receiptNoBelongsToAnotherAdmission(receiptNo = "", admissionNo = "", ignoredPaymentId = "") {
+  const normalizedAdmissionNo = normalizeAdmissionNo(admissionNo);
+  return [...getReceiptAdmissions(receiptNo, ignoredPaymentId)].some(owner => owner !== normalizedAdmissionNo);
+}
+
+function getSafeReceiptNoForPayment(admissionNo = "", requestedReceiptNo = "", ignoredPaymentId = "") {
+  const receiptYear = String(activeSession || new Date().getFullYear()).split("-")[0] || String(new Date().getFullYear());
+  let candidate = String(requestedReceiptNo || "").trim() || getNextReceiptNo();
+  let changed = false;
+  if (receiptNoBelongsToAnotherAdmission(candidate, admissionNo, ignoredPaymentId) || (!requestedReceiptNo && isReceiptNoUsed(candidate, ignoredPaymentId))) {
+    let nextSerial = Math.max(receiptSerial, getHighestReceiptSerialForActiveSession(receiptYear) + 1);
+    do {
+      candidate = `ANPS/${receiptYear}-${String(nextSerial).padStart(3, "0")}`;
+      nextSerial += 1;
+    } while (isReceiptNoUsed(candidate, ignoredPaymentId));
+    changed = true;
+  }
+  const usedSerial = getReceiptSerial(candidate, receiptYear);
+  if (usedSerial >= receiptSerial) receiptSerial = usedSerial + 1;
+  return {receiptNo: candidate, changed};
 }
 
 function showToast(message, tone = "default", duration = 2400) {
@@ -10340,9 +10443,14 @@ combinedCollectionForm.addEventListener("submit", event => {
     showToast(`Payment cannot be more than ${formatRs(payableAmount)} after discount.`);
     return;
   }
-  const receiptNo = String(form.elements.receiptNo.value || "").trim() || getNextReceiptNo();
   const editingReceipt = form.dataset.editPaymentReceipt || "";
   const editingPaymentId = form.dataset.editPaymentId || "";
+  const safeReceipt = getSafeReceiptNoForPayment(student.admissionNo, form.elements.receiptNo.value, editingPaymentId);
+  const receiptNo = safeReceipt.receiptNo;
+  if (safeReceipt.changed) {
+    form.elements.receiptNo.value = receiptNo;
+    showToast(`Receipt no. changed to ${receiptNo} to avoid duplicate.`);
+  }
   if (editingReceipt) deletePaymentByReceipt(student.admissionNo, editingReceipt, editingPaymentId);
   const payment = collectCombinedStudentPayment(student, selected, form.elements.date.value, receiptNo, {
     bankAmount,
@@ -10355,7 +10463,6 @@ combinedCollectionForm.addEventListener("submit", event => {
     showToast("Combined payment could not be saved.");
     return;
   }
-  if (!editingReceipt) receiptSerial += 1;
   setNextReceiptNo();
   saveAppState();
   renderFeeBook(student.admissionNo);
@@ -10381,12 +10488,13 @@ document.getElementById("feeForm").addEventListener("submit", event => {
   const cashAmount = Number(data.get("cashAmount") || 0);
   const rawAmount = bankAmount + cashAmount;
   const mode = bankAmount > 0 && cashAmount > 0 ? "Bank + Cash" : bankAmount > 0 ? "Bank" : "Cash";
-  const receiptNo = String(data.get("receiptNo") || "").trim() || getNextReceiptNo();
   const feeHead = event.currentTarget.dataset.feeHead || "";
   const fineAmount = ["Tuition Fee", "Transport Fees"].includes(feeHead) ? Number(data.get("fineAmount") || event.currentTarget.dataset.fineAmount || 0) : 0;
   const feeMonth = event.currentTarget.dataset.feeMonth || "";
   const editingReceipt = event.currentTarget.dataset.editPaymentReceipt || "";
   const editingPaymentId = event.currentTarget.dataset.editPaymentId || "";
+  const safeReceipt = getSafeReceiptNoForPayment(student.admissionNo, data.get("receiptNo"), editingPaymentId);
+  const receiptNo = safeReceipt.receiptNo;
   event.currentTarget.elements.amount.value = rawAmount;
   if (rawAmount <= 0) {
     showToast("Enter bank or cash payment amount.");
@@ -10402,7 +10510,6 @@ document.getElementById("feeForm").addEventListener("submit", event => {
   renderFeeBook(student.admissionNo);
   renderDueFeesSearch();
   renderFinanceSession();
-  if (!editingReceipt) receiptSerial += 1;
   setNextReceiptNo();
   saveAppState();
   resetPaymentEditMode();
