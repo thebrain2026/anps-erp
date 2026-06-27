@@ -1486,6 +1486,19 @@ table { width: 100%; border-collapse: collapse; }
 th, td { padding: 13px 12px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
 th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
 
+.student-transport-fee-table-wrap {
+  max-height: 62vh;
+  overflow: auto;
+}
+
+.student-transport-fee-table-wrap th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: #f8fbff;
+  box-shadow: 0 1px 0 var(--line), 0 8px 14px rgba(31, 50, 72, .06);
+}
+
 .transport-village-form {
   grid-template-columns: minmax(190px, 1fr) 120px 140px 160px 150px auto;
   align-items: end;
