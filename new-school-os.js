@@ -287,7 +287,8 @@ const titleMap = {
   transportVehicle: "Vehicle",
   transportAssignVehicle: "Assign Vehicle",
   transportRoutePickupPoint: "Route Pickup Point",
-  studentTransportFees: "Student Transport Fees"
+  studentTransportFees: "Student Transport Fees",
+  nonTransportStudents: "Non Transport Students"
 };
 
 const ACCESS_PERMISSION_MODULES = Object.keys(titleMap);
@@ -306,7 +307,7 @@ const ACCESS_PERMISSION_GROUPS = [
   {name: "Certificate", modules: ["studentIdCard", "teacherIdCard"]},
   {name: "Settings", modules: ["masterAdmin", "userAccessSettings", "studentUserLogin"]},
   {name: "Security", modules: ["securityMaintenance"]},
-  {name: "Transport", modules: ["transportFeesMaster", "transportFineSetup", "transportPickupPoint", "transportRoute", "transportVehicle", "transportAssignVehicle", "transportRoutePickupPoint", "studentTransportFees"]}
+  {name: "Transport", modules: ["transportFeesMaster", "transportFineSetup", "transportPickupPoint", "transportRoute", "transportVehicle", "transportAssignVehicle", "transportRoutePickupPoint", "studentTransportFees", "nonTransportStudents"]}
 ];
 
 const pageTitle = document.getElementById("pageTitle");
@@ -1294,6 +1295,7 @@ function renderActiveView(viewName = document.querySelector(".view.active")?.id 
   if (viewName === "transportRoutePickupPoint") renderTransportRoutePickupPoints();
   if (viewName === "transportFineSetup") renderTransportFineSetup();
   if (viewName === "studentTransportFees") renderStudentTransportFees();
+  if (viewName === "nonTransportStudents") renderNonTransportStudents();
   if (viewName === "staffDetails") renderStaffDetails();
   if (viewName === "department") renderHrSetup();
   if (viewName === "staffAttendance") renderStaffAttendance();
@@ -1392,6 +1394,9 @@ function setView(viewName, options = {}) {
   }
   if (viewName === "studentTransportFees") {
     renderStudentTransportFees();
+  }
+  if (viewName === "nonTransportStudents") {
+    renderNonTransportStudents();
   }
   document.body.classList.remove("nav-open");
 }
@@ -3157,6 +3162,7 @@ function importStudentsExcelFile(file) {
     renderDueFeesSearch();
     renderStudentFeeCounter();
     renderStudentTransportFees();
+    renderNonTransportStudents();
     renderTransportRoutePickupPoints();
     showToast(`Import complete: ${added} added, ${updated} updated.`);
   };
@@ -3277,6 +3283,7 @@ function disableStudentByAdmissionNo(admissionNo, reason) {
   renderDueFeesSearch();
   renderStudentFeeCounter();
   renderStudentTransportFees();
+  renderNonTransportStudents();
   renderTransportRoutePickupPoints();
   renderFinanceSession(false);
   renderDashboardOnly();
@@ -6597,6 +6604,33 @@ function renderStudentTransportFees() {
     const monthlyTotal = transportStudents.reduce((sum, student) => sum + Number(student.transportFee || 0), 0);
     summary.textContent = `Transport students: ${transportStudents.length} | Monthly transport fee: ${formatRs(monthlyTotal)}`;
   }
+}
+
+function renderNonTransportStudents() {
+  const rows = document.getElementById("nonTransportStudentRows");
+  if (!rows) return;
+  const nonTransportStudents = getActiveStudents()
+    .filter(student => !studentTakesTransport(student))
+    .sort((a, b) =>
+      String(a.klass || "").localeCompare(String(b.klass || ""), undefined, {numeric: true}) ||
+      String(a.name || "").localeCompare(String(b.name || ""), undefined, {numeric: true})
+    );
+  rows.innerHTML = nonTransportStudents.map(student => {
+    const classInfo = splitStudentClassSection(student.klass || "");
+    return `
+      <tr>
+        <td><strong>${escapeHtml(student.admissionNo || "-")}</strong></td>
+        <td>${escapeHtml(student.name || "-")}</td>
+        <td>${escapeHtml(classInfo.klass || "-")}</td>
+        <td>${escapeHtml(classInfo.section || "-")}</td>
+        <td>${escapeHtml(student.villageTown || "-")}</td>
+        <td>${escapeHtml(getStudentGuardianName(student) || "-")}</td>
+        <td>${escapeHtml(getStudentContactMobile(student) || "-")}</td>
+      </tr>
+    `;
+  }).join("") || `<tr><td colspan="7">No non-transport students found.</td></tr>`;
+  const summary = document.getElementById("nonTransportStudentSummary");
+  if (summary) summary.textContent = `Non transport students: ${nonTransportStudents.length}`;
 }
 
 function renderTuitionFineSetup() {
@@ -10037,6 +10071,7 @@ admissionForm.addEventListener("submit", event => {
   renderStudentUserLogin();
   renderStudentIdCardModule();
   renderStudentTransportFees();
+  renderNonTransportStudents();
   renderTransportRoutePickupPoints();
   renderFeeBook(admissionNo);
   closeAdmissionForm();
@@ -10920,6 +10955,7 @@ document.body.addEventListener("click", event => {
       renderDueFeesSearch();
       renderStudentFeeCounter(student.admissionNo);
       renderStudentTransportFees();
+      renderNonTransportStudents();
       renderTransportRoutePickupPoints();
       renderFinanceSession(false);
       renderDashboardOnly();
@@ -10948,6 +10984,7 @@ document.body.addEventListener("click", event => {
       renderStudentUserLogin();
       renderStudentIdCardModule();
       renderStudentTransportFees();
+      renderNonTransportStudents();
       renderTransportRoutePickupPoints();
       renderFeeBook();
       showToast(`${student.name} deleted.`);
