@@ -21,6 +21,7 @@ const designations = [];
 const userAccessAccounts = [];
 const studentUserAccounts = [];
 const rolePermissions = {};
+const rolePermissionAudit = {};
 const staffAttendanceRecords = [];
 const classTimetableEntries = [];
 const syllabusEntries = [];
@@ -282,6 +283,8 @@ const titleMap = {
   studentUserLogin: "Student User Login",
   securityMaintenance: "Security Maintenance",
   securityDuplicateReceipts: "Duplicate Receipts",
+  securityAlertSolver: "Alert Solver",
+  securityRoleHealth: "Role & Permission Health",
   transportFeesMaster: "Transport Fees Master",
   transportFineSetup: "Transport Fine Setup",
   transportPickupPoint: "Pickup Point",
@@ -308,7 +311,7 @@ const ACCESS_PERMISSION_GROUPS = [
   {name: "Academic", modules: ["classTimetable", "teacherTimetable", "syllabus", "teacherComplaint", "holidayReport", "annualCalendar"]},
   {name: "Certificate", modules: ["studentIdCard", "teacherIdCard"]},
   {name: "Settings", modules: ["masterAdmin", "userAccessSettings", "studentUserLogin"]},
-  {name: "Security", modules: ["securityMaintenance", "securityDuplicateReceipts"]},
+  {name: "Security", modules: ["securityMaintenance", "securityDuplicateReceipts", "securityAlertSolver", "securityRoleHealth"]},
   {name: "Transport", modules: ["transportFeesMaster", "transportFineSetup", "transportPickupPoint", "transportRoute", "transportVehicle", "transportAssignVehicle", "transportRoutePickupPoint", "studentTransportFees", "nonTransportStudents"]}
 ];
 
@@ -398,6 +401,7 @@ function getAppStateSnapshot() {
     userAccessAccounts,
     studentUserAccounts,
     rolePermissions,
+    rolePermissionAudit,
     staffAttendanceRecords,
     classTimetableEntries,
     syllabusEntries,
@@ -678,6 +682,7 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
   merged.transportVillageDistances = {...(remoteState.transportVillageDistances || {}), ...(localState.transportVillageDistances || {})};
   merged.transportVillageFees = {...(remoteState.transportVillageFees || {}), ...(localState.transportVillageFees || {})};
   merged.rolePermissions = {...(remoteState.rolePermissions || {}), ...(localState.rolePermissions || {})};
+  merged.rolePermissionAudit = {...(remoteState.rolePermissionAudit || {}), ...(localState.rolePermissionAudit || {})};
   merged.classSubjectAssignments = {...(remoteState.classSubjectAssignments || {}), ...(localState.classSubjectAssignments || {})};
   merged.collectedPayments = mergeCollectedPayments(remoteState.collectedPayments || {}, localState.collectedPayments || {});
   merged.financeSessions = {...(remoteState.financeSessions || {}), ...(localState.financeSessions || {})};
@@ -898,6 +903,10 @@ function applySavedState(saved = {}) {
       Object.keys(rolePermissions).forEach(role => delete rolePermissions[role]);
       Object.assign(rolePermissions, saved.rolePermissions);
     }
+    if (saved.rolePermissionAudit && typeof saved.rolePermissionAudit === "object") {
+      Object.keys(rolePermissionAudit).forEach(role => delete rolePermissionAudit[role]);
+      Object.assign(rolePermissionAudit, saved.rolePermissionAudit);
+    }
     DEFAULT_STAFF_DESIGNATIONS.forEach(name => {
       if (!designations.some(item => String(item.name || "").toLowerCase() === name.toLowerCase())) {
         designations.push({name, department: "", level: ""});
@@ -1068,6 +1077,7 @@ function applyProductionCleanSeedOnce() {
   selectedHistoryPayments.clear();
   Object.keys(collectedPayments).forEach(session => delete collectedPayments[session]);
   Object.keys(rolePermissions).forEach(role => delete rolePermissions[role]);
+  Object.keys(rolePermissionAudit).forEach(role => delete rolePermissionAudit[role]);
   Object.keys(classSubjectAssignments).forEach(className => delete classSubjectAssignments[className]);
   Object.keys(transportVillageDistances).forEach(village => delete transportVillageDistances[village]);
   Object.keys(transportVillageFees).forEach(village => delete transportVillageFees[village]);
@@ -1423,6 +1433,8 @@ function renderActiveView(viewName = document.querySelector(".view.active")?.id 
   if (viewName === "studentUserLogin") renderStudentUserLogin();
   if (viewName === "securityMaintenance") renderSecurityMaintenance();
   if (viewName === "securityDuplicateReceipts") renderDuplicateReceiptUtility();
+  if (viewName === "securityAlertSolver") renderAlertSolverPage();
+  if (viewName === "securityRoleHealth") renderRolePermissionHealth();
   if (viewName === "masterAdmin") renderMasterAdminSettings();
   if (viewName === "reportStudentInformation") {
     renderClassSectionReport();
@@ -1504,6 +1516,12 @@ function setView(viewName, options = {}) {
   }
   if (viewName === "securityDuplicateReceipts") {
     renderDuplicateReceiptUtility();
+  }
+  if (viewName === "securityAlertSolver") {
+    renderAlertSolverPage();
+  }
+  if (viewName === "securityRoleHealth") {
+    renderRolePermissionHealth();
   }
   if (viewName === "studentTransportFees") {
     renderStudentTransportFees();
@@ -8172,6 +8190,318 @@ function showSecuritySystemHealth() {
   `);
 }
 
+function getAlertSolverRules() {
+  return [
+    {
+      id: "duplicate-receipt",
+      title: "Duplicate Receipt Number",
+      severity: "Critical",
+      module: "Security / Collect Fees",
+      pages: ["Security > Duplicate Receipts", "Collect Fees > Payment History"],
+      patterns: ["receipt number used for multiple students", "linked with", "duplicate receipt", "same receipt"],
+      reason: "Same receipt number multiple admission numbers-e use hoyeche.",
+      steps: [
+        "Security > Duplicate Receipts page open korun.",
+        "Receipt group review korun.",
+        "Fix This ba Fix All Duplicates click korun.",
+        "Tarpor Security Maintenance > System Health refresh kore alert komeche kina dekhun."
+      ]
+    },
+    {
+      id: "allocation-mismatch",
+      title: "Receipt Allocation Mismatch",
+      severity: "Review",
+      module: "Collect Fees",
+      pages: ["Collect Fees > Payment History"],
+      patterns: ["receipt allocation mismatch", "fee allocations"],
+      reason: "Payment amount, discount, fine ba fee allocation total ek line-e milche na.",
+      steps: [
+        "Collect Fees > Payment History open korun.",
+        "Receipt No search-e receipt number likhun.",
+        "Edit icon diye payment details check korun.",
+        "Discount thakle Paid + Discount allocation-er sathe milche kina dekhun.",
+        "Vul entry hole edit/delete kore correct payment save korun."
+      ]
+    },
+    {
+      id: "bank-cash-mismatch",
+      title: "Bank/Cash Total Mismatch",
+      severity: "Critical",
+      module: "Collect Fees",
+      pages: ["Collect Fees > Payment History"],
+      patterns: ["bank/cash total mismatch", "bank+cash"],
+      reason: "Saved amount-er sathe bank payment + cash payment total milche na.",
+      steps: [
+        "Collect Fees > Payment History page-e receipt no search korun.",
+        "Edit icon diye bank/cash amount check korun.",
+        "Bank + Cash total jeno Total Amount-er sathe mile seta update korun."
+      ]
+    },
+    {
+      id: "missing-receipt",
+      title: "Payment Without Receipt Number",
+      severity: "Critical",
+      module: "Collect Fees",
+      pages: ["Collect Fees > Payment History"],
+      patterns: ["payment without receipt", "no receipt no"],
+      reason: "Payment save hoyeche kintu receipt number blank.",
+      steps: [
+        "Collect Fees > Payment History open korun.",
+        "Problem payment row find korun.",
+        "Edit kore unique receipt number diye save korun."
+      ]
+    },
+    {
+      id: "no-backup",
+      title: "Backup Required",
+      severity: "Warning",
+      module: "Security",
+      pages: ["Security > Security Maintenance"],
+      patterns: ["no backup found", "backup is older"],
+      reason: "Recent backup nei ba backup purono hoye geche.",
+      steps: [
+        "Security > Security Maintenance open korun.",
+        "Create Backup click korun.",
+        "Backup Date card update hoyeche kina dekhun."
+      ]
+    },
+    {
+      id: "transport-mapping",
+      title: "Transport Route / Vehicle Mapping Issue",
+      severity: "Review",
+      module: "Transport",
+      pages: ["Transport > Route Pickup Point", "Transport > Assign Vehicle", "Transport > Student Transport Fees"],
+      patterns: ["transport student village not mapped", "route pickup has no assigned vehicle", "transport student without village", "transport student without transport fee"],
+      reason: "Transport student-er village, route, vehicle assignment ba fee missing.",
+      steps: [
+        "Transport > Pickup Point-e village ache kina check korun.",
+        "Transport > Route Pickup Point-e village route/shift-e map korun.",
+        "Transport > Assign Vehicle-e route + shift-er vehicle assign korun.",
+        "Student Transport Fees page-e fee/status verify korun."
+      ]
+    },
+    {
+      id: "duplicate-master",
+      title: "Duplicate Master Data",
+      severity: "Review",
+      module: "Student / Transport / HR",
+      pages: ["Student Details", "Transport", "Human Resources"],
+      patterns: ["duplicate admission number", "duplicate vehicle number", "duplicate route name", "duplicate staff id"],
+      reason: "Same master data ekadhik bar save hoyeche.",
+      steps: [
+        "Alert text-e kon duplicate bola ache seta dekhen.",
+        "Related page open korun.",
+        "Duplicate row edit/delete kore ekta correct record rakhen."
+      ]
+    },
+    {
+      id: "offline-save",
+      title: "Internet / Server Connection Problem",
+      severity: "Critical",
+      module: "Backend / Save",
+      pages: ["Topbar Online Status", "Security > Security Maintenance"],
+      patterns: ["no internet", "server connection", "entry not saved", "offline", "backend save failed"],
+      reason: "Internet/server connection stable na hole entry save hobe na.",
+      steps: [
+        "Topbar-e Online dekha jacche kina check korun.",
+        "Offline/Checking hole page refresh kore abar login korun.",
+        "Entry save korar age Online status confirm korun.",
+        "Problem thakle Render service running ache kina check korun."
+      ]
+    }
+  ];
+}
+
+function analyzeAlertText(text = "") {
+  const clean = String(text || "").trim();
+  const lower = clean.toLowerCase();
+  if (!clean) return [];
+  const rules = getAlertSolverRules();
+  return rules.filter(rule => rule.patterns.some(pattern => lower.includes(pattern)));
+}
+
+function renderAlertSolverMatches(matches = [], rawText = "") {
+  const output = document.getElementById("alertSolverOutput");
+  if (!output) return;
+  if (!String(rawText || "").trim()) {
+    output.innerHTML = "Paste an alert and click Analyze Alert.";
+    return;
+  }
+  if (!matches.length) {
+    output.innerHTML = `
+      <article class="alert-solver-card solver-warning">
+        <span>Unknown Alert</span>
+        <strong>Exact rule match pawa jayni.</strong>
+        <p>Security Maintenance > System Health-e alert group dekhe related page check korun. Alert text-ta Codex-e pathale ami logic add kore dite parbo.</p>
+      </article>
+    `;
+    return;
+  }
+  output.innerHTML = matches.map(match => `
+    <article class="alert-solver-card solver-${match.severity.toLowerCase() === "critical" ? "danger" : "warning"}">
+      <span>${escapeHtml(match.severity)} | ${escapeHtml(match.module)}</span>
+      <strong>${escapeHtml(match.title)}</strong>
+      <p>${escapeHtml(match.reason)}</p>
+      <div><b>Related Page:</b> ${match.pages.map(page => `<code>${escapeHtml(page)}</code>`).join(" ")}</div>
+      <ol>${match.steps.map(step => `<li>${escapeHtml(step)}</li>`).join("")}</ol>
+    </article>
+  `).join("");
+}
+
+function renderAlertSolverPage() {
+  const input = document.getElementById("alertSolverInput");
+  const output = document.getElementById("alertSolverOutput");
+  if (!input || !output) return;
+  if (!output.dataset.ready) {
+    output.dataset.ready = "1";
+    renderAlertSolverMatches([], "");
+  }
+}
+
+function analyzeAlertSolverInput() {
+  const input = document.getElementById("alertSolverInput");
+  const text = input?.value || "";
+  renderAlertSolverMatches(analyzeAlertText(text), text);
+}
+
+function loadCurrentAlertsIntoSolver() {
+  const input = document.getElementById("alertSolverInput");
+  if (!input) return;
+  const report = getSystemHealthReport();
+  input.value = report.issues.map(issue => `${issue.type}: ${issue.title}\n${issue.details || ""}`).join("\n\n");
+  analyzeAlertSolverInput();
+}
+
+function getRolePermissionCounts(roleName = "") {
+  const permissions = normalizeRolePermission(roleName);
+  let viewOn = 0;
+  let totalOn = 0;
+  let total = 0;
+  ACCESS_PERMISSION_MODULES.forEach(moduleId => {
+    ACCESS_ACTIONS.forEach(action => {
+      total += 1;
+      if (permissions?.[moduleId]?.[action]) {
+        totalOn += 1;
+        if (action === "view") viewOn += 1;
+      }
+    });
+  });
+  return {viewOn, totalOn, total};
+}
+
+function getRoleAuditLabel(roleName = "") {
+  const audit = rolePermissionAudit[roleName] || {};
+  if (!audit.updatedAt) return "-";
+  const date = new Date(audit.updatedAt);
+  const dateLabel = Number.isNaN(date.getTime()) ? String(audit.updatedAt || "-") : date.toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
+  });
+  return `${dateLabel}${audit.updatedBy ? ` by ${audit.updatedBy}` : ""}`;
+}
+
+function getRoleHealthRows() {
+  const roleNames = new Set();
+  roles.forEach(role => {
+    const name = String(role.name || "").trim();
+    if (name) roleNames.add(name);
+  });
+  Object.keys(rolePermissions).forEach(name => {
+    if (String(name || "").trim()) roleNames.add(name);
+  });
+  userAccessAccounts.forEach(account => {
+    const roleName = String(account.role || "").trim();
+    if (roleName) roleNames.add(roleName);
+  });
+  PROTECTED_ROLE_NAMES.forEach(name => roleNames.add(name));
+  return [...roleNames].sort((a, b) => a.localeCompare(b)).map(roleName => {
+    const counts = getRolePermissionCounts(roleName);
+    const users = userAccessAccounts.filter(account => String(account.role || "").trim().toLowerCase() === roleName.toLowerCase());
+    const activeUsers = users.filter(account => String(account.status || "Active") === "Active").length;
+    const roleExists = roles.some(role => String(role.name || "").trim().toLowerCase() === roleName.toLowerCase());
+    const protectedRole = isProtectedRoleName(roleName);
+    const issues = [];
+    if (!roleExists && !protectedRole) issues.push("Role setup missing");
+    if (!protectedRole && counts.viewOn === 0) issues.push("No view access");
+    if (!protectedRole && counts.totalOn === counts.total) issues.push("Full access");
+    if (protectedRole && counts.totalOn < counts.total) issues.push("Protected role changed");
+    const status = protectedRole ? "Locked" : issues.some(issue => /missing|No view|Protected/i.test(issue)) ? "Critical" : issues.length ? "Review" : "OK";
+    return {roleName, counts, users, activeUsers, roleExists, protectedRole, issues, status};
+  });
+}
+
+function getRoleHealthIssues(rows = getRoleHealthRows()) {
+  const issues = [];
+  if (!roles.length) issues.push({severity: "Warning", title: "No roles saved", detail: "HR Setup > Role Setup-e role add korun."});
+  if (!userAccessAccounts.length) issues.push({severity: "Info", title: "No user login saved", detail: "Settings > User Access & Permissions-e staff login create korun."});
+  rows.forEach(row => {
+    if (!row.roleExists && !row.protectedRole) {
+      issues.push({severity: "Critical", title: `${row.roleName} role setup missing`, detail: "User access-e role ache, but HR Setup role list-e nei."});
+    }
+    if (!row.protectedRole && row.counts.viewOn === 0) {
+      issues.push({severity: "Critical", title: `${row.roleName} has no view permission`, detail: "Ei role login korle sidebar almost blank hote pare."});
+    }
+    if (!row.protectedRole && row.counts.totalOn === row.counts.total) {
+      issues.push({severity: "Warning", title: `${row.roleName} has full access`, detail: "Admin/Master Admin chara full access dorkar kina check korun."});
+    }
+    if (row.protectedRole && row.counts.totalOn < row.counts.total) {
+      issues.push({severity: "Critical", title: `${row.roleName} protected permission changed`, detail: "Protected role full access locked thaka uchit."});
+    }
+  });
+  userAccessAccounts.forEach(account => {
+    const name = account.staffName || account.loginId || "User";
+    if (!String(account.role || "").trim()) issues.push({severity: "Critical", title: `${name} has no role`, detail: "User access login-e role select korun."});
+    if (!String(account.loginId || "").trim()) issues.push({severity: "Critical", title: `${name} login ID missing`, detail: "Login ID chara user login korte parbe na."});
+    if (!String(account.password || "").trim()) issues.push({severity: "Warning", title: `${name} password missing`, detail: "Password blank thakle login issue hote pare."});
+  });
+  return issues;
+}
+
+function renderRolePermissionHealth() {
+  const summary = document.getElementById("roleHealthSummary");
+  const rowsBody = document.getElementById("roleHealthRows");
+  const issueBox = document.getElementById("roleHealthIssues");
+  if (!summary || !rowsBody || !issueBox) return;
+  const rows = getRoleHealthRows();
+  const issues = getRoleHealthIssues(rows);
+  const criticalCount = issues.filter(issue => issue.severity === "Critical").length;
+  const warningCount = issues.filter(issue => issue.severity === "Warning").length;
+  const activeUserCount = userAccessAccounts.filter(account => String(account.status || "Active") === "Active").length;
+  summary.innerHTML = `
+    <article><span>Total Roles</span><strong>${rows.length}</strong><small>Role setup + permission roles</small></article>
+    <article><span>Active Users</span><strong>${activeUserCount}</strong><small>Login enabled users</small></article>
+    <article><span>Critical</span><strong>${criticalCount}</strong><small>Immediate check</small></article>
+    <article><span>Warnings</span><strong>${warningCount}</strong><small>Review needed</small></article>
+  `;
+  rowsBody.innerHTML = rows.map(row => {
+    const statusClass = row.status === "OK" || row.status === "Locked" ? "stable" : row.status === "Review" ? "watch" : "pending";
+    return `
+      <tr>
+        <td><strong>${escapeHtml(row.roleName)}</strong>${row.protectedRole ? `<small class="system-lock-note">Protected</small>` : ""}</td>
+        <td>${row.activeUsers}/${row.users.length}</td>
+        <td>${row.counts.viewOn}/${ACCESS_PERMISSION_MODULES.length}</td>
+        <td>${row.counts.totalOn}/${row.counts.total}</td>
+        <td>${escapeHtml(getRoleAuditLabel(row.roleName))}</td>
+        <td><span class="status-pill ${statusClass}">${escapeHtml(row.status)}</span>${row.issues.length ? `<small>${row.issues.map(escapeHtml).join(", ")}</small>` : ""}</td>
+      </tr>
+    `;
+  }).join("") || `<tr><td colspan="6">No role found.</td></tr>`;
+  if (!issues.length) {
+    issueBox.innerHTML = `<strong>Role health OK.</strong><br>No role/permission issue found.`;
+    return;
+  }
+  issueBox.innerHTML = issues.map(issue => `
+    <article class="role-health-issue role-health-${issue.severity.toLowerCase()}">
+      <span>${escapeHtml(issue.severity)}</span>
+      <strong>${escapeHtml(issue.title)}</strong>
+      <p>${escapeHtml(issue.detail)}</p>
+    </article>
+  `).join("");
+}
+
 function getDuplicateReceiptGroups() {
   const sessionPayments = collectedPayments[activeSession] || {};
   const groups = new Map();
@@ -9478,6 +9808,14 @@ document.getElementById("securityPerformanceBtn")?.addEventListener("click", sho
 document.getElementById("securityRefreshBtn")?.addEventListener("click", showSecurityRefreshRate);
 document.getElementById("securityCleanDemoBtn")?.addEventListener("click", clearSecurityTestDemoData);
 document.getElementById("securityReloadBtn")?.addEventListener("click", () => window.location.reload());
+document.getElementById("analyzeAlertSolverBtn")?.addEventListener("click", analyzeAlertSolverInput);
+document.getElementById("loadCurrentAlertsBtn")?.addEventListener("click", loadCurrentAlertsIntoSolver);
+document.getElementById("clearAlertSolverBtn")?.addEventListener("click", () => {
+  const input = document.getElementById("alertSolverInput");
+  if (input) input.value = "";
+  renderAlertSolverMatches([], "");
+});
+document.getElementById("refreshRoleHealthBtn")?.addEventListener("click", renderRolePermissionHealth);
 document.getElementById("refreshDuplicateReceiptsBtn")?.addEventListener("click", () => renderDuplicateReceiptUtility("Refreshed."));
 document.getElementById("fixAllDuplicateReceiptsBtn")?.addEventListener("click", () => {
   const groups = getDuplicateReceiptGroups();
@@ -9655,6 +9993,10 @@ if (roleForm) {
       if (oldName && oldName !== role.name && rolePermissions[oldName]) {
         rolePermissions[role.name] = rolePermissions[oldName];
         delete rolePermissions[oldName];
+      }
+      if (oldName && oldName !== role.name && rolePermissionAudit[oldName]) {
+        rolePermissionAudit[role.name] = rolePermissionAudit[oldName];
+        delete rolePermissionAudit[oldName];
       }
     } else {
       roles.push(role);
@@ -10070,6 +10412,11 @@ if (accessPermissionForm) {
     }
     if (isProtectedRoleName(roleName)) {
       rolePermissions[roleName] = getDefaultRolePermission(roleName);
+      rolePermissionAudit[roleName] = {
+        updatedAt: new Date().toISOString(),
+        updatedBy: getCurrentTopbarRole(),
+        locked: true
+      };
       saveAppState();
       renderPermissionRows(roleName);
       showToast("Master Admin/Admin permissions are locked with full access.");
@@ -10083,6 +10430,11 @@ if (accessPermissionForm) {
       });
     });
     rolePermissions[roleName] = permissions;
+    rolePermissionAudit[roleName] = {
+      updatedAt: new Date().toISOString(),
+      updatedBy: getCurrentTopbarRole(),
+      locked: false
+    };
     saveAppState();
     renderPermissionRows(roleName);
     showToast(`${roleName} permissions saved.`);
@@ -11006,6 +11358,7 @@ document.body.addEventListener("click", event => {
     if (role && confirm(`Delete role ${role.name}?`)) {
       roles.splice(index, 1);
       delete rolePermissions[role.name];
+      delete rolePermissionAudit[role.name];
       userAccessAccounts.forEach(account => {
         if (account.role === role.name) account.role = "";
       });

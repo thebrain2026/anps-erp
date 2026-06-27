@@ -128,6 +128,8 @@
           <div class="nav-sub">
             <button data-view="securityMaintenance" type="button">Security Maintenance</button>
             <button data-view="securityDuplicateReceipts" type="button">Duplicate Receipts</button>
+            <button data-view="securityAlertSolver" type="button">Alert Solver</button>
+            <button data-view="securityRoleHealth" type="button">Role & Permission Health</button>
           </div>
         </div>
         <div class="nav-group" id="transportNavGroup">
@@ -2154,6 +2156,90 @@
               </div>
               <textarea id="securityJsonOutput" class="security-json-output" readonly placeholder="Click Server JSON to view saved database JSON."></textarea>
             </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="securityRoleHealth">
+        <div class="security-dashboard">
+          <section class="panel security-hero-panel role-health-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Security</p>
+                <h2>Role & Permission Health</h2>
+                <small>Role, user login, permission on/off and access risk ek jaigai check korun.</small>
+              </div>
+              <button class="primary-action" id="refreshRoleHealthBtn" type="button">Refresh</button>
+            </div>
+            <div class="role-health-summary" id="roleHealthSummary"></div>
+          </section>
+
+          <section class="panel role-health-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Roles</p>
+                <h2>Role Permission Status</h2>
+              </div>
+            </div>
+            <div class="table-wrap role-health-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Role</th>
+                    <th>Users</th>
+                    <th>View Access</th>
+                    <th>Permissions On</th>
+                    <th>Last Save</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody id="roleHealthRows">
+                  <tr><td colspan="6">No role health scanned yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="panel role-health-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Issues</p>
+                <h2>Role Alerts</h2>
+              </div>
+            </div>
+            <div class="security-output role-health-issues" id="roleHealthIssues">No role issue scanned yet.</div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="securityAlertSolver">
+        <div class="security-dashboard">
+          <section class="panel security-hero-panel alert-solver-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Security</p>
+                <h2>Alert Solver</h2>
+                <small>Alert/problem text paste korun. System bolbe kothay problem, ki korte hobe.</small>
+              </div>
+              <button class="ghost-action" id="clearAlertSolverBtn" type="button">Clear</button>
+            </div>
+            <label class="alert-solver-input-label">Paste Alert / Problem Text
+              <textarea id="alertSolverInput" class="alert-solver-input" placeholder="Example: Receipt number used for multiple students ANPS/2026-319 is linked with 3 admission numbers."></textarea>
+            </label>
+            <div class="alert-solver-actions">
+              <button class="primary-action" id="analyzeAlertSolverBtn" type="button">Analyze Alert</button>
+              <button class="ghost-action" id="loadCurrentAlertsBtn" type="button">Load Current Alerts</button>
+            </div>
+          </section>
+
+          <section class="panel alert-solver-result-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Result</p>
+                <h2>Suggested Fix</h2>
+              </div>
+            </div>
+            <div id="alertSolverOutput" class="alert-solver-output">Paste an alert and click Analyze Alert.</div>
           </section>
         </div>
       </section>
