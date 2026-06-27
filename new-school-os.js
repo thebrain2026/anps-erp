@@ -5292,6 +5292,7 @@ function getLedgerPaymentDetails(student, row) {
       .filter(allocation => allocation.head === fineHead)
       .reduce((sum, allocation) => sum + allocation.amount, 0) : 0;
     return amount > 0 ? {
+      id: payment.id || "",
       date: matchingAllocations.map(allocation => allocation.date).find(Boolean) || payment.date,
       receipt: payment.receipt,
       amount,
@@ -5489,6 +5490,9 @@ function renderLedgerPeriodCell(student, row) {
                 </button>
                 <button class="payment-edit-action" type="button" data-edit-payment="${student.admissionNo || ""}" data-payment-receipt="${payment.receipt}" title="Edit payment" aria-label="Edit receipt ${payment.receipt} for ${student.name || "student"}">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4.7L19.3 9.4a2.1 2.1 0 0 0 0-3L17.6 4.7a2.1 2.1 0 0 0-3 0L4 15.3V20Zm3.8-2H6v-1.8l8.5-8.5 1.8 1.8L7.8 18Zm7.9-11.5.4-.4 1.8 1.8-.4.4-1.8-1.8Z"/></svg>
+                </button>
+                <button class="payment-delete-action" type="button" data-delete-payment="${student.admissionNo || ""}" data-payment-receipt="${payment.receipt}" data-payment-id="${payment.id || ""}" title="Delete payment" aria-label="Delete receipt ${payment.receipt} for ${student.name || "student"}">
+                  <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 21c-.6 0-1.1-.2-1.5-.6S5 19.5 5 19V8H4V6h5V4h6v2h5v2h-1v11c0 .6-.2 1.1-.6 1.5s-.9.6-1.5.6H7ZM17 8H7v11h10V8Zm-8 9h2v-7H9v7Zm4 0h2v-7h-2v7Z"/></svg>
                 </button>
               </span>
             </div>
@@ -8215,7 +8219,6 @@ document.getElementById("transportPickupPoint").addEventListener("input", event 
     } else {
       delete transportVillageDistances[village];
     }
-    saveAppState();
     return;
   }
   const feeInput = event.target.closest("[data-village-fee]");
@@ -8224,11 +8227,29 @@ document.getElementById("transportPickupPoint").addEventListener("input", event 
   const feeType = feeInput.dataset.feeType;
   if (!transportVillageFees[village]) transportVillageFees[village] = {};
   transportVillageFees[village][feeType] = Number(feeInput.value || 0);
-  saveAppState();
   updateAdmissionTransportFee();
 });
 
 document.getElementById("transportPickupPoint").addEventListener("change", event => {
+  const distanceInput = event.target.closest("[data-village-distance]");
+  if (distanceInput) {
+    const village = distanceInput.dataset.villageDistance;
+    const value = String(distanceInput.value || "").trim();
+    if (value) transportVillageDistances[village] = value;
+    else delete transportVillageDistances[village];
+    saveAppState();
+    return;
+  }
+  const feeInput = event.target.closest("[data-village-fee]");
+  if (feeInput) {
+    const village = feeInput.dataset.villageFee;
+    const feeType = feeInput.dataset.feeType;
+    if (!transportVillageFees[village]) transportVillageFees[village] = {};
+    transportVillageFees[village][feeType] = Number(feeInput.value || 0);
+    saveAppState();
+    updateAdmissionTransportFee();
+    return;
+  }
   const input = event.target.closest("[data-village-name]");
   if (!input) return;
   const oldName = input.dataset.villageName;
@@ -10924,8 +10945,9 @@ document.body.addEventListener("click", event => {
   if (deletePayment) {
     const admissionNo = deletePayment.dataset.deletePayment;
     const receiptNo = deletePayment.dataset.paymentReceipt;
+    const paymentId = deletePayment.dataset.paymentId || "";
     if (receiptNo && confirm(`Delete receipt ${receiptNo}?`)) {
-      if (deletePaymentByReceipt(admissionNo, receiptNo)) {
+      if (deletePaymentByReceipt(admissionNo, receiptNo, paymentId)) {
         saveAppState();
         renderStudentFeeCounter(admissionNo);
         renderFeeBook(admissionNo);

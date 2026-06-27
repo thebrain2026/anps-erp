@@ -4159,7 +4159,8 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
 .month-collect-action,
 .month-preview-action,
 .payment-receipt-action,
-.payment-edit-action {
+.payment-edit-action,
+.payment-delete-action {
   display: inline-grid;
   place-items: center;
   width: 24px;
@@ -4174,7 +4175,8 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
 .month-collect-action svg,
 .month-preview-action svg,
 .payment-receipt-action svg,
-.payment-edit-action svg {
+.payment-edit-action svg,
+.payment-delete-action svg {
   width: 16px;
   height: 16px;
   fill: currentColor;
@@ -4195,6 +4197,11 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   color: #1d4ed8;
 }
 
+.payment-delete-action {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
 .month-preview-action:hover,
 .payment-receipt-action:hover {
   background: #ffe3a3;
@@ -4202,6 +4209,10 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
 
 .payment-edit-action:hover {
   background: #bfdbfe;
+}
+
+.payment-delete-action:hover {
+  background: #fecaca;
 }
 
 .period-breakdown-head {
