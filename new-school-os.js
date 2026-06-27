@@ -4786,6 +4786,10 @@ function getCollectionHistoryAdmissionFilter() {
   return String(document.getElementById("collectionHistoryAdmissionNo")?.value || "").trim().toLowerCase();
 }
 
+function getCollectionHistoryReceiptFilter() {
+  return String(document.getElementById("collectionHistoryReceiptNo")?.value || "").trim().toLowerCase();
+}
+
 function renderCollectionHistoryCollectedByOptions(payments = []) {
   const select = document.getElementById("collectionHistoryCollectedBy");
   if (!select) return;
@@ -4800,12 +4804,14 @@ function filterPaymentsByDateRange(payments) {
   const {from, to} = getCollectionHistoryDateRange();
   const collectedBy = getCollectionHistoryCollectedByFilter();
   const admissionFilter = getCollectionHistoryAdmissionFilter();
+  const receiptFilter = getCollectionHistoryReceiptFilter();
   return payments.filter(payment => {
     const date = parseOptionalDateDDMMYYYY(payment.date) || parseDateDDMMYYYY(payment.date);
     if (from && date < from) return false;
     if (to && date > to) return false;
     if (collectedBy && String(payment.by || "").trim().toLowerCase() !== collectedBy) return false;
     if (admissionFilter && !String(payment.admissionNo || "").toLowerCase().includes(admissionFilter)) return false;
+    if (receiptFilter && !String(payment.receipt || "").toLowerCase().includes(receiptFilter)) return false;
     return true;
   });
 }
@@ -6996,7 +7002,8 @@ function renderFeeBook(admissionNo = activeLedgerAdmissionNo) {
     document.getElementById("collectionHistoryFromDate")?.value ||
     document.getElementById("collectionHistoryToDate")?.value ||
     document.getElementById("collectionHistoryCollectedBy")?.value ||
-    document.getElementById("collectionHistoryAdmissionNo")?.value
+    document.getElementById("collectionHistoryAdmissionNo")?.value ||
+    document.getElementById("collectionHistoryReceiptNo")?.value
   );
   document.getElementById("ledgerPaymentRows").innerHTML = ledgerPayments.map(payment => {
     const paymentAdmissionNo = payment.admissionNo || student.admissionNo || "";
@@ -9850,10 +9857,12 @@ document.getElementById("clearCollectionHistoryDateRange")?.addEventListener("cl
   const toInput = document.getElementById("collectionHistoryToDate");
   const collectedByInput = document.getElementById("collectionHistoryCollectedBy");
   const admissionInput = document.getElementById("collectionHistoryAdmissionNo");
+  const receiptInput = document.getElementById("collectionHistoryReceiptNo");
   if (fromInput) fromInput.value = "";
   if (toInput) toInput.value = "";
   if (collectedByInput) collectedByInput.value = "";
   if (admissionInput) admissionInput.value = "";
+  if (receiptInput) receiptInput.value = "";
   selectedHistoryPayments.clear();
   renderFeeBook(activeLedgerAdmissionNo || activeFeeStudentAdmissionNo);
   showToast("Collection history filter cleared.");
@@ -9893,6 +9902,10 @@ document.getElementById("collectionHistoryCollectedBy")?.addEventListener("chang
 });
 
 document.getElementById("collectionHistoryAdmissionNo")?.addEventListener("input", () => {
+  scheduleCollectionHistoryFilterRender(false);
+});
+
+document.getElementById("collectionHistoryReceiptNo")?.addEventListener("input", () => {
   scheduleCollectionHistoryFilterRender(false);
 });
 
