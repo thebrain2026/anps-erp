@@ -8003,25 +8003,57 @@ function getSystemHealthReport() {
   return {issues, score, danger, warning, info};
 }
 
+function getSecuritySafetySignal(report = getSystemHealthReport()) {
+  if (report.danger > 0) return {tone: "red", label: "Red Alert", detail: `${report.danger} critical issue(s)`};
+  if (report.warning > 0 || report.info > 0) return {tone: "yellow", label: "Yellow Review", detail: `${report.warning + report.info} item(s) need review`};
+  return {tone: "blue", label: "Light Blue Safe", detail: "No active health issue"};
+}
+
+function getSecurityBackendStatusLabel() {
+  const hasRecentBackendHealth = Date.now() - backendLastHealthOkAt < BACKEND_HEALTH_GRACE_MS;
+  if (navigator.onLine && (backendSyncReady || hasRecentBackendHealth)) return "Online";
+  if (navigator.onLine) return "Checking";
+  return "Offline";
+}
+
+function getSecurityLastSaveLabel() {
+  if (!backendLastLocalSaveAt) return "No save yet";
+  return new Date(backendLastLocalSaveAt).toLocaleString("en-IN", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true
+  });
+}
+
 function renderSecurityMaintenance(message = "") {
   const cards = document.getElementById("securityStatusCards");
   const runMode = document.getElementById("securityRunMode");
   if (!cards) return;
   const snapshot = getSecuritySnapshot();
+  const report = getSystemHealthReport();
+  const safety = getSecuritySafetySignal(report);
   if (runMode) runMode.textContent = `Run Mode: ${snapshot.runMode}`;
   cards.innerHTML = [
-    ["Logic Check", snapshot.logicStatus],
-    ["Database", `${snapshot.dbSizeKb} KB`],
-    ["Total Records", snapshot.totalRecords],
-    ["Backup", `${snapshot.backupCount} saved`],
-    ["Version", snapshot.version],
-    ["Backup Date", snapshot.backupDate],
-    ["Active Sign-ins", `${userAccessAccounts.filter(item => item.status === "Active").length + studentUserAccounts.filter(item => item.status === "Active").length}`],
-    ["Refresh Rate", "Manual / On demand"]
-  ].map(([label, value]) => `
-    <article>
-      <span>${escapeHtml(label)}</span>
-      <strong>${escapeHtml(String(value))}</strong>
+    {label: "System Safety Light", value: safety.label, detail: safety.detail, className: `safety-light-card safety-${safety.tone}`},
+    {label: "Backend", value: getSecurityBackendStatusLabel()},
+    {label: "Last Save", value: getSecurityLastSaveLabel()},
+    {label: "Alerts", value: report.issues.length},
+    {label: "Logic Check", value: snapshot.logicStatus},
+    {label: "Database", value: `${snapshot.dbSizeKb} KB`},
+    {label: "Total Records", value: snapshot.totalRecords},
+    {label: "Backup", value: `${snapshot.backupCount} saved`},
+    {label: "Version", value: snapshot.version},
+    {label: "Backup Date", value: snapshot.backupDate},
+    {label: "Active Sign-ins", value: `${userAccessAccounts.filter(item => item.status === "Active").length + studentUserAccounts.filter(item => item.status === "Active").length}`},
+    {label: "Refresh Rate", value: "Manual / On demand"}
+  ].map(card => `
+    <article class="${escapeHtml(card.className || "")}">
+      <span>${escapeHtml(card.label)}</span>
+      <strong>${escapeHtml(String(card.value))}</strong>
+      ${card.detail ? `<small>${escapeHtml(card.detail)}</small>` : ""}
     </article>
   `).join("");
   if (message) {
