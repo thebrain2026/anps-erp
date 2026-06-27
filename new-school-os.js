@@ -7942,11 +7942,13 @@ function getSystemHealthReport() {
     const allocationsTotal = (payment.allocations || []).reduce((sum, allocation) => sum + Number(allocation.amount || 0), 0);
     const paidSplit = Number(payment.bankAmount || 0) + Number(payment.cashAmount || 0);
     const savedAmount = Number(payment.amount || 0);
+    const discountAmount = Number(payment.discountAmount || 0);
+    const coveredAmount = savedAmount + discountAmount;
     if (Math.abs(savedAmount - paidSplit) > 1) {
       addHealthIssue(issues, "Payment Integrity", "Bank/Cash total mismatch", `${receipt}: amount ${formatRs(savedAmount)} but bank+cash ${formatRs(paidSplit)}.`, "danger");
     }
-    if (allocationsTotal && Math.abs(savedAmount - allocationsTotal) > 1) {
-      addHealthIssue(issues, "Payment Integrity", "Receipt allocation mismatch", `${receipt}: amount ${formatRs(savedAmount)} but fee allocations ${formatRs(allocationsTotal)}.`, "warning");
+    if (allocationsTotal && Math.abs(coveredAmount - allocationsTotal) > 1) {
+      addHealthIssue(issues, "Payment Integrity", "Receipt allocation mismatch", `${receipt}: paid ${formatRs(savedAmount)} + discount ${formatRs(discountAmount)} but fee allocations ${formatRs(allocationsTotal)}.`, "warning");
     }
   });
   receiptOwners.forEach((owners, receipt) => {
