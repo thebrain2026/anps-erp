@@ -127,6 +127,7 @@
           <button class="nav-group-title" id="securityToggle" type="button" aria-expanded="false">Security</button>
           <div class="nav-sub">
             <button data-view="securityMaintenance" type="button">Security Maintenance</button>
+            <button data-view="securityDuplicateReceipts" type="button">Duplicate Receipts</button>
           </div>
         </div>
         <div class="nav-group" id="transportNavGroup">
@@ -2152,6 +2153,48 @@
                 </div>
               </div>
               <textarea id="securityJsonOutput" class="security-json-output" readonly placeholder="Click Server JSON to view saved database JSON."></textarea>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="securityDuplicateReceipts">
+        <div class="security-dashboard">
+          <section class="panel security-hero-panel duplicate-receipt-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Security</p>
+                <h2>Duplicate Receipt Utility</h2>
+                <small>Same receipt no. multiple admission-e thakle ekhane review kore safe fix korun.</small>
+              </div>
+              <button class="primary-action" id="refreshDuplicateReceiptsBtn" type="button">Refresh</button>
+            </div>
+            <div class="duplicate-receipt-summary" id="duplicateReceiptSummary"></div>
+          </section>
+
+          <section class="panel duplicate-receipt-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Review</p>
+                <h2>Duplicate Receipt List</h2>
+              </div>
+              <button class="ghost-action danger-lite" id="fixAllDuplicateReceiptsBtn" type="button">Fix All Duplicates</button>
+            </div>
+            <div class="table-wrap duplicate-receipt-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Receipt No.</th>
+                    <th>Admission Nos.</th>
+                    <th>Students</th>
+                    <th>Total Rows</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="duplicateReceiptRows">
+                  <tr><td colspan="5">No duplicate receipt scanned yet.</td></tr>
+                </tbody>
+              </table>
             </div>
           </section>
         </div>

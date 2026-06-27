@@ -3744,6 +3744,55 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   line-height: 1.45;
 }
 
+.duplicate-receipt-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.duplicate-receipt-summary article {
+  border: 1px solid #d7e5f2;
+  border-radius: 8px;
+  padding: 12px;
+  background: linear-gradient(135deg, #fff 0%, #f3f9ff 100%);
+  box-shadow: 0 10px 20px rgba(31, 50, 72, .07);
+}
+
+.duplicate-receipt-summary article.wide {
+  grid-column: 1 / -1;
+}
+
+.duplicate-receipt-summary span {
+  display: block;
+  color: var(--muted);
+  font-size: .78rem;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.duplicate-receipt-summary strong {
+  display: block;
+  margin-top: 5px;
+  color: var(--ink);
+  font-size: 1.05rem;
+}
+
+.duplicate-receipt-table-wrap table {
+  min-width: 760px;
+}
+
+.duplicate-chip {
+  display: inline-flex;
+  align-items: center;
+  margin: 2px 4px 2px 0;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: #fff4d8;
+  color: #6d4a00;
+  font-weight: 900;
+  font-size: .78rem;
+}
+
 .permission-role-bar {
   display: grid;
   grid-template-columns: minmax(180px, 260px) minmax(96px, 120px) auto;

@@ -281,6 +281,7 @@ const titleMap = {
   userAccessSettings: "User Access & Permissions",
   studentUserLogin: "Student User Login",
   securityMaintenance: "Security Maintenance",
+  securityDuplicateReceipts: "Duplicate Receipts",
   transportFeesMaster: "Transport Fees Master",
   transportFineSetup: "Transport Fine Setup",
   transportPickupPoint: "Pickup Point",
@@ -307,7 +308,7 @@ const ACCESS_PERMISSION_GROUPS = [
   {name: "Academic", modules: ["classTimetable", "teacherTimetable", "syllabus", "teacherComplaint", "holidayReport", "annualCalendar"]},
   {name: "Certificate", modules: ["studentIdCard", "teacherIdCard"]},
   {name: "Settings", modules: ["masterAdmin", "userAccessSettings", "studentUserLogin"]},
-  {name: "Security", modules: ["securityMaintenance"]},
+  {name: "Security", modules: ["securityMaintenance", "securityDuplicateReceipts"]},
   {name: "Transport", modules: ["transportFeesMaster", "transportFineSetup", "transportPickupPoint", "transportRoute", "transportVehicle", "transportAssignVehicle", "transportRoutePickupPoint", "studentTransportFees", "nonTransportStudents"]}
 ];
 
@@ -1421,6 +1422,7 @@ function renderActiveView(viewName = document.querySelector(".view.active")?.id 
   if (viewName === "userAccessSettings") renderUserAccessSettings();
   if (viewName === "studentUserLogin") renderStudentUserLogin();
   if (viewName === "securityMaintenance") renderSecurityMaintenance();
+  if (viewName === "securityDuplicateReceipts") renderDuplicateReceiptUtility();
   if (viewName === "masterAdmin") renderMasterAdminSettings();
   if (viewName === "reportStudentInformation") {
     renderClassSectionReport();
@@ -1499,6 +1501,9 @@ function setView(viewName, options = {}) {
   }
   if (viewName === "securityMaintenance") {
     renderSecurityMaintenance();
+  }
+  if (viewName === "securityDuplicateReceipts") {
+    renderDuplicateReceiptUtility();
   }
   if (viewName === "studentTransportFees") {
     renderStudentTransportFees();
@@ -8133,6 +8138,95 @@ function showSecuritySystemHealth() {
   `);
 }
 
+function getDuplicateReceiptGroups() {
+  const sessionPayments = collectedPayments[activeSession] || {};
+  const groups = new Map();
+  Object.entries(sessionPayments).forEach(([admissionNo, payments]) => {
+    (payments || []).forEach((payment, index) => {
+      const receipt = String(payment.receipt || "").trim();
+      if (!receipt) return;
+      if (!groups.has(receipt)) groups.set(receipt, []);
+      groups.get(receipt).push({admissionNo, payment, index});
+    });
+  });
+  return [...groups.entries()]
+    .map(([receipt, rows]) => {
+      const admissionSet = new Set(rows.map(row => normalizeAdmissionNo(row.admissionNo)));
+      return {receipt, rows, admissionCount: admissionSet.size};
+    })
+    .filter(group => group.admissionCount > 1)
+    .sort((a, b) => String(a.receipt || "").localeCompare(String(b.receipt || ""), undefined, {numeric: true}));
+}
+
+function getDuplicateReceiptUsedSet() {
+  const usedReceipts = new Set();
+  const sessionPayments = collectedPayments[activeSession] || {};
+  Object.values(sessionPayments).forEach(payments => {
+    (payments || []).forEach(payment => {
+      if (payment.receipt) usedReceipts.add(String(payment.receipt).trim());
+    });
+  });
+  return usedReceipts;
+}
+
+function renderDuplicateReceiptUtility(message = "") {
+  const rowsBody = document.getElementById("duplicateReceiptRows");
+  const summary = document.getElementById("duplicateReceiptSummary");
+  if (!rowsBody || !summary) return;
+  const groups = getDuplicateReceiptGroups();
+  const duplicateRows = groups.reduce((sum, group) => sum + Math.max(group.rows.length - 1, 0), 0);
+  summary.innerHTML = `
+    <article><span>Duplicate Receipts</span><strong>${groups.length}</strong></article>
+    <article><span>Rows to Fix</span><strong>${duplicateRows}</strong></article>
+    <article><span>Session</span><strong>${escapeHtml(activeSession)}</strong></article>
+    ${message ? `<article class="wide"><span>Status</span><strong>${message}</strong></article>` : ""}
+  `;
+  rowsBody.innerHTML = groups.map(group => {
+    const admissions = [...new Set(group.rows.map(row => row.admissionNo || "-"))];
+    const names = [...new Set(group.rows.map(row => findStudentByAdmissionNo(row.admissionNo)?.name || "-"))];
+    return `
+      <tr>
+        <td><strong>${escapeHtml(group.receipt)}</strong></td>
+        <td>${admissions.map(item => `<span class="duplicate-chip">${escapeHtml(item)}</span>`).join("")}</td>
+        <td>${escapeHtml(names.join(", "))}</td>
+        <td>${group.rows.length}</td>
+        <td><button class="ghost-action" type="button" data-fix-duplicate-receipt="${escapeHtml(group.receipt)}">Fix This</button></td>
+      </tr>
+    `;
+  }).join("") || `<tr><td colspan="5">No duplicate receipt found. Accounts receipt numbers are clean.</td></tr>`;
+}
+
+function fixDuplicateReceiptGroups(targetReceipt = "") {
+  const groups = getDuplicateReceiptGroups().filter(group => !targetReceipt || group.receipt === targetReceipt);
+  if (!groups.length) {
+    renderDuplicateReceiptUtility("No duplicate receipt found.");
+    showToast("No duplicate receipt found.");
+    return 0;
+  }
+  const usedReceipts = getDuplicateReceiptUsedSet();
+  const receiptYear = String(activeSession || new Date().getFullYear()).split("-")[0] || String(new Date().getFullYear());
+  const nextSerialRef = {value: Math.max(receiptSerial, getHighestReceiptSerialForActiveSession(receiptYear) + 1)};
+  let changed = 0;
+  groups.forEach(group => {
+    const rows = group.rows.slice();
+    rows.slice(1).forEach(row => {
+      const nextReceipt = getNextAvailableReceiptForMerge(activeSession, usedReceipts, nextSerialRef);
+      row.payment.receipt = nextReceipt;
+      changed += 1;
+    });
+  });
+  if (changed > 0) {
+    receiptSerial = Math.max(receiptSerial, nextSerialRef.value);
+    saveAppState();
+    renderDuplicateReceiptUtility(`${changed} receipt row fixed.`);
+    renderFeeBook(activeLedgerAdmissionNo || activeFeeStudentAdmissionNo);
+    renderFinanceSession();
+    updateTopbarStatus();
+    showToast(`${changed} duplicate receipt row fixed.`);
+  }
+  return changed;
+}
+
 function showSecurityReadiness() {
   const issues = getSecurityReadinessIssues();
   renderSecurityMaintenance(issues.length ? `
@@ -9350,6 +9444,24 @@ document.getElementById("securityPerformanceBtn")?.addEventListener("click", sho
 document.getElementById("securityRefreshBtn")?.addEventListener("click", showSecurityRefreshRate);
 document.getElementById("securityCleanDemoBtn")?.addEventListener("click", clearSecurityTestDemoData);
 document.getElementById("securityReloadBtn")?.addEventListener("click", () => window.location.reload());
+document.getElementById("refreshDuplicateReceiptsBtn")?.addEventListener("click", () => renderDuplicateReceiptUtility("Refreshed."));
+document.getElementById("fixAllDuplicateReceiptsBtn")?.addEventListener("click", () => {
+  const groups = getDuplicateReceiptGroups();
+  if (!groups.length) {
+    renderDuplicateReceiptUtility("No duplicate receipt found.");
+    showToast("No duplicate receipt found.");
+    return;
+  }
+  if (!confirm(`Fix ${groups.length} duplicate receipt group(s)? First row will stay, duplicate rows will get new receipt numbers.`)) return;
+  fixDuplicateReceiptGroups();
+});
+document.getElementById("duplicateReceiptRows")?.addEventListener("click", event => {
+  const button = event.target.closest("[data-fix-duplicate-receipt]");
+  if (!button) return;
+  const receipt = button.dataset.fixDuplicateReceipt || "";
+  if (!confirm(`Fix duplicate receipt ${receipt}? First row will stay, duplicate rows will get new receipt numbers.`)) return;
+  fixDuplicateReceiptGroups(receipt);
+});
 
 document.getElementById("accessPermissionRole")?.addEventListener("change", event => {
   renderPermissionRows(event.target.value);
