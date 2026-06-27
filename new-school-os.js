@@ -2314,6 +2314,9 @@ function renderClassSectionReport() {
   const rows = document.getElementById("classSectionReportRows");
   if (!rows) return;
   const groups = getClassSectionGroups();
+  const total = groups.reduce((sum, group) => sum + group.students.length, 0);
+  const totalChip = document.getElementById("classSectionReportTotal");
+  if (totalChip) totalChip.textContent = `Total Students: ${total}`;
   rows.innerHTML = groups.map((group, index) => `
     <tr>
       <td>${index + 1}</td>

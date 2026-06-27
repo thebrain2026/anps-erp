@@ -2145,6 +2145,19 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
     inset 0 1px 0 rgba(255, 255, 255, .78);
 }
 
+.report-total-chip {
+  display: inline-flex;
+  margin: 12px 12px 0;
+  padding: 8px 14px;
+  border: 1px solid #bfd8f1;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #eef8ff 0%, #f4fff7 100%);
+  color: #174f81;
+  font-size: .9rem;
+  font-weight: 950;
+  box-shadow: 0 8px 18px rgba(31, 50, 72, .08);
+}
+
 .class-section-report-table table {
   min-width: 620px;
 }
