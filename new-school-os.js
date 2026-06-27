@@ -2162,6 +2162,32 @@ function getStudentContactMobile(student = {}) {
   return student.mobile || student.fatherMobile || student.motherMobile || "";
 }
 
+function getAdmissionSearchTokens(admissionNo = "") {
+  const raw = String(admissionNo || "").trim().toLowerCase();
+  const normalized = normalizeAdmissionNo(admissionNo);
+  const parts = raw.split("/");
+  const serial = parts[parts.length - 1] || "";
+  const numericSerial = serial.replace(/\D/g, "");
+  const tokens = [raw, normalized, serial.toLowerCase(), numericSerial];
+  if (numericSerial) {
+    const plain = String(Number(numericSerial));
+    tokens.push(plain, plain.padStart(2, "0"), plain.padStart(3, "0"), plain.padStart(4, "0"));
+  }
+  return [...new Set(tokens.filter(Boolean))];
+}
+
+function studentMatchesStudentDetailsSearch(student = {}, query = "") {
+  const cleanQuery = String(query || "").trim().toLowerCase();
+  if (!cleanQuery) return true;
+  const admissionTokens = getAdmissionSearchTokens(student.admissionNo || "");
+  if (admissionTokens.some(token => token.includes(cleanQuery))) return true;
+  return Object.entries(student)
+    .filter(([key]) => key !== "admissionNo")
+    .map(([, value]) => String(value || "").toLowerCase())
+    .join(" ")
+    .includes(cleanQuery);
+}
+
 function normalizeStudentContactFields() {
   students.forEach(student => {
     if (!student.guardian) student.guardian = getStudentGuardianName(student);
@@ -2174,7 +2200,7 @@ function renderStudents() {
   renderStudentClassFilter();
   const selectedClass = String(document.getElementById("studentClassFilter")?.value || "").trim();
   const filtered = getActiveStudents().filter(student => {
-    const matchesSearch = Object.values(student).join(" ").toLowerCase().includes(query);
+    const matchesSearch = studentMatchesStudentDetailsSearch(student, query);
     const {klass} = splitStudentClassSection(student.klass || "");
     const matchesClass = !selectedClass || klass === selectedClass;
     return matchesSearch && matchesClass;
