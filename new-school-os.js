@@ -227,6 +227,7 @@ const transportVillageDistances = {
   "Choto Belun": "2.1"
 };
 const transportVillageFees = {};
+const transportFeeMatched = {};
 const tuitionFineSetup = {...DEFAULT_TUITION_FINE_SETUP};
 const transportFineSetup = {...DEFAULT_TRANSPORT_FINE_SETUP};
 const customAdmissionClasses = [];
@@ -409,6 +410,7 @@ function getAppStateSnapshot() {
     tuitionFineSetup,
     transportVillageDistances,
     transportVillageFees,
+    transportFeeMatched,
     transportFineSetup,
     transportRoutes,
     transportVehicles,
@@ -633,6 +635,7 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
   });
   merged.transportVillageDistances = {...(remoteState.transportVillageDistances || {}), ...(localState.transportVillageDistances || {})};
   merged.transportVillageFees = {...(remoteState.transportVillageFees || {}), ...(localState.transportVillageFees || {})};
+  merged.transportFeeMatched = {...(remoteState.transportFeeMatched || {}), ...(localState.transportFeeMatched || {})};
   merged.rolePermissions = {...(remoteState.rolePermissions || {}), ...(localState.rolePermissions || {})};
   merged.classSubjectAssignments = {...(remoteState.classSubjectAssignments || {}), ...(localState.classSubjectAssignments || {})};
   merged.collectedPayments = mergeCollectedPayments(remoteState.collectedPayments || {}, localState.collectedPayments || {});
@@ -935,6 +938,9 @@ function applySavedState(saved = {}) {
     }
     if (saved.transportVillageFees && typeof saved.transportVillageFees === "object") {
       Object.assign(transportVillageFees, saved.transportVillageFees);
+    }
+    if (saved.transportFeeMatched && typeof saved.transportFeeMatched === "object") {
+      Object.assign(transportFeeMatched, saved.transportFeeMatched);
     }
     if (saved.transportFineSetup && typeof saved.transportFineSetup === "object") {
       Object.assign(transportFineSetup, DEFAULT_TRANSPORT_FINE_SETUP, saved.transportFineSetup);
@@ -6574,6 +6580,10 @@ function getStudentTransportVehicleName(student = {}) {
   return vehicle.vehicleName || assignment.vehicleName || "Vehicle";
 }
 
+function getTransportFeeMatchKey(student = {}) {
+  return normalizeAdmissionNo(student.admissionNo || student.name || "");
+}
+
 function renderStudentTransportFees() {
   const rows = document.getElementById("studentTransportFeeRows");
   if (!rows) return;
@@ -6594,8 +6604,16 @@ function renderStudentTransportFees() {
     const classInfo = splitStudentClassSection(student.klass || "");
     const months = getSelectedMonths(student, "transportMonths");
     const fee = Number(student.transportFee || 0);
+    const matchKey = getTransportFeeMatchKey(student);
+    const isMatched = Boolean(transportFeeMatched[matchKey]);
     return `
-      <tr>
+      <tr class="${isMatched ? "transport-fee-matched-row" : ""}">
+        <td>
+          <label class="transport-match-check" title="${isMatched ? "Matched" : "Mark as matched"}">
+            <input data-transport-fee-match type="checkbox" value="${escapeHtml(matchKey)}" ${isMatched ? "checked" : ""} />
+            <span>${isMatched ? "Done" : "Pending"}</span>
+          </label>
+        </td>
         <td><strong>${escapeHtml(student.admissionNo || "-")}</strong></td>
         <td><button class="student-name-link" type="button" data-open-fee-book="${escapeHtml(student.admissionNo || "")}"><strong>${escapeHtml(student.name || "-")}</strong></button></td>
         <td>${escapeHtml(classInfo.klass || "-")}</td>
@@ -6613,11 +6631,12 @@ function renderStudentTransportFees() {
         </td>
       </tr>
     `;
-  }).join("") || `<tr><td colspan="11">No student transport fees assigned yet.</td></tr>`;
+  }).join("") || `<tr><td colspan="12">No student transport fees assigned yet.</td></tr>`;
   const summary = document.getElementById("studentTransportFeeSummary");
   if (summary) {
     const monthlyTotal = transportStudents.reduce((sum, student) => sum + Number(student.transportFee || 0), 0);
-    summary.textContent = `Transport students: ${transportStudents.length} | Monthly transport fee: ${formatRs(monthlyTotal)}`;
+    const matchedTotal = transportStudents.filter(student => transportFeeMatched[getTransportFeeMatchKey(student)]).length;
+    summary.textContent = `Transport students: ${transportStudents.length} | Matched: ${matchedTotal} | Pending: ${Math.max(transportStudents.length - matchedTotal, 0)} | Monthly transport fee: ${formatRs(monthlyTotal)}`;
   }
 }
 
@@ -8335,6 +8354,14 @@ document.getElementById("globalSearch").addEventListener("input", () => {
 
 document.getElementById("studentClassFilter")?.addEventListener("change", renderStudents);
 document.getElementById("studentTransportClassFilter")?.addEventListener("change", renderStudentTransportFees);
+document.getElementById("studentTransportFeeRows")?.addEventListener("change", event => {
+  const input = event.target.closest("[data-transport-fee-match]");
+  if (!input) return;
+  if (input.checked) transportFeeMatched[input.value] = true;
+  else delete transportFeeMatched[input.value];
+  saveAppState();
+  renderStudentTransportFees();
+});
 
 document.getElementById("transportPickupPoint").addEventListener("input", event => {
   const distanceInput = event.target.closest("[data-village-distance]");
