@@ -410,7 +410,6 @@ function getAppStateSnapshot() {
     tuitionFineSetup,
     transportVillageDistances,
     transportVillageFees,
-    transportFeeMatched,
     transportFineSetup,
     transportRoutes,
     transportVehicles,
@@ -635,7 +634,6 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
   });
   merged.transportVillageDistances = {...(remoteState.transportVillageDistances || {}), ...(localState.transportVillageDistances || {})};
   merged.transportVillageFees = {...(remoteState.transportVillageFees || {}), ...(localState.transportVillageFees || {})};
-  merged.transportFeeMatched = {...(remoteState.transportFeeMatched || {}), ...(localState.transportFeeMatched || {})};
   merged.rolePermissions = {...(remoteState.rolePermissions || {}), ...(localState.rolePermissions || {})};
   merged.classSubjectAssignments = {...(remoteState.classSubjectAssignments || {}), ...(localState.classSubjectAssignments || {})};
   merged.collectedPayments = mergeCollectedPayments(remoteState.collectedPayments || {}, localState.collectedPayments || {});
@@ -938,9 +936,6 @@ function applySavedState(saved = {}) {
     }
     if (saved.transportVillageFees && typeof saved.transportVillageFees === "object") {
       Object.assign(transportVillageFees, saved.transportVillageFees);
-    }
-    if (saved.transportFeeMatched && typeof saved.transportFeeMatched === "object") {
-      Object.assign(transportFeeMatched, saved.transportFeeMatched);
     }
     if (saved.transportFineSetup && typeof saved.transportFineSetup === "object") {
       Object.assign(transportFineSetup, DEFAULT_TRANSPORT_FINE_SETUP, saved.transportFineSetup);
@@ -8359,7 +8354,6 @@ document.getElementById("studentTransportFeeRows")?.addEventListener("change", e
   if (!input) return;
   if (input.checked) transportFeeMatched[input.value] = true;
   else delete transportFeeMatched[input.value];
-  saveAppState();
   renderStudentTransportFees();
 });
 
