@@ -6572,19 +6572,29 @@ function getStudentTransportVehicleName(student = {}) {
 function renderStudentTransportFees() {
   const rows = document.getElementById("studentTransportFeeRows");
   if (!rows) return;
+  renderStudentTransportClassFilter();
+  const selectedClass = String(document.getElementById("studentTransportClassFilter")?.value || "").trim();
   const transportStudents = getActiveStudents()
     .filter(student => studentTakesTransport(student))
+    .filter(student => {
+      const {klass} = splitStudentClassSection(student.klass || "");
+      return !selectedClass || klass === selectedClass;
+    })
     .sort((a, b) =>
+      String(a.klass || "").localeCompare(String(b.klass || ""), undefined, {numeric: true}) ||
       String(a.villageTown || "").localeCompare(String(b.villageTown || ""), undefined, {numeric: true}) ||
       String(a.name || "").localeCompare(String(b.name || ""), undefined, {numeric: true})
     );
   rows.innerHTML = transportStudents.map(student => {
+    const classInfo = splitStudentClassSection(student.klass || "");
     const months = getSelectedMonths(student, "transportMonths");
     const fee = Number(student.transportFee || 0);
     return `
       <tr>
         <td><strong>${escapeHtml(student.admissionNo || "-")}</strong></td>
         <td>${escapeHtml(student.name || "-")}</td>
+        <td>${escapeHtml(classInfo.klass || "-")}</td>
+        <td>${escapeHtml(classInfo.section || "-")}</td>
         <td>${escapeHtml(student.villageTown || "-")}</td>
         <td>${escapeHtml(getStudentTransportVehicleName(student))}</td>
         <td>${escapeHtml(getStudentTransportFeeType(student))}</td>
@@ -6598,12 +6608,25 @@ function renderStudentTransportFees() {
         </td>
       </tr>
     `;
-  }).join("") || `<tr><td colspan="9">No student transport fees assigned yet.</td></tr>`;
+  }).join("") || `<tr><td colspan="11">No student transport fees assigned yet.</td></tr>`;
   const summary = document.getElementById("studentTransportFeeSummary");
   if (summary) {
     const monthlyTotal = transportStudents.reduce((sum, student) => sum + Number(student.transportFee || 0), 0);
     summary.textContent = `Transport students: ${transportStudents.length} | Monthly transport fee: ${formatRs(monthlyTotal)}`;
   }
+}
+
+function renderStudentTransportClassFilter() {
+  const select = document.getElementById("studentTransportClassFilter");
+  if (!select) return;
+  const selected = select.value;
+  const classes = [...new Set(getActiveStudents()
+    .filter(student => studentTakesTransport(student))
+    .map(student => splitStudentClassSection(student.klass || "").klass)
+    .filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, undefined, {numeric: true}));
+  select.innerHTML = `<option value="">All Classes</option>${classes.map(klass => `<option value="${escapeHtml(klass)}">${escapeHtml(klass)}</option>`).join("")}`;
+  select.value = classes.includes(selected) ? selected : "";
 }
 
 function renderNonTransportStudents() {
@@ -8301,6 +8324,7 @@ document.getElementById("globalSearch").addEventListener("input", () => {
 });
 
 document.getElementById("studentClassFilter")?.addEventListener("change", renderStudents);
+document.getElementById("studentTransportClassFilter")?.addEventListener("change", renderStudentTransportFees);
 
 document.getElementById("transportPickupPoint").addEventListener("input", event => {
   const distanceInput = event.target.closest("[data-village-distance]");
