@@ -4657,7 +4657,7 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
 
 .collection-history-filter {
   display: grid;
-  grid-template-columns: minmax(140px, 180px) minmax(140px, 180px) minmax(110px, 140px) auto auto;
+  grid-template-columns: minmax(130px, 165px) minmax(130px, 165px) minmax(105px, 135px) minmax(125px, 150px) auto auto;
   gap: 10px;
   align-items: end;
   padding: 10px;
@@ -4700,6 +4700,10 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
 
 .collection-by-filter {
   max-width: 140px;
+}
+
+.collection-admission-filter {
+  max-width: 150px;
 }
 
 .collection-history-filter button {
