@@ -1693,7 +1693,12 @@ function findActiveStudentByAdmissionNo(admissionNo) {
 function findActiveStudentByAdmissionOrName(value) {
   const clean = String(value || "").trim();
   if (!clean) return null;
-  return findActiveStudentByAdmissionNo(clean) || getActiveStudents().find(student => String(student.name || "").trim() === clean) || null;
+  const cleanLower = clean.toLowerCase();
+  const compact = normalizeDueSearchText(clean);
+  return findActiveStudentByAdmissionNo(clean)
+    || getActiveStudents().find(student => getAdmissionSearchTokens(student.admissionNo || "").some(token => token === cleanLower || (compact && (token === compact || token.endsWith(compact)))))
+    || getActiveStudents().find(student => String(student.name || "").trim().toLowerCase() === cleanLower)
+    || null;
 }
 
 function setSelectValue(select, value) {
@@ -7077,7 +7082,7 @@ function updateCombinedCollectionTotals() {
 function renderCombinedCollectionItems() {
   const admissionNo = combinedCollectionForm.elements.admissionNo.value;
   const month = combinedCollectionForm.elements.month.value;
-  const student = findActiveStudentByAdmissionNo(admissionNo);
+  const student = findActiveStudentByAdmissionOrName(admissionNo);
   const date = combinedCollectionForm.elements.date.value || new Date();
   const includePriorTuitionDue = combinedCollectionForm.dataset.includePriorTuitionDue === "1";
   const items = getCombinedCollectionItems(student, month, date, includePriorTuitionDue);
@@ -7155,7 +7160,7 @@ function renderSingleCollectionItem(item) {
 }
 
 function openCombinedCollectionPopup(admissionNo, month, options = {}) {
-  const student = findActiveStudentByAdmissionNo(admissionNo);
+  const student = findActiveStudentByAdmissionOrName(admissionNo);
   if (!student || !month) {
     showToast("Monthly collection data not found.");
     return;
@@ -7182,7 +7187,7 @@ function openCombinedCollectionPopup(admissionNo, month, options = {}) {
 }
 
 function openSingleCollectionPopup(admissionNo, feeHead, amount = 0, fine = 0) {
-  const student = findActiveStudentByAdmissionNo(admissionNo);
+  const student = findActiveStudentByAdmissionOrName(admissionNo);
   const total = Number(amount || 0);
   const fineAmount = Number(fine || 0);
   if (!student || !feeHead || total + fineAmount <= 0) {
@@ -10250,7 +10255,7 @@ receiptPreviewBody.addEventListener("change", event => {
 combinedCollectionForm.addEventListener("submit", event => {
   event.preventDefault();
   const form = event.currentTarget;
-  const student = findActiveStudentByAdmissionNo(form.elements.admissionNo.value);
+  const student = findActiveStudentByAdmissionOrName(form.elements.admissionNo.value);
   const selected = [...form.querySelectorAll("[data-combined-fee]:checked")].map(input => {
     const appliedDate = formatDateDDMMYYYY(form.elements.date.value || new Date());
     return {
@@ -10925,7 +10930,7 @@ document.body.addEventListener("click", event => {
     const feeHead = studentFees.dataset.feeHead || "";
     const fineAmount = studentFees.dataset.fineAmount || 0;
     const feeMonth = studentFees.dataset.feeMonth || "";
-    const student = findActiveStudentByAdmissionNo(admissionNo);
+    const student = findActiveStudentByAdmissionOrName(admissionNo);
     if (!student) {
       showToast("Student is disabled or not found.");
       return;
