@@ -5299,6 +5299,14 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   border-bottom: 0;
 }
 
+.transport-fee-summary {
+  margin: 8px 2px 0;
+  color: #52677d;
+  font-size: .82rem;
+  font-weight: 900;
+  letter-spacing: .01em;
+}
+
 .fee-cards article {
   min-height: 134px;
 }
@@ -6434,6 +6442,11 @@ body.modal-open {
 .admission-form fieldset.other-fees-fieldset {
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   align-items: start;
+}
+
+.admission-form fieldset.transport-section-focus {
+  outline: 3px solid rgba(20, 121, 139, .22);
+  box-shadow: 0 0 0 6px rgba(20, 121, 139, .08), 0 16px 36px rgba(20, 121, 139, .12);
 }
 
 .other-fees-fieldset label,

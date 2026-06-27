@@ -1560,7 +1560,19 @@ function renderStaffPhotoPreview() {
   }
 }
 
-function openStudentEditForm(admissionNo) {
+function focusAdmissionTransportSection() {
+  const section = admissionForm.querySelector(".other-fees-fieldset");
+  const transportInput = admissionForm.elements.transportFee;
+  if (!section) return;
+  section.classList.add("transport-section-focus");
+  setTimeout(() => {
+    section.scrollIntoView({behavior: "smooth", block: "center"});
+    transportInput?.focus({preventScroll: true});
+  }, 80);
+  setTimeout(() => section.classList.remove("transport-section-focus"), 1800);
+}
+
+function openStudentEditForm(admissionNo, focusSection = "") {
   const student = findStudentByAdmissionNo(admissionNo);
   if (!student) return;
   editingAdmissionNo = student.admissionNo || "";
@@ -1634,7 +1646,8 @@ function openStudentEditForm(admissionNo) {
   setAdmissionMonthGroups(student);
   admissionModal.setAttribute("aria-hidden", "false");
   document.body.classList.add("modal-open");
-  setTimeout(() => admissionForm.elements.studentName.focus(), 0);
+  if (focusSection === "transport") focusAdmissionTransportSection();
+  else setTimeout(() => admissionForm.elements.studentName.focus(), 0);
 }
 
 function closeAdmissionForm() {
@@ -6568,9 +6581,19 @@ function renderStudentTransportFees() {
         <td><strong>${formatRs(fee)}</strong></td>
         <td>${escapeHtml(formatMonthPeriod(months))}</td>
         <td><span class="status-pill ${fee > 0 ? "stable" : "pending"}">${fee > 0 ? "Active" : "Fee Missing"}</span></td>
+        <td>
+          <button class="icon-action edit" type="button" data-edit-student-transport="${escapeHtml(student.admissionNo || "")}" title="Edit transport details" aria-label="Edit transport details for ${escapeHtml(student.name || "student")}">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4.7L19.3 9.4a2.1 2.1 0 0 0 0-3L17.6 4.7a2.1 2.1 0 0 0-3 0L4 15.3V20Zm3.8-2H6v-1.8l8.5-8.5 1.8 1.8L7.8 18Zm7.9-11.5.4-.4 1.8 1.8-.4.4-1.8-1.8Z"/></svg>
+          </button>
+        </td>
       </tr>
     `;
-  }).join("") || `<tr><td colspan="7">No student transport fees assigned yet.</td></tr>`;
+  }).join("") || `<tr><td colspan="9">No student transport fees assigned yet.</td></tr>`;
+  const summary = document.getElementById("studentTransportFeeSummary");
+  if (summary) {
+    const monthlyTotal = transportStudents.reduce((sum, student) => sum + Number(student.transportFee || 0), 0);
+    summary.textContent = `Transport students: ${transportStudents.length} | Monthly transport fee: ${formatRs(monthlyTotal)}`;
+  }
 }
 
 function renderTuitionFineSetup() {
@@ -10422,6 +10445,7 @@ document.body.addEventListener("click", event => {
   });
   const profile = event.target.closest("[data-profile]");
   const editStudent = event.target.closest("[data-edit-student]");
+  const editStudentTransport = event.target.closest("[data-edit-student-transport]");
   const admissionPreview = event.target.closest("[data-open-admission-preview]");
   const studentFees = event.target.closest("[data-student-fees]");
   const paymentReceiptPreview = event.target.closest("[data-preview-payment-receipt]");
@@ -10480,6 +10504,10 @@ document.body.addEventListener("click", event => {
   }
   if (admissionPreview) {
     openAdmissionFormPreview(admissionPreview.dataset.openAdmissionPreview);
+    return;
+  }
+  if (editStudentTransport) {
+    openStudentEditForm(editStudentTransport.dataset.editStudentTransport, "transport");
     return;
   }
   if (editStudent) openStudentEditForm(editStudent.dataset.editStudent);
