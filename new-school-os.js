@@ -3278,6 +3278,8 @@ function disableStudentByAdmissionNo(admissionNo, reason) {
   renderStudentFeeCounter();
   renderStudentTransportFees();
   renderTransportRoutePickupPoints();
+  renderFinanceSession(false);
+  renderDashboardOnly();
   renderFeeBook();
   setView("disableStudent");
   showToast(`${student.name} disabled.`);
@@ -4578,8 +4580,9 @@ function getDashboardMonthlyFeeCollectionSummary() {
       .filter(item => Array.isArray(item.months) && item.months.length && isDashboardMonthlyFeeHead(item.name))
       .reduce((itemSum, item) => itemSum + Number(item.total || 0), 0);
   }, 0);
-  const collected = activeStudents.reduce((sum, student) => {
-    return sum + getSessionPayments(student.admissionNo).reduce((paymentSum, payment) => {
+  const sessionPayments = collectedPayments[activeSession] || {};
+  const collected = Object.values(sessionPayments).reduce((sum, payments) => {
+    return sum + (payments || []).reduce((paymentSum, payment) => {
       return paymentSum + (payment.allocations || []).reduce((allocationSum, allocation) => {
         if (!allocation.month || !isDashboardMonthlyFeeHead(allocation.head)) return allocationSum;
         return allocationSum + Number(allocation.amount || 0);
@@ -5234,7 +5237,7 @@ function getLedgerPayments(student) {
 }
 
 function getAllLedgerPayments() {
-  return getActiveStudents().flatMap(student => getLedgerPayments(student)).sort((a, b) => {
+  return students.flatMap(student => getLedgerPayments(student)).sort((a, b) => {
     const dateA = parseDateDDMMYYYY(a.date).getTime();
     const dateB = parseDateDDMMYYYY(b.date).getTime();
     if (dateA !== dateB) return dateB - dateA;
@@ -10918,6 +10921,8 @@ document.body.addEventListener("click", event => {
       renderStudentFeeCounter(student.admissionNo);
       renderStudentTransportFees();
       renderTransportRoutePickupPoints();
+      renderFinanceSession(false);
+      renderDashboardOnly();
       renderFeeBook(student.admissionNo);
       setView("students");
       showToast(`${student.name} enabled.`);
