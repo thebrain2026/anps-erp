@@ -4947,24 +4947,28 @@ function getTransportMonthPaidInfo(student, row, month) {
 function getTuitionMonthFineDue(student, row, month, paymentDate = new Date()) {
   const paid = getTuitionMonthPaidInfo(student, row, month);
   if (paid.isSettled) return 0;
+  if (Number(paid.tuition || 0) > 0) return 0;
   return Math.max(calculateTuitionFineForMonth(month, paymentDate) - Number(paid.fine || 0), 0);
 }
 
 function getTuitionMonthCollectFineDue(student, row, month, paymentDate = new Date()) {
   const paid = getTuitionMonthPaidInfo(student, row, month);
   if (paid.isSettled) return 0;
+  if (Number(paid.tuition || 0) > 0) return 0;
   return Math.max(calculateTuitionFineForMonth(month, paymentDate) - Number(paid.fine || 0), 0);
 }
 
 function getTransportMonthFineDue(student, row, month, paymentDate = new Date()) {
   const paid = getTransportMonthPaidInfo(student, row, month);
   if (paid.isSettled) return 0;
+  if (Number(paid.transport || 0) > 0) return 0;
   return Math.max(calculateTransportFineForMonth(month, paymentDate) - Number(paid.fine || 0), 0);
 }
 
 function getTransportMonthCollectFineDue(student, row, month, paymentDate = new Date()) {
   const paid = getTransportMonthPaidInfo(student, row, month);
   if (paid.isSettled) return 0;
+  if (Number(paid.transport || 0) > 0) return 0;
   return Math.max(calculateTransportFineForMonth(month, paymentDate) - Number(paid.fine || 0), 0);
 }
 
