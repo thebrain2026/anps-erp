@@ -623,7 +623,7 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
     syllabusEntries: ["id"],
     holidayReports: ["id", "date", "holidayName"],
     transportRoutes: ["routeName"],
-    transportVehicles: ["vehicleNo", "vehicleName"],
+    transportVehicles: ["id", "vehicleNo"],
     transportVehicleAssignments: ["routeName", "vehicleNo", "shift"],
     transportRoutePickupPoints: ["routeName", "villageName", "shift"],
     notices: ["id", "title"]
@@ -726,7 +726,7 @@ function canSaveOnlineNow() {
 
 function showNoInternetSaveWarning() {
   markBackendConnectionIssue();
-  showToast("No internet connection. Entry not saved.");
+  showToast("No internet/server connection. Entry not saved. Please reconnect and save again.", "error", 6000);
 }
 
 function restoreStateFromRaw(rawState = "") {
@@ -779,7 +779,7 @@ function queueBackendSave(snapshot = getAppStateSnapshot(), rollbackRawState = "
       localStorage.removeItem(BACKEND_PENDING_STATE_KEY);
       if (rollbackRawState) restoreStateFromRaw(rollbackRawState);
       scheduleBackendReconnect();
-      showToast("No internet/server connection. Entry not saved.");
+      showToast("No internet/server connection. Entry not saved. Please reconnect and save again.", "error", 6000);
       console.warn("Backend save failed; local change rolled back.", error);
       setTopbarSaveStatus("saved");
     }
@@ -1071,11 +1071,15 @@ function setNextReceiptNo() {
   if (receiptInput) receiptInput.value = getNextReceiptNo();
 }
 
-function showToast(message) {
+function showToast(message, tone = "default", duration = 2400) {
   toast.textContent = message;
+  toast.classList.toggle("error", tone === "error");
   toast.classList.add("show");
   clearTimeout(showToast.timer);
-  showToast.timer = setTimeout(() => toast.classList.remove("show"), 2400);
+  showToast.timer = setTimeout(() => {
+    toast.classList.remove("show");
+    toast.classList.remove("error");
+  }, duration);
 }
 
 function ensureLoginOverlay() {
@@ -9500,11 +9504,21 @@ if (transportVehicleForm) {
       showToast(`${vehicleNo} already added.`);
       return;
     }
-    const previousVehicleNo = editingTransportVehicleIndex >= 0
+    const wasEditingVehicle = editingTransportVehicleIndex >= 0;
+    const previousVehicleNo = wasEditingVehicle
       ? String(transportVehicles[editingTransportVehicleIndex]?.vehicleNo || "").toUpperCase()
       : "";
-    const vehicleEntry = {vehicleNo, vehicleName, driverName, driverMobile, status: "Active"};
-    if (editingTransportVehicleIndex >= 0) {
+    const previousVehicle = wasEditingVehicle ? transportVehicles[editingTransportVehicleIndex] || {} : {};
+    const vehicleEntry = {
+      id: previousVehicle.id || `veh-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
+      vehicleNo,
+      vehicleName,
+      driverName,
+      driverMobile,
+      status: "Active",
+      updatedAt: new Date().toISOString()
+    };
+    if (wasEditingVehicle) {
       transportVehicles[editingTransportVehicleIndex] = vehicleEntry;
       transportVehicleAssignments.forEach(assignment => {
         if (String(assignment.vehicleNo || "").toUpperCase() === previousVehicleNo) {
@@ -9514,12 +9528,17 @@ if (transportVehicleForm) {
           assignment.driverMobile = driverMobile;
         }
       });
-      editingTransportVehicleIndex = -1;
     } else {
       transportVehicles.push(vehicleEntry);
     }
     transportVehicles.sort((a, b) => String(a.vehicleNo || "").localeCompare(String(b.vehicleNo || ""), undefined, {numeric: true}));
-    saveAppState();
+    if (!saveAppState()) {
+      renderTransportVehicles();
+      renderTransportVehicleAssignments();
+      renderTransportRoutePickupPoints();
+      return;
+    }
+    editingTransportVehicleIndex = -1;
     renderTransportVehicles();
     renderTransportVehicleAssignments();
     renderTransportRoutePickupPoints();
