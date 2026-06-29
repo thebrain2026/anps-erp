@@ -4328,12 +4328,45 @@ function normalizeStudentUserLoginIds() {
   return changed;
 }
 
+function renderStudentUserFilterOptions() {
+  const select = document.getElementById("studentUserClassFilter");
+  if (!select) return;
+  const currentValue = select.value;
+  const classes = [...new Set(studentUserAccounts.map(account => {
+    const student = findStudentByAdmissionNo(account.admissionNo) || {};
+    return splitStudentClassSection(account.klass || student.klass || "").klass;
+  }).filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, {numeric: true}));
+  select.innerHTML = `<option value="">All Classes</option>${classes.map(klass => `<option value="${escapeHtml(klass)}">${escapeHtml(klass)}</option>`).join("")}`;
+  if (currentValue && classes.includes(currentValue)) select.value = currentValue;
+}
+
 function renderStudentUserRows() {
   const rows = document.getElementById("studentUserRows");
   const summary = document.getElementById("studentUserSummary");
   if (!rows) return;
   normalizeStudentUserLoginIds();
-  rows.innerHTML = studentUserAccounts.map((account, index) => {
+  renderStudentUserFilterOptions();
+  const selectedClass = document.getElementById("studentUserClassFilter")?.value || "";
+  const search = String(document.getElementById("studentUserSearch")?.value || "").trim().toLowerCase();
+  const filteredAccounts = studentUserAccounts
+    .map((account, index) => ({account, index}))
+    .filter(({account}) => {
+      const student = findStudentByAdmissionNo(account.admissionNo) || {};
+      const classInfo = splitStudentClassSection(account.klass || student.klass || "");
+      const loginId = getStudentLoginIdFromAdmissionNo(account.admissionNo);
+      const matchesClass = !selectedClass || classInfo.klass === selectedClass;
+      const haystack = [
+        account.studentName,
+        student.name,
+        account.admissionNo,
+        loginId,
+        account.password,
+        account.klass,
+        student.klass
+      ].join(" ").toLowerCase();
+      return matchesClass && (!search || haystack.includes(search));
+    });
+  rows.innerHTML = filteredAccounts.map(({account, index}) => {
     const student = findStudentByAdmissionNo(account.admissionNo) || {};
     const loginId = getStudentLoginIdFromAdmissionNo(account.admissionNo);
     const permissions = getStudentUserPermissionValues(account);
@@ -4361,7 +4394,7 @@ function renderStudentUserRows() {
       </tr>
     `;
   }).join("") || `<tr><td colspan="7">No student user saved yet.</td></tr>`;
-  if (summary) summary.textContent = `${studentUserAccounts.length} student users saved`;
+  if (summary) summary.textContent = `${filteredAccounts.length} of ${studentUserAccounts.length} student users`;
 }
 
 function renderUserAccessSettings() {
@@ -9917,6 +9950,9 @@ document.getElementById("studentUserSelect")?.addEventListener("change", event =
 document.getElementById("autoFillStudentUsers")?.addEventListener("click", () => {
   autoFillStudentUserAccounts();
 });
+
+document.getElementById("studentUserClassFilter")?.addEventListener("change", renderStudentUserRows);
+document.getElementById("studentUserSearch")?.addEventListener("input", renderStudentUserRows);
 
 document.getElementById("idCardStudentSelect")?.addEventListener("change", renderStudentIdCardModule);
 document.getElementById("studentIdContactType")?.addEventListener("change", renderStudentIdCardModule);

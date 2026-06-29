@@ -1029,6 +1029,35 @@ h2 { font-size: 1.15rem; }
   flex-wrap: wrap;
 }
 
+.student-user-filter-bar {
+  display: grid;
+  grid-template-columns: minmax(160px, 220px) minmax(240px, 1fr);
+  gap: 10px;
+  align-items: end;
+  margin: 14px 0 12px;
+}
+
+.student-user-filter-bar label {
+  display: grid;
+  gap: 6px;
+  font-size: .76rem;
+  font-weight: 900;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.student-user-filter-bar select,
+.student-user-filter-bar input {
+  min-height: 38px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0 12px;
+  background: #fff;
+  color: var(--ink);
+  font: inherit;
+  font-weight: 800;
+}
+
 .bars {
   display: grid;
   grid-template-columns: repeat(7, minmax(38px, 1fr));
