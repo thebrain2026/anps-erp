@@ -1289,29 +1289,20 @@
                 <input name="title" placeholder="School closed tomorrow" required />
               </label>
               <label>Audience
-                <select name="audience" required>
+                <select name="audience" id="noticeAudienceSelect" required>
                   <option>All Students</option>
                   <option>All Students & Teachers</option>
                   <option>Teachers Only</option>
                   <option>Selected Class</option>
+                  <option>Selected Class & Section</option>
                 </select>
               </label>
-              <label>Class
-                <select name="noticeClass">
-                  <option value="">All Classes</option>
-                  <option>Nursery</option>
-                  <option>Class I</option>
-                  <option>Class II</option>
-                  <option>Class III</option>
-                  <option>Class IV</option>
-                  <option>Class V</option>
-                  <option>Class VI</option>
-                  <option>Class VII</option>
-                  <option>Class VIII</option>
-                  <option>Class IX</option>
-                  <option>Class X</option>
-                  <option>Class XI</option>
-                  <option>Class XII</option>
+              <label class="notice-target-field" id="noticeClassField">Class
+                <select name="noticeClasses" id="noticeClassSelect" multiple size="5">
+                </select>
+              </label>
+              <label class="notice-target-field" id="noticeSectionField">Section
+                <select name="noticeSections" id="noticeSectionSelect" multiple size="5">
                 </select>
               </label>
               <label>Publish Date
@@ -1358,7 +1349,7 @@
             </div>
             <div class="table-wrap">
               <table>
-                <thead><tr><th>Notice</th><th>Audience</th><th>Class</th><th>Date</th><th>Priority</th><th>Status</th></tr></thead>
+                <thead><tr><th>Notice</th><th>Audience</th><th>Target</th><th>Date</th><th>Priority</th><th>Status</th></tr></thead>
                 <tbody id="noticeRows">
                   <tr><td colspan="6">No notices entered yet.</td></tr>
                 </tbody>

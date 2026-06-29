@@ -3776,15 +3776,65 @@ function renderDues() {
   `).join("") || `<tr><td colspan="4">No dues recorded for this session.</td></tr>`;
 }
 
+function getSelectedNoticeOptions(select) {
+  return [...(select?.selectedOptions || [])]
+    .map(option => String(option.value || option.textContent || "").trim())
+    .filter(Boolean);
+}
+
+function getNoticeTargetLabel(notice = {}) {
+  const classes = Array.isArray(notice.classes) ? notice.classes.filter(Boolean) : [];
+  const sections = Array.isArray(notice.sections) ? notice.sections.filter(Boolean) : [];
+  if (classes.length && sections.length) return `${classes.join(", ")} | ${sections.join(", ")}`;
+  if (classes.length) return classes.join(", ");
+  if (sections.length) return `Sections: ${sections.join(", ")}`;
+  return notice.noticeClass || "All Classes";
+}
+
+function renderNoticeAudienceOptions() {
+  const classSelect = document.getElementById("noticeClassSelect");
+  const sectionSelect = document.getElementById("noticeSectionSelect");
+  if (classSelect) {
+    const selected = new Set(getSelectedNoticeOptions(classSelect));
+    classSelect.innerHTML = getAdmissionClassOptions()
+      .map(className => `<option value="${escapeHtml(className)}" ${selected.has(className) ? "selected" : ""}>${escapeHtml(className)}</option>`)
+      .join("");
+  }
+  if (sectionSelect) {
+    const selected = new Set(getSelectedNoticeOptions(sectionSelect));
+    sectionSelect.innerHTML = getAdmissionSectionOptions()
+      .map(sectionName => `<option value="${escapeHtml(sectionName)}" ${selected.has(sectionName) ? "selected" : ""}>${escapeHtml(sectionName)}</option>`)
+      .join("");
+  }
+  updateNoticeAudienceFields();
+}
+
+function updateNoticeAudienceFields() {
+  const audience = String(document.getElementById("noticeAudienceSelect")?.value || "");
+  const classField = document.getElementById("noticeClassField");
+  const sectionField = document.getElementById("noticeSectionField");
+  const classSelect = document.getElementById("noticeClassSelect");
+  const sectionSelect = document.getElementById("noticeSectionSelect");
+  const needsClass = audience === "Selected Class" || audience === "Selected Class & Section";
+  const needsSection = audience === "Selected Class & Section";
+  if (classField) classField.hidden = !needsClass;
+  if (sectionField) sectionField.hidden = !needsSection;
+  if (classSelect) classSelect.required = needsClass;
+  if (sectionSelect) sectionSelect.required = needsSection;
+  if (!needsClass && classSelect) [...classSelect.options].forEach(option => option.selected = false);
+  if (!needsSection && sectionSelect) [...sectionSelect.options].forEach(option => option.selected = false);
+}
+
 function renderNoticeBoard() {
   const rows = document.getElementById("noticeRows");
   const preview = document.getElementById("noticeAppPreview");
   if (!rows) return;
+  renderNoticeAudienceOptions();
   rows.innerHTML = notices.map(notice => `
     <tr>
       <td><strong>${escapeHtml(notice.title)}</strong><br><small>${escapeHtml(notice.message)}</small></td>
       <td>${escapeHtml(notice.audience)}</td>
-      <td>${escapeHtml(notice.noticeClass || "All Classes")}</td>
+      <td>${escapeHtml(getNoticeTargetLabel(notice))}</td>
       <td>${escapeHtml(notice.publishDate)}</td>
       <td><span class="badge ${notice.priority === "Urgent" ? "red" : notice.priority === "Important" ? "amber" : "blue"}">${escapeHtml(notice.priority)}</span></td>
       <td><span class="status-pill stable">Published</span></td>
@@ -3793,7 +3843,7 @@ function renderNoticeBoard() {
   if (preview) {
     const latest = notices[0];
     preview.innerHTML = latest ? `
-      <span>${escapeHtml(latest.audience)}${latest.noticeClass ? ` | ${escapeHtml(latest.noticeClass)}` : ""}</span>
+      <span>${escapeHtml(latest.audience)} | ${escapeHtml(getNoticeTargetLabel(latest))}</span>
       <strong>${escapeHtml(latest.title)}</strong>
       <p>${escapeHtml(latest.message)}</p>
       <small>${escapeHtml(latest.publishDate)} | ${escapeHtml(latest.delivery)}</small>
@@ -9788,6 +9838,7 @@ document.getElementById("printStudentIdCard")?.addEventListener("click", printSt
 document.getElementById("teacherIdCardSelect")?.addEventListener("change", renderTeacherIdCardModule);
 document.getElementById("generateTeacherIdCard")?.addEventListener("click", renderTeacherIdCardModule);
 document.getElementById("printTeacherIdCard")?.addEventListener("click", printTeacherIdCard);
+document.getElementById("noticeAudienceSelect")?.addEventListener("change", updateNoticeAudienceFields);
 document.getElementById("securityBackupBtn")?.addEventListener("click", createSecurityBackup);
 document.getElementById("securityExportBtn")?.addEventListener("click", exportSecurityJson);
 document.getElementById("securityServerJsonBtn")?.addEventListener("click", showSecurityServerJson);
@@ -9868,11 +9919,25 @@ document.getElementById("accessPermissionRows")?.addEventListener("change", even
 noticeForm.addEventListener("submit", event => {
   event.preventDefault();
   const data = new FormData(noticeForm);
+  const audience = String(data.get("audience") || "All Students");
+  const classes = getSelectedNoticeOptions(document.getElementById("noticeClassSelect"));
+  const sections = getSelectedNoticeOptions(document.getElementById("noticeSectionSelect"));
+  if ((audience === "Selected Class" || audience === "Selected Class & Section") && !classes.length) {
+    showToast("Select at least one class for this notice.");
+    return;
+  }
+  if (audience === "Selected Class & Section" && !sections.length) {
+    showToast("Select at least one section for this notice.");
+    return;
+  }
   notices.unshift({
     id: `NOTICE-${Date.now()}`,
     title: String(data.get("title") || "").trim(),
-    audience: String(data.get("audience") || "All Students"),
-    noticeClass: String(data.get("noticeClass") || "").trim(),
+    audience,
+    audienceType: audience,
+    noticeClass: classes.join(", "),
+    classes,
+    sections,
     publishDate: String(data.get("publishDate") || "").trim() || formatDateDDMMYYYY(new Date()),
     message: String(data.get("message") || "").trim(),
     priority: String(data.get("priority") || "Normal"),
@@ -9884,6 +9949,7 @@ noticeForm.addEventListener("submit", event => {
   renderNoticeBoard();
   noticeForm.reset();
   noticeForm.elements.publishDate.value = formatDateDDMMYYYY(new Date());
+  updateNoticeAudienceFields();
   showToast("Notice published for selected audience.");
 });
 

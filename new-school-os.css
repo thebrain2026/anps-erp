@@ -1337,6 +1337,22 @@ h2 { font-size: 1.15rem; }
   resize: vertical;
 }
 
+.notice-form select[multiple] {
+  min-height: 128px;
+  padding: 8px;
+}
+
+.notice-target-field {
+  border: 1px solid #dce8f5;
+  border-radius: 8px;
+  padding: 10px;
+  background: linear-gradient(135deg, #ffffff 0%, #f5fbff 100%);
+}
+
+.notice-target-field[hidden] {
+  display: none;
+}
+
 .notice-app-preview {
   display: grid;
   gap: 10px;
