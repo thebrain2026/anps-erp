@@ -60,6 +60,7 @@ SENSITIVE_STATIC_NAMES = {
 }
 ALLOWED_STATIC_FILES = {
     "/anps-erp.html",
+    "/anps-mobile-app.html",
     "/new-school-os.js",
     "/new-school-os.css",
     "/assets/anps-logo.png",
