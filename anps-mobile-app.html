@@ -492,6 +492,21 @@
     .status.warn { color: #9a5d00; background: rgba(248,189,69,.2); }
     .status.bad { color: #a92727; background: rgba(226,80,80,.14); }
 
+    .complaint-status-bar {
+      display: grid;
+      gap: 5px;
+      margin-top: 10px;
+      padding: 9px 10px;
+      border-radius: 14px;
+      font-size: .78rem;
+      font-weight: 850;
+    }
+
+    .complaint-status-bar.ok { color: #087044; background: rgba(32,160,100,.12); }
+    .complaint-status-bar.warn { color: #9a5d00; background: rgba(248,189,69,.18); }
+    .complaint-status-bar.bad { color: #a92727; background: rgba(226,80,80,.12); }
+    .complaint-status-bar b { font-size: .82rem; }
+
     .quick-row { display: grid; grid-template-columns: 46px 1fr auto; gap: 11px; align-items: center; }
     .quick-icon { width: 46px; height: 46px; border-radius: 16px; background: linear-gradient(135deg, #246bfe, #22c8a6); overflow: hidden; }
     .quick-icon img { width: 100%; height: 100%; object-fit: cover; }
@@ -1424,9 +1439,19 @@
 
     function complaintStatusTone(status = "") {
       const clean = normalizeText(status).toLowerCase();
-      if (["resolved", "closed"].includes(clean)) return "ok";
+      if (["accepted", "resolved", "closed"].includes(clean)) return "ok";
+      if (["cancelled", "rejected"].includes(clean)) return "bad";
       if (clean === "in progress") return "warn";
       return "warn";
+    }
+
+    function complaintStudentStatusBar(item = {}) {
+      const status = item.status || "Open";
+      const tone = complaintStatusTone(status);
+      const reason = normalizeText(item.cancelReason);
+      const reviewedBy = normalizeText(item.reviewedBy);
+      const reviewedLine = reviewedBy ? `Reviewed by ${reviewedBy}` : "School will review this complaint.";
+      return `<span class="complaint-status-bar ${tone}"><b>Status: ${status}</b><span>${reason ? `Reason: ${reason}` : reviewedLine}</span></span>`;
     }
 
     function studentComplaintCards(complaints = []) {
@@ -1445,7 +1470,7 @@
       return ownComplaints.map(item => card({
         title: `${item.category || item.type || "Academic"} | ${item.status || "Open"}`,
         meta: `${item.date || "-"} | ${item.source || "Student App"}`,
-        body: item.details || item.note || "-",
+        body: `${item.details || item.note || "-"}${complaintStudentStatusBar(item)}`,
         badge: item.status || "Open",
         status: complaintStatusTone(item.status)
       })).join("");

@@ -311,7 +311,7 @@
               <label>Mobile No. <input name="mobile" placeholder="Mobile number" /></label>
               <label>Category <select name="category"><option>Academic</option><option>Fees</option><option>Transport</option><option>Discipline</option><option>Staff</option><option>Other</option></select></label>
               <label>Priority <select name="priority"><option>Normal</option><option>High</option><option>Urgent</option></select></label>
-              <label>Status <select name="status"><option>Open</option><option>In Progress</option><option>Resolved</option><option>Closed</option></select></label>
+              <label>Status <select name="status"><option>Open</option><option>Accepted</option><option>In Progress</option><option>Resolved</option><option>Closed</option><option>Cancelled</option></select></label>
               <label>Received By <input name="receivedBy" placeholder="Front office staff" /></label>
               <label class="front-office-full">Complaint Details <textarea name="details" rows="3" placeholder="Complaint details" required></textarea></label>
               <button class="primary-action" type="submit">Save Complaint</button>
@@ -326,9 +326,9 @@
             <div class="panel-head"><div><p class="eyebrow">Complaint Desk</p><h2>Complaint Book</h2><small id="complaintsDeskSummary">0 complaints saved.</small></div></div>
             <div class="complaint-filter-row">
               <label>Type <select id="complaintTypeFilter"><option value="All">All</option><option>Student</option><option>Teacher</option><option>General</option></select></label>
-              <label>Status <select id="complaintStatusFilter"><option value="All">All</option><option>Open</option><option>In Progress</option><option>Resolved</option><option>Closed</option></select></label>
+              <label>Status <select id="complaintStatusFilter"><option value="All">All</option><option>Open</option><option>Accepted</option><option>In Progress</option><option>Resolved</option><option>Closed</option><option>Cancelled</option></select></label>
             </div>
-            <div class="table-wrap"><table><thead><tr><th>Date</th><th>For</th><th>Name</th><th>Category</th><th>Priority</th><th>Details</th><th>Status</th><th>Source</th><th>Action</th></tr></thead><tbody id="complaintsDeskRows"></tbody></table></div>
+            <div class="table-wrap"><table><thead><tr><th>Date</th><th>For</th><th>Name</th><th>Complaint</th><th>Status</th><th>Source</th><th>Action</th></tr></thead><tbody id="complaintsDeskRows"></tbody></table></div>
           </section>
         </div>
       </section>
@@ -3033,6 +3033,27 @@
           <button class="primary-action" type="submit">Save Combined Receipt</button>
         </footer>
       </form>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="complaintReviewModal" aria-hidden="true">
+    <section class="complaint-review-modal" role="dialog" aria-modal="true" aria-labelledby="complaintReviewTitle">
+      <header class="modal-head complaint-review-head">
+        <div>
+          <p class="eyebrow">Complaint Book</p>
+          <h2 id="complaintReviewTitle">Complaint Review</h2>
+          <small>Accept korle student app-e accepted status dekhabe. Cancel korle reason student dekhte parbe.</small>
+        </div>
+        <button class="mini" id="closeComplaintReview" type="button">Close</button>
+      </header>
+      <div class="complaint-review-body" id="complaintReviewBody"></div>
+      <label class="complaint-review-reason">Cancel Reason
+        <textarea id="complaintReviewReason" rows="3" placeholder="Complaint accept na korar reason likhun"></textarea>
+      </label>
+      <footer class="modal-actions complaint-review-actions">
+        <button class="ghost-action" id="cancelComplaintReviewAction" type="button">Cancel Complaint</button>
+        <button class="primary-action" id="acceptComplaintReviewAction" type="button">Accept Complaint</button>
+      </footer>
     </section>
   </div>
 

@@ -3551,6 +3551,57 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   margin-bottom: 12px;
 }
 
+.complaint-preview-box {
+  width: 100%;
+  min-width: 230px;
+  border: 1px solid #b9d8f1;
+  border-left: 5px solid #1d7ed0;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #f2f8ff 0%, #ffffff 58%, #fff7df 100%);
+  color: #17324d;
+  padding: 9px 10px;
+  text-align: left;
+  box-shadow: 0 8px 18px rgba(29, 126, 208, .12);
+  cursor: pointer;
+}
+
+.complaint-preview-box:hover {
+  border-color: #1d7ed0;
+  box-shadow: 0 12px 26px rgba(29, 126, 208, .18);
+}
+
+.complaint-preview-box strong,
+.complaint-preview-box span {
+  display: block;
+}
+
+.complaint-preview-box strong {
+  font-size: .82rem;
+  margin-bottom: 3px;
+}
+
+.complaint-preview-box span {
+  color: #475569;
+  font-size: .76rem;
+  line-height: 1.35;
+}
+
+.complaint-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: .75rem;
+  font-weight: 950;
+}
+
+.complaint-status-pill.open { background: #fff2d6; color: #8b5207; }
+.complaint-status-pill.accepted { background: #dff7ec; color: #087047; }
+.complaint-status-pill.progress { background: #e3efff; color: #2455bd; }
+.complaint-status-pill.done { background: #e4f4ee; color: #116b4e; }
+.complaint-status-pill.cancelled { background: #ffe5eb; color: #a42e45; }
+
 .holiday-layout,
 .annual-calendar-layout {
   display: grid;
@@ -5995,6 +6046,85 @@ body.modal-open {
   border: 1px solid #bfd0df;
   background: #fff;
   box-shadow: 0 24px 80px rgba(16, 24, 39, .28);
+}
+
+.complaint-review-modal {
+  width: min(760px, calc(100vw - 32px));
+  max-height: calc(100vh - 32px);
+  overflow: auto;
+  border-radius: 10px;
+  border: 1px solid #bdd8ef;
+  background: linear-gradient(180deg, #eff8ff 0, #ffffff 180px);
+  box-shadow: 0 28px 90px rgba(16, 24, 39, .3);
+}
+
+.complaint-review-head {
+  background: linear-gradient(135deg, #0f766e 0%, #1d7ed0 52%, #a855f7 100%);
+  color: #fff;
+}
+
+.complaint-review-head .eyebrow,
+.complaint-review-head small {
+  color: rgba(255, 255, 255, .82);
+}
+
+.complaint-review-body {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  padding: 16px;
+}
+
+.complaint-review-card {
+  border: 1px solid #d1e1f1;
+  border-radius: 9px;
+  background: rgba(255, 255, 255, .86);
+  padding: 12px;
+  box-shadow: 0 10px 24px rgba(31, 50, 72, .08);
+}
+
+.complaint-review-card.full {
+  grid-column: 1 / -1;
+}
+
+.complaint-review-card span {
+  display: block;
+  color: #64748b;
+  font-size: .74rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.complaint-review-card strong,
+.complaint-review-card p {
+  margin: 5px 0 0;
+  color: #172033;
+  font-weight: 900;
+  line-height: 1.45;
+}
+
+.complaint-review-reason {
+  display: grid;
+  gap: 7px;
+  margin: 0 16px 14px;
+  color: #475569;
+  font-size: .8rem;
+  font-weight: 950;
+}
+
+.complaint-review-reason textarea {
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid #c8d9ee;
+  border-radius: 8px;
+  padding: 11px;
+  font: inherit;
+  font-weight: 850;
+  resize: vertical;
+}
+
+.complaint-review-actions {
+  padding: 0 16px 16px;
 }
 
 .modal-head-actions {

@@ -330,6 +330,9 @@ const receiptPreviewModal = document.getElementById("receiptPreviewModal");
 const receiptPreviewBody = document.getElementById("receiptPreviewBody");
 const combinedCollectionModal = document.getElementById("combinedCollectionModal");
 const combinedCollectionForm = document.getElementById("combinedCollectionForm");
+const complaintReviewModal = document.getElementById("complaintReviewModal");
+const complaintReviewBody = document.getElementById("complaintReviewBody");
+const complaintReviewReason = document.getElementById("complaintReviewReason");
 const sessionSelect = document.getElementById("sessionSelect");
 const newSessionInput = document.getElementById("newSessionInput");
 const feeMasterForm = document.getElementById("feeMasterForm");
@@ -365,6 +368,7 @@ let activeFilter = "All";
 let editingAdmissionNo = "";
 let editingAdmissionEnquiryIndex = -1;
 let editingComplaintIndex = -1;
+let activeComplaintReviewIndex = -1;
 let editingFeeMasterIndex = -1;
 let editingFeeGroupIndex = -1;
 let editingClassSetupIndex = -1;
@@ -3529,33 +3533,74 @@ function resetComplaintEditing() {
   if (button) button.textContent = "Save Complaint";
 }
 
+function getComplaintForType(item = {}) {
+  return item.forType || (item.studentId || item.studentName ? "Student" : item.teacherId ? "Teacher" : "General");
+}
+
+function getComplaintPersonName(item = {}) {
+  return item.personName || item.studentName || item.teacherName || "-";
+}
+
+function getComplaintCategory(item = {}) {
+  return item.category || item.type || "-";
+}
+
+function getComplaintDetails(item = {}) {
+  return item.details || item.note || "-";
+}
+
+function getComplaintSource(item = {}) {
+  if (item.source === "student") return "Student App";
+  if (item.source === "teacher") return "Teacher App";
+  return item.source || "Front Office";
+}
+
+function getComplaintStatusClass(status = "", priority = "") {
+  const clean = String(status || "Open").trim().toLowerCase();
+  if (clean === "accepted") return "accepted";
+  if (clean === "cancelled" || clean === "rejected") return "cancelled";
+  if (clean === "in progress") return "progress";
+  if (clean === "resolved" || clean === "closed") return "done";
+  if (priority === "Urgent") return "cancelled";
+  return "open";
+}
+
+function getComplaintShortText(details = "") {
+  const text = String(details || "-").trim();
+  return text.length > 82 ? `${text.slice(0, 82)}...` : text;
+}
+
 function renderComplaintsDesk() {
   const typeFilter = document.getElementById("complaintTypeFilter")?.value || "All";
   const statusFilter = document.getElementById("complaintStatusFilter")?.value || "All";
   const rows = document.getElementById("complaintsDeskRows");
   const summary = document.getElementById("complaintsDeskSummary");
   const filtered = complaintRecords.filter(item =>
-    (typeFilter === "All" || item.forType === typeFilter) &&
+    (typeFilter === "All" || getComplaintForType(item) === typeFilter) &&
     (statusFilter === "All" || item.status === statusFilter)
   );
   if (summary) summary.textContent = `${filtered.length} of ${complaintRecords.length} complaints showing.`;
   if (!rows) return;
   rows.innerHTML = filtered.map((item) => {
     const index = complaintRecords.indexOf(item);
-    const forType = item.forType || (item.studentId || item.studentName ? "Student" : item.teacherId ? "Teacher" : "General");
-    const personName = item.personName || item.studentName || item.teacherName || "-";
-    const category = item.category || item.type || "-";
-    const details = item.details || item.note || "-";
-    const source = item.source === "student" ? "Student App" : item.source === "teacher" ? "Teacher App" : (item.source || "Front Office");
+    const forType = getComplaintForType(item);
+    const personName = getComplaintPersonName(item);
+    const category = getComplaintCategory(item);
+    const details = getComplaintDetails(item);
+    const source = getComplaintSource(item);
+    const status = item.status || "Open";
     return `
       <tr>
         <td>${formatDateDDMMYYYY(item.date)}</td>
         <td><span class="badge ${forType === "Teacher" ? "amber" : forType === "Student" ? "green" : "blue"}">${escapeHtml(forType)}</span></td>
         <td><strong>${escapeHtml(personName)}</strong><br><small>${escapeHtml(item.mobile || item.classSection || item.className || "")}</small></td>
-        <td>${escapeHtml(category)}</td>
-        <td>${escapeHtml(item.priority || "Normal")}</td>
-        <td>${escapeHtml(details)}</td>
-        <td><span class="badge ${item.status === "Resolved" || item.status === "Closed" ? "green" : item.priority === "Urgent" ? "red" : "amber"}">${escapeHtml(item.status || "Open")}</span></td>
+        <td>
+          <button class="complaint-preview-box" type="button" data-review-complaint="${index}">
+            <strong>${escapeHtml(category)}</strong>
+            <span>${escapeHtml(getComplaintShortText(details))}</span>
+          </button>
+        </td>
+        <td><span class="complaint-status-pill ${getComplaintStatusClass(status, item.priority)}">${escapeHtml(status)}</span></td>
         <td>${escapeHtml(source)}</td>
         <td>
           <button class="icon-action edit" type="button" data-edit-complaint="${index}" title="Edit complaint" aria-label="Edit complaint">✎</button>
@@ -3563,7 +3608,89 @@ function renderComplaintsDesk() {
         </td>
       </tr>
     `;
-  }).join("") || `<tr><td colspan="9">No complaint found.</td></tr>`;
+  }).join("") || `<tr><td colspan="7">No complaint found.</td></tr>`;
+}
+
+function closeComplaintReviewModal() {
+  activeComplaintReviewIndex = -1;
+  complaintReviewModal?.setAttribute("aria-hidden", "true");
+  if (complaintReviewReason) complaintReviewReason.value = "";
+  document.body.classList.remove("modal-open");
+}
+
+function openComplaintReviewModal(index) {
+  const item = complaintRecords[index];
+  if (!item || !complaintReviewModal || !complaintReviewBody) return;
+  activeComplaintReviewIndex = index;
+  if (complaintReviewReason) complaintReviewReason.value = item.cancelReason || "";
+  const status = item.status || "Open";
+  complaintReviewBody.innerHTML = `
+    <div class="complaint-review-card">
+      <span>Name</span>
+      <strong>${escapeHtml(getComplaintPersonName(item))}</strong>
+    </div>
+    <div class="complaint-review-card">
+      <span>Status</span>
+      <strong><span class="complaint-status-pill ${getComplaintStatusClass(status, item.priority)}">${escapeHtml(status)}</span></strong>
+    </div>
+    <div class="complaint-review-card">
+      <span>For</span>
+      <strong>${escapeHtml(getComplaintForType(item))}</strong>
+    </div>
+    <div class="complaint-review-card">
+      <span>Class / Mobile</span>
+      <strong>${escapeHtml(item.classSection || item.className || item.mobile || "-")}</strong>
+    </div>
+    <div class="complaint-review-card">
+      <span>Category</span>
+      <strong>${escapeHtml(getComplaintCategory(item))}</strong>
+    </div>
+    <div class="complaint-review-card">
+      <span>Source</span>
+      <strong>${escapeHtml(getComplaintSource(item))}</strong>
+    </div>
+    <div class="complaint-review-card full">
+      <span>Complaint Details</span>
+      <p>${escapeHtml(getComplaintDetails(item))}</p>
+    </div>
+    ${item.cancelReason ? `<div class="complaint-review-card full"><span>Cancel Reason</span><p>${escapeHtml(item.cancelReason)}</p></div>` : ""}
+  `;
+  complaintReviewModal.setAttribute("aria-hidden", "false");
+  document.body.classList.add("modal-open");
+}
+
+function acceptComplaintReview() {
+  const item = complaintRecords[activeComplaintReviewIndex];
+  if (!item) return;
+  item.status = "Accepted";
+  item.reviewStatus = "Accepted";
+  item.cancelReason = "";
+  item.reviewedAt = new Date().toISOString();
+  item.reviewedBy = getCurrentTopbarRole();
+  saveAppState();
+  renderComplaintsDesk();
+  closeComplaintReviewModal();
+  showToast("Complaint accepted.");
+}
+
+function cancelComplaintReviewWithReason() {
+  const item = complaintRecords[activeComplaintReviewIndex];
+  if (!item) return;
+  const reason = String(complaintReviewReason?.value || "").trim();
+  if (!reason) {
+    showToast("Cancel reason likhun.");
+    complaintReviewReason?.focus();
+    return;
+  }
+  item.status = "Cancelled";
+  item.reviewStatus = "Cancelled";
+  item.cancelReason = reason;
+  item.reviewedAt = new Date().toISOString();
+  item.reviewedBy = getCurrentTopbarRole();
+  saveAppState();
+  renderComplaintsDesk();
+  closeComplaintReviewModal();
+  showToast("Complaint cancelled with reason.");
 }
 
 function getActiveStaffAccount() {
@@ -9959,8 +10086,13 @@ document.getElementById("admissionEnquiryRows")?.addEventListener("click", event
 });
 
 document.getElementById("complaintsDeskRows")?.addEventListener("click", event => {
+  const reviewButton = event.target.closest("[data-review-complaint]");
   const editButton = event.target.closest("[data-edit-complaint]");
   const deleteButton = event.target.closest("[data-delete-complaint]");
+  if (reviewButton) {
+    openComplaintReviewModal(Number(reviewButton.dataset.reviewComplaint));
+    return;
+  }
   if (editButton) {
     const index = Number(editButton.dataset.editComplaint);
     const item = complaintRecords[index];
@@ -9968,14 +10100,14 @@ document.getElementById("complaintsDeskRows")?.addEventListener("click", event =
     editingComplaintIndex = index;
     setView("complaintRegister");
     complaintRegisterForm.elements.date.value = toDateInputValue(item.date);
-    complaintRegisterForm.elements.forType.value = item.forType || "Student";
-    complaintRegisterForm.elements.personName.value = item.personName || "";
+    complaintRegisterForm.elements.forType.value = getComplaintForType(item);
+    complaintRegisterForm.elements.personName.value = getComplaintPersonName(item);
     complaintRegisterForm.elements.mobile.value = item.mobile || "";
-    complaintRegisterForm.elements.category.value = item.category || "Other";
+    complaintRegisterForm.elements.category.value = getComplaintCategory(item) || "Other";
     complaintRegisterForm.elements.priority.value = item.priority || "Normal";
     complaintRegisterForm.elements.status.value = item.status || "Open";
     complaintRegisterForm.elements.receivedBy.value = item.receivedBy || "";
-    complaintRegisterForm.elements.details.value = item.details || "";
+    complaintRegisterForm.elements.details.value = getComplaintDetails(item);
     complaintRegisterForm.querySelector("button[type='submit']").textContent = "Update Complaint";
     showToast("Complaint ready to edit.");
   }
@@ -11120,6 +11252,9 @@ document.getElementById("closeReceiptPreview").addEventListener("click", closeRe
 document.getElementById("printReceiptPreview")?.addEventListener("click", printLedgerPaymentPreviewContent);
 document.getElementById("closeCombinedCollection").addEventListener("click", closeCombinedCollectionPopup);
 document.getElementById("cancelCombinedCollection").addEventListener("click", closeCombinedCollectionPopup);
+document.getElementById("closeComplaintReview")?.addEventListener("click", closeComplaintReviewModal);
+document.getElementById("acceptComplaintReviewAction")?.addEventListener("click", acceptComplaintReview);
+document.getElementById("cancelComplaintReviewAction")?.addEventListener("click", cancelComplaintReviewWithReason);
 
 disableReasonModal.addEventListener("click", event => {
   if (event.target === disableReasonModal) closeDisableReasonModal();
@@ -11131,6 +11266,10 @@ receiptPreviewModal.addEventListener("click", event => {
 
 combinedCollectionModal.addEventListener("click", event => {
   if (event.target === combinedCollectionModal) closeCombinedCollectionPopup();
+});
+
+complaintReviewModal?.addEventListener("click", event => {
+  if (event.target === complaintReviewModal) closeComplaintReviewModal();
 });
 
 document.addEventListener("click", event => {
@@ -11173,6 +11312,7 @@ document.addEventListener("keydown", event => {
   if (event.key === "Escape" && disableReasonModal.getAttribute("aria-hidden") === "false") closeDisableReasonModal();
   if (event.key === "Escape" && receiptPreviewModal.getAttribute("aria-hidden") === "false") closeReceiptPreview();
   if (event.key === "Escape" && combinedCollectionModal.getAttribute("aria-hidden") === "false") closeCombinedCollectionPopup();
+  if (event.key === "Escape" && complaintReviewModal?.getAttribute("aria-hidden") === "false") closeComplaintReviewModal();
   if (event.key === "Escape") closeDatePickerPopover();
 });
 
