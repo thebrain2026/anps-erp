@@ -877,7 +877,7 @@
   <script>
     const AppConfig = {
       mode: "api",
-      apiBaseUrl: "",
+      apiBaseUrl: "/api",
       tokenKey: "anps_mobile_token",
       roleKey: "anps_mobile_role",
       userKey: "anps_mobile_user"
@@ -889,42 +889,294 @@
     let state = { role: null, user: null, workspace: null, attendanceClass: "", language: "en" };
 
     const AppApi = {
-      async login(role, loginId, password) {
-        if (AppConfig.apiBaseUrl) {
-          const res = await fetch(`${AppConfig.apiBaseUrl}/${role}/login`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ loginId, password })
-          });
-          if (!res.ok) throw new Error("Login failed");
-          return res.json();
+      token() {
+        return localStorage.getItem(AppConfig.tokenKey) || "";
+      },
+      async request(path, options = {}) {
+        const headers = {"Content-Type": "application/json", ...(options.headers || {})};
+        const token = this.token();
+        if (token) headers.Authorization = `Bearer ${token}`;
+        const res = await fetch(`${AppConfig.apiBaseUrl}${path}`, {...options, headers});
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok || payload.ok === false) {
+          throw new Error(payload.error || "ERP API request failed");
         }
-        throw new Error("ERP API not connected yet");
+        return payload;
+      },
+      async login(role, loginId, password) {
+        const res = await fetch(`${AppConfig.apiBaseUrl}/login`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: loginId, password })
+        });
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok || payload.ok === false) throw new Error(payload.error || "Login failed");
+        const user = normalizeLoginUser(payload.user, role);
+        if (role === "student" && user.role !== "Student") {
+          throw new Error("Student login ID use korun.");
+        }
+        if (role === "teacher" && user.role === "Student") {
+          throw new Error("Teacher / staff login ID use korun.");
+        }
+        return { token: payload.token, user };
       },
       async workspace(role, userId) {
-        if (AppConfig.apiBaseUrl) {
-          const token = localStorage.getItem(AppConfig.tokenKey);
-          const res = await fetch(`${AppConfig.apiBaseUrl}/${role}/workspace?userId=${encodeURIComponent(userId)}`, {
-            headers: { Authorization: `Bearer ${token}` }
-          });
-          if (!res.ok) throw new Error("Workspace load failed");
-          return res.json();
-        }
-        throw new Error("ERP API not connected yet");
+        const payload = await this.request("/state", { method: "GET" });
+        state.erpState = payload.state || {};
+        state.erpUpdatedAt = payload.updated_at || "";
+        if (role === "student") return buildStudentWorkspace(state.erpState, userId);
+        return buildTeacherWorkspace(state.erpState, userId);
       },
       async create(collection, record) {
-        if (AppConfig.apiBaseUrl) {
-          const token = localStorage.getItem(AppConfig.tokenKey);
-          const res = await fetch(`${AppConfig.apiBaseUrl}/${state.role}/${collection}`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-            body: JSON.stringify(record)
-          });
-          if (!res.ok) throw new Error("Save failed");
-          return res.json();
-        }
-        throw new Error("ERP API not connected yet");
+        const latest = await this.request("/state", { method: "GET" });
+        const erpState = latest.state || {};
+        const collectionName = mobileCollectionName(collection);
+        const entry = {...record, id: record.id || `${collectionName}-${Date.now()}`, createdAt: new Date().toISOString()};
+        erpState[collectionName] = Array.isArray(erpState[collectionName]) ? erpState[collectionName] : [];
+        erpState[collectionName].unshift(entry);
+        const saved = await this.request("/state", {
+          method: "POST",
+          body: JSON.stringify({state: erpState, base_updated_at: latest.updated_at || ""})
+        });
+        state.erpState = saved.state || erpState;
+        state.erpUpdatedAt = saved.updated_at || "";
+        return entry;
       }
+    }
+
+    function normalizeText(value) {
+      return String(value || "").trim();
+    }
+
+    function normalizeAdmission(value) {
+      return normalizeText(value).toLowerCase().replace(/[^a-z0-9]/g, "");
+    }
+
+    function initials(name) {
+      const parts = normalizeText(name).split(/\s+/).filter(Boolean);
+      return (parts[0]?.[0] || "A") + (parts[1]?.[0] || "N");
+    }
+
+    function normalizeLoginUser(user = {}, role) {
+      const roleName = normalizeText(user.role_name || user.role || (role === "student" ? "Student" : "Staff"));
+      const name = normalizeText(user.full_name || user.name || user.username || "User");
+      return {
+        id: normalizeText(user.username || user.id || user.loginId),
+        name,
+        role: roleName,
+        department: normalizeText(user.department || roleName),
+        assignedClass: normalizeText(user.assignedClass || ""),
+        className: "",
+        roll: "-",
+        guardian: "-",
+        attendance: "0%",
+        feesDue: 0,
+        initials: initials(name),
+        photo: "",
+        subjects: []
+      };
+    }
+
+    function mobileCollectionName(collection) {
+      const map = {
+        syllabus: "syllabusEntries",
+        notices: "notices",
+        complaints: "complaintRecords",
+        homework: "homework",
+        classwork: "classworkEntries",
+        results: "resultEntries",
+        ratings: "teacherRatings",
+        leaves: "teacherLeaves"
+      };
+      return map[collection] || collection;
+    }
+
+    function activeStudents(erpState = {}) {
+      return (erpState.students || []).filter(item => !["disabled", "inactive"].includes(normalizeText(item.status).toLowerCase()));
+    }
+
+    function findStudentByLogin(erpState = {}, userId = "") {
+      const cleanId = normalizeText(userId);
+      const account = (erpState.studentUserAccounts || []).find(item =>
+        normalizeText(item.loginId || item.id).toLowerCase() === cleanId.toLowerCase()
+      );
+      const admissionNo = account?.admissionNo || cleanId;
+      return activeStudents(erpState).find(item =>
+        normalizeAdmission(item.admissionNo) === normalizeAdmission(admissionNo)
+      ) || activeStudents(erpState).find(item =>
+        normalizeAdmission(item.admissionNo).endsWith(normalizeAdmission(cleanId).slice(-4))
+      ) || {};
+    }
+
+    function getClassName(student = {}) {
+      return [student.klass || student.className || student.class, student.sectionName || student.section].filter(Boolean).join(" ").trim() || "-";
+    }
+
+    function studentDueAmount(erpState = {}, student = {}) {
+      const admissionNo = normalizeAdmission(student.admissionNo);
+      const paid = Object.values(student.payments || {}).reduce((sum, list) => {
+        return sum + (Array.isArray(list) ? list.reduce((rowSum, item) => rowSum + Number(item.amount || item.paid || item.total || 0), 0) : 0);
+      }, 0);
+      const receipts = (erpState.feeReceipts || erpState.fees || []).filter(item => normalizeAdmission(item.admissionNo) === admissionNo);
+      const receiptPaid = receipts.reduce((sum, item) => sum + Number(item.amount || item.totalAmount || item.paid || 0), 0);
+      return Math.max(0, Number(student.openingDue || 0) + Number(student.tuitionFee || 0) + Number(student.transportFee || 0) - paid - receiptPaid);
+    }
+
+    function studentReceipts(erpState = {}, student = {}) {
+      const admissionNo = normalizeAdmission(student.admissionNo);
+      const fromReceipts = (erpState.feeReceipts || erpState.fees || [])
+        .filter(item => normalizeAdmission(item.admissionNo) === admissionNo)
+        .map(item => ({
+          receiptNo: item.receiptNo || item.receipt || "-",
+          date: item.date || item.paymentDate || "-",
+          mode: item.paymentMode || item.mode || item.type || "-",
+          amount: Number(item.amount || item.totalAmount || item.paid || 0)
+        }));
+      const fromPayments = Object.values(student.payments || {}).flat().map(item => ({
+        receiptNo: item.receipt || item.receiptNo || "-",
+        date: item.date || "-",
+        mode: item.type || item.paymentMode || "-",
+        amount: Number(item.amount || item.paid || item.total || 0)
+      }));
+      return [...fromReceipts, ...fromPayments].filter(item => item.receiptNo !== "-" || item.amount);
+    }
+
+    function timetableForStudent(erpState = {}, student = {}) {
+      const className = normalizeText(student.klass || student.className || student.class);
+      const section = normalizeText(student.sectionName || student.section);
+      return (erpState.classTimetableEntries || [])
+        .filter(item => !className || normalizeText(item.className || item.class) === className)
+        .filter(item => !section || !item.section || normalizeText(item.section) === section)
+        .map(item => ({
+          day: item.day || "Monday",
+          time: `${item.timeFrom || item.from || "-"} - ${item.timeTo || item.to || "-"}`,
+          subject: item.subject || item.entryType || "-",
+          room: item.roomNo || "-",
+          className: [item.className || item.class, item.section].filter(Boolean).join(" ")
+        }));
+    }
+
+    function teacherList(erpState = {}) {
+      return (erpState.staffMembers || erpState.staff || []).map(item => ({
+        id: item.staffId || item.id || item.email || item.name,
+        name: item.name || item.staffName || "-",
+        department: item.department || item.designation || "-",
+        assignedClass: item.assignedClass || ""
+      }));
+    }
+
+    function studentList(erpState = {}) {
+      return activeStudents(erpState).map(item => ({
+        id: item.admissionNo || item.id,
+        admissionId: item.admissionNo || item.id,
+        name: item.name || "-",
+        className: getClassName(item),
+        roll: item.roll || item.rollNo || "-"
+      }));
+    }
+
+    function visibleNotices(erpState = {}, className = "") {
+      return (erpState.notices || []).filter(item => {
+        const audience = normalizeText(item.audience || item.target || "All");
+        return !className || ["All", "Students", "Student"].includes(audience) || audience === className || className.includes(audience);
+      });
+    }
+
+    function buildStudentWorkspace(erpState = {}, userId = "") {
+      const student = findStudentByLogin(erpState, userId);
+      const className = getClassName(student);
+      state.user = {
+        ...state.user,
+        id: student.admissionNo || state.user.id,
+        name: student.name || state.user.name,
+        className,
+        roll: student.roll || student.rollNo || "-",
+        guardian: student.guardianName || student.fatherName || student.motherName || "-",
+        attendance: student.attendance || "0%",
+        feesDue: studentDueAmount(erpState, student),
+        initials: initials(student.name || state.user.name),
+        photo: student.photo || student.studentPhoto || ""
+      };
+      return {
+        students: studentList(erpState),
+        teachers: teacherList(erpState),
+        receipts: studentReceipts(erpState, student),
+        results: (erpState.resultEntries || []).filter(item => normalizeAdmission(item.studentId) === normalizeAdmission(student.admissionNo)),
+        timetable: timetableForStudent(erpState, student),
+        syllabus: (erpState.syllabusEntries || []).filter(item => !item.className || className.includes(item.className)),
+        homework: (erpState.homework || []).filter(item => !item.className || className.includes(item.className)),
+        classwork: (erpState.classworkEntries || []).filter(item => !item.className || className.includes(item.className)),
+        notices: visibleNotices(erpState, className),
+        teacherComplaints: (erpState.complaintRecords || []).filter(item => normalizeAdmission(item.studentId) === normalizeAdmission(student.admissionNo) && item.source === "teacher"),
+        ratings: [],
+        complaints: (erpState.complaintRecords || []).filter(item => normalizeAdmission(item.studentId) === normalizeAdmission(student.admissionNo)),
+        subjects: []
+      };
+    }
+
+    function findStaffByLogin(erpState = {}, userId = "", userName = "") {
+      const account = (erpState.userAccessAccounts || []).find(item =>
+        normalizeText(item.loginId || item.id || item.username).toLowerCase() === normalizeText(userId).toLowerCase()
+      );
+      const staffName = normalizeText(account?.staffName || account?.name || userName);
+      return (erpState.staffMembers || erpState.staff || []).find(item =>
+        normalizeText(item.staffId || item.id).toLowerCase() === normalizeText(account?.staffId || userId).toLowerCase()
+      ) || (erpState.staffMembers || erpState.staff || []).find(item =>
+        normalizeText(item.name || item.staffName).toLowerCase() === staffName.toLowerCase()
+      ) || {};
+    }
+
+    function teacherSubjects(erpState = {}, staff = {}) {
+      const subjectNames = normalizeText(staff.teachingSubject).split(",").map(item => item.trim()).filter(Boolean);
+      const classAssignments = erpState.classSubjectAssignments || {};
+      const classes = Object.keys(classAssignments);
+      const fromAssignments = classes.flatMap(className => (classAssignments[className] || [])
+        .filter(subject => !subjectNames.length || subjectNames.some(name => name.toLowerCase() === normalizeText(subject).toLowerCase()))
+        .map(subject => ({className, subject})));
+      if (fromAssignments.length) return fromAssignments;
+      const fallbackClass = staff.assignedClass || classes[0] || "Class";
+      return (subjectNames.length ? subjectNames : (erpState.customSubjects || ["Subject"])).map(subject => ({className: fallbackClass, subject}));
+    }
+
+    function buildTeacherWorkspace(erpState = {}, userId = "") {
+      const staff = findStaffByLogin(erpState, userId, state.user?.name);
+      const subjects = teacherSubjects(erpState, staff);
+      state.user = {
+        ...state.user,
+        id: staff.staffId || state.user.id,
+        name: staff.name || state.user.name,
+        role: staff.designation || state.user.role,
+        department: staff.department || state.user.department,
+        assignedClass: staff.assignedClass || subjects[0]?.className || "-",
+        subjects,
+        initials: initials(staff.name || state.user.name),
+        photo: staff.photo || staff.staffPhoto || ""
+      };
+      const subjectSet = new Set(subjects.map(item => `${item.className}|${item.subject}`));
+      const timetable = (erpState.classTimetableEntries || [])
+        .filter(item => normalizeText(item.teacher || item.teacherName).toLowerCase().includes(normalizeText(state.user.name).toLowerCase()) || subjectSet.has(`${item.className || item.class}|${item.subject}`))
+        .map(item => ({
+          day: item.day || "Monday",
+          time: `${item.timeFrom || item.from || "-"} - ${item.timeTo || item.to || "-"}`,
+          subject: item.subject || "-",
+          room: item.roomNo || "-",
+          className: [item.className || item.class, item.section].filter(Boolean).join(" ")
+        }));
+      return {
+        students: studentList(erpState),
+        teachers: teacherList(erpState),
+        subjects,
+        timetable,
+        results: erpState.resultEntries || [],
+        syllabus: erpState.syllabusEntries || [],
+        homework: erpState.homework || [],
+        classwork: erpState.classworkEntries || [],
+        notices: erpState.notices || [],
+        complaints: erpState.complaintRecords || [],
+        teacherComplaints: [],
+        ratings: (erpState.teacherRatings || []).filter(item => normalizeText(item.teacherId) === normalizeText(state.user.id)),
+        leaves: (erpState.teacherLeaves || []).filter(item => normalizeText(item.teacherId) === normalizeText(state.user.id))
+      };
     }
 
     const studentModules = [
