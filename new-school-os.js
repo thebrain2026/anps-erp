@@ -3854,9 +3854,65 @@ function renderNoticeBoard() {
   }
 }
 
+function renderStaffDetailsFormOptions() {
+  if (!staffDetailsForm) return;
+  const staffRoleSelect = staffDetailsForm.elements.role;
+  const staffDepartmentSelect = staffDetailsForm.elements.department;
+  const staffDesignationSelect = staffDetailsForm.elements.designation;
+  const staffSubjectSelect = staffDetailsForm.elements.teachingSubject;
+  const roleOptions = [...new Set([
+    ...PROTECTED_ROLE_NAMES,
+    ...roles.map(role => role.name),
+    ...staffMembers.map(staff => staff.role),
+    ...userAccessAccounts.map(account => account.role)
+  ].map(value => String(value || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const departmentOptions = [...new Set([
+    ...departments.map(department => department.name),
+    ...staffMembers.map(staff => staff.department)
+  ].map(value => String(value || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const designationOptions = [...new Set([
+    ...DEFAULT_STAFF_DESIGNATIONS,
+    ...designations.map(designation => designation.name),
+    ...staffMembers.map(staff => staff.designation)
+  ].map(value => String(value || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  const subjectOptions = [...new Set([
+    ...getSubjectOptions(),
+    ...staffMembers.flatMap(staff => String(staff.teachingSubject || "").split(","))
+  ].map(value => String(value || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  if (staffRoleSelect) {
+    const currentValue = staffRoleSelect.value;
+    staffRoleSelect.innerHTML = `<option value="">Select Role</option>` + roleOptions
+      .map(role => `<option value="${escapeHtml(role)}">${escapeHtml(role)}</option>`)
+      .join("");
+    if (currentValue) setSelectValue(staffRoleSelect, currentValue);
+  }
+  if (staffDepartmentSelect) {
+    const currentValue = staffDepartmentSelect.value;
+    staffDepartmentSelect.innerHTML = `<option value="">Select Department</option>` + departmentOptions
+      .map(department => `<option value="${escapeHtml(department)}">${escapeHtml(department)}</option>`)
+      .join("");
+    if (currentValue) setSelectValue(staffDepartmentSelect, currentValue);
+  }
+  if (staffDesignationSelect) {
+    const currentValue = staffDesignationSelect.value;
+    staffDesignationSelect.innerHTML = `<option value="">Select Designation</option>` + designationOptions
+      .map(designation => `<option value="${escapeHtml(designation)}">${escapeHtml(designation)}</option>`)
+      .join("");
+    if (currentValue) setSelectValue(staffDesignationSelect, currentValue);
+  }
+  if (staffSubjectSelect) {
+    const currentValue = staffSubjectSelect.value;
+    staffSubjectSelect.innerHTML = `<option value="">Select Subject</option>` + subjectOptions
+      .map(subject => `<option value="${escapeHtml(subject)}">${escapeHtml(subject)}</option>`)
+      .join("");
+    if (currentValue) setSelectValue(staffSubjectSelect, currentValue);
+  }
+}
+
 function renderStaffDetails() {
   const rows = document.getElementById("staffDetailsRows");
   const summary = document.getElementById("staffSummary");
+  renderStaffDetailsFormOptions();
   if (!rows) return;
   rows.innerHTML = staffMembers.map(staff => `
     <tr>
@@ -3899,29 +3955,9 @@ function renderHrSetup() {
   const roleSummary = document.getElementById("roleSummary");
   const designationRows = document.getElementById("designationRows");
   const designationSummary = document.getElementById("designationSummary");
-  const staffRoleSelect = staffDetailsForm ? staffDetailsForm.elements.role : null;
-  const staffDepartmentSelect = staffDetailsForm ? staffDetailsForm.elements.department : null;
-  const staffDesignationSelect = staffDetailsForm ? staffDetailsForm.elements.designation : null;
   const designationDepartmentSelect = designationForm ? designationForm.elements.department : null;
 
-  if (staffRoleSelect) {
-    const currentValue = staffRoleSelect.value;
-    staffRoleSelect.innerHTML = `<option value="">Select Role</option>` + roles
-      .map(role => `<option value="${escapeHtml(role.name)}">${escapeHtml(role.name)}</option>`)
-      .join("");
-    if (currentValue && [...staffRoleSelect.options].some(option => option.value === currentValue)) {
-      staffRoleSelect.value = currentValue;
-    }
-  }
-  if (staffDepartmentSelect) {
-    const currentValue = staffDepartmentSelect.value;
-    staffDepartmentSelect.innerHTML = `<option value="">Select Department</option>` + departments
-      .map(department => `<option value="${escapeHtml(department.name)}">${escapeHtml(department.name)}</option>`)
-      .join("");
-    if (currentValue && [...staffDepartmentSelect.options].some(option => option.value === currentValue)) {
-      staffDepartmentSelect.value = currentValue;
-    }
-  }
+  renderStaffDetailsFormOptions();
   if (designationDepartmentSelect) {
     const currentValue = designationDepartmentSelect.value;
     designationDepartmentSelect.innerHTML = `<option value="">Select Department</option>` + departments
@@ -3929,15 +3965,6 @@ function renderHrSetup() {
       .join("");
     if (currentValue && [...designationDepartmentSelect.options].some(option => option.value === currentValue)) {
       designationDepartmentSelect.value = currentValue;
-    }
-  }
-  if (staffDesignationSelect) {
-    const currentValue = staffDesignationSelect.value;
-    staffDesignationSelect.innerHTML = `<option value="">Select Designation</option>` + designations
-      .map(designation => `<option value="${escapeHtml(designation.name)}">${escapeHtml(designation.name)}</option>`)
-      .join("");
-    if (currentValue && [...staffDesignationSelect.options].some(option => option.value === currentValue)) {
-      staffDesignationSelect.value = currentValue;
     }
   }
   renderStaffTeachingSubjectField();
@@ -4435,9 +4462,13 @@ function isTeacherDesignation(value = "") {
 
 function renderStaffTeachingSubjectField() {
   const field = document.getElementById("staffTeachingSubjectField");
-  const subjectOptions = document.getElementById("staffSubjectOptions");
-  if (subjectOptions) {
-    subjectOptions.innerHTML = getSubjectOptions().map(subject => `<option value="${escapeHtml(subject)}"></option>`).join("");
+  const subjectSelect = staffDetailsForm?.elements.teachingSubject;
+  if (subjectSelect) {
+    const currentValue = subjectSelect.value;
+    subjectSelect.innerHTML = `<option value="">Select Subject</option>` + getSubjectOptions()
+      .map(subject => `<option value="${escapeHtml(subject)}">${escapeHtml(subject)}</option>`)
+      .join("");
+    if (currentValue) setSelectValue(subjectSelect, currentValue);
   }
   if (!field || !staffDetailsForm) return;
   const isTeacher = isTeacherDesignation(staffDetailsForm.elements.designation?.value || "");

@@ -1010,7 +1010,9 @@
                 </select>
               </label>
               <label class="staff-teaching-subject-field" id="staffTeachingSubjectField" hidden>Teaching Subject
-                <input name="teachingSubject" list="staffSubjectOptions" placeholder="Mathematics / English / Bengali" />
+                <select name="teachingSubject" id="staffTeachingSubjectSelect">
+                  <option value="">Select Subject</option>
+                </select>
               </label>
               <label>Department
                 <select name="department" required>
@@ -1029,7 +1031,6 @@
               <label class="staff-address-field">Address
                 <textarea name="address" rows="2" placeholder="Full address"></textarea>
               </label>
-              <datalist id="staffSubjectOptions"></datalist>
               <button class="primary-action" type="submit">Add Staff</button>
             </form>
           </section>
