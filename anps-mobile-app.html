@@ -1,0 +1,1357 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#101a4a" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="ANPS App" />
+  <title>ANPS Mobile App</title>
+  <style>
+    :root {
+      --ink: #12172f;
+      --muted: #5d6578;
+      --deep: #101a4a;
+      --blue: #246bfe;
+      --cyan: #1bb6d9;
+      --mint: #22c8a6;
+      --rose: #f06c9b;
+      --gold: #f8bd45;
+      --green: #20a064;
+      --danger: #e25050;
+      --paper: rgba(255, 255, 255, .82);
+      --line: rgba(95, 107, 136, .14);
+      --shadow: 0 20px 48px rgba(16, 26, 74, .16);
+      color-scheme: light;
+    }
+
+    * { box-sizing: border-box; }
+    html { min-height: 100%; background: #eaf2ff; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      letter-spacing: 0;
+      background:
+        radial-gradient(circle at 12% 4%, rgba(36,107,254,.32), transparent 28%),
+        radial-gradient(circle at 88% 8%, rgba(240,108,155,.3), transparent 24%),
+        radial-gradient(circle at 50% 105%, rgba(34,200,166,.3), transparent 32%),
+        linear-gradient(145deg, #e8f5ff 0%, #fff1c9 34%, #ffe8f0 62%, #e7edff 100%);
+    }
+
+    button, input, textarea, select { font: inherit; }
+    button { cursor: pointer; }
+    .hidden { display: none !important; }
+
+    .shell {
+      width: min(100%, 520px);
+      min-height: 100dvh;
+      margin: 0 auto;
+      position: relative;
+      overflow-x: hidden;
+      background: linear-gradient(180deg, rgba(255,255,255,.84), rgba(239,246,255,.76) 48%, rgba(234,238,255,.94));
+      box-shadow: 0 20px 80px rgba(25,35,80,.18);
+    }
+
+    body.student-theme {
+      background:
+        radial-gradient(circle at 16% 6%, rgba(36,107,254,.34), transparent 28%),
+        radial-gradient(circle at 84% 10%, rgba(27,182,217,.28), transparent 26%),
+        radial-gradient(circle at 50% 104%, rgba(34,200,166,.3), transparent 32%),
+        linear-gradient(145deg, #e6f7ff 0%, #effbff 38%, #e9fff7 70%, #eef3ff 100%);
+    }
+
+    body.teacher-theme {
+      background:
+        radial-gradient(circle at 16% 6%, rgba(118,89,255,.34), transparent 28%),
+        radial-gradient(circle at 86% 12%, rgba(240,108,155,.32), transparent 26%),
+        radial-gradient(circle at 50% 104%, rgba(248,189,69,.28), transparent 34%),
+        linear-gradient(145deg, #f3edff 0%, #fff0f6 42%, #fff6df 72%, #eef1ff 100%);
+    }
+
+    body.student-theme .shell {
+      background: linear-gradient(180deg, rgba(238,250,255,.92), rgba(231,252,255,.78) 48%, rgba(230,255,247,.94));
+    }
+
+    body.teacher-theme .shell {
+      background: linear-gradient(180deg, rgba(249,245,255,.92), rgba(255,238,248,.78) 48%, rgba(255,248,226,.94));
+    }
+
+    .screen { min-height: 100dvh; padding: 22px 16px calc(24px + env(safe-area-inset-bottom)); }
+    .center-screen { display: grid; align-content: center; gap: 16px; }
+    #landingScreen {
+      position: relative;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 18% 12%, rgba(36,107,254,.34), transparent 25%),
+        radial-gradient(circle at 82% 18%, rgba(240,108,155,.32), transparent 25%),
+        radial-gradient(circle at 36% 92%, rgba(34,200,166,.3), transparent 27%),
+        linear-gradient(160deg, rgba(255,255,255,.48), rgba(255,244,202,.48) 38%, rgba(235,241,255,.64));
+    }
+
+    #landingScreen:before {
+      content: "";
+      position: absolute;
+      inset: 18px;
+      border-radius: 34px;
+      background:
+        linear-gradient(135deg, rgba(36,107,254,.12), transparent 36%),
+        linear-gradient(315deg, rgba(240,108,155,.16), transparent 42%);
+      border: 1px solid rgba(255,255,255,.6);
+      pointer-events: none;
+    }
+
+    #landingScreen > * { position: relative; z-index: 1; }
+
+    .brand-lockup { display: grid; justify-items: center; gap: 10px; text-align: center; }
+    .crest {
+      display: grid;
+      place-items: center;
+      width: 122px;
+      height: 122px;
+      border-radius: 28px;
+      background: linear-gradient(145deg, rgba(255,255,255,.98), rgba(255,255,255,.68));
+      border: 1px solid rgba(255,255,255,.78);
+      box-shadow: 0 22px 52px rgba(36,107,254,.2), 0 0 0 9px rgba(255,255,255,.28), 0 0 44px rgba(240,108,155,.22);
+      padding: 10px;
+    }
+
+    .crest img { width: 100%; height: 100%; object-fit: contain; }
+
+    h1, h2, h3, p { margin-top: 0; }
+    h1 { margin-bottom: 8px; font-size: clamp(2rem, 8vw, 3.08rem); line-height: .96; }
+    h2 { margin-bottom: 7px; font-size: 1.35rem; }
+    p { color: var(--muted); line-height: 1.45; font-weight: 680; }
+
+    .glass {
+      border: 1px solid rgba(255,255,255,.76);
+      border-radius: 26px;
+      background: rgba(255,255,255,.74);
+      backdrop-filter: blur(22px);
+      box-shadow: var(--shadow);
+    }
+
+    .landing-card { padding: 22px; }
+    #landingScreen .landing-card {
+      background:
+        linear-gradient(145deg, rgba(255,255,255,.82), rgba(255,255,255,.58)),
+        linear-gradient(135deg, rgba(36,107,254,.12), rgba(240,108,155,.12));
+      border-color: rgba(255,255,255,.86);
+    }
+
+    .maker-signature {
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid rgba(95,107,136,.12);
+      text-align: center;
+    }
+
+    .maker-signature b {
+      display: block;
+      color: var(--deep);
+      font-size: .92rem;
+      line-height: 1.1;
+    }
+
+    .maker-signature span {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: .72rem;
+      font-weight: 850;
+    }
+    .eyebrow {
+      margin: 0 0 8px;
+      color: var(--blue);
+      font-size: .73rem;
+      font-weight: 950;
+      text-transform: uppercase;
+    }
+
+    .role-options { display: grid; gap: 12px; margin-top: 18px; }
+    .role-card {
+      display: grid;
+      grid-template-columns: 54px 1fr 28px;
+      gap: 13px;
+      align-items: center;
+      min-height: 82px;
+      width: 100%;
+      padding: 12px;
+      border: 1px solid rgba(255,255,255,.76);
+      border-radius: 22px;
+      color: var(--ink);
+      background: rgba(255,255,255,.7);
+      box-shadow: 0 12px 28px rgba(16,26,74,.1);
+      text-align: left;
+      transition: transform .18s ease, box-shadow .18s ease;
+    }
+
+    .role-card:active { transform: scale(.98); }
+    .role-card.student { background: linear-gradient(135deg, rgba(255,255,255,.82), rgba(223,246,255,.86)); }
+    .role-card.teacher { background: linear-gradient(135deg, rgba(255,255,255,.82), rgba(255,232,246,.86)); }
+
+    .role-card b, .quick-row b, .student-row b { display: block; }
+    .role-card span, .quick-row span, .student-row span { color: var(--muted); font-size: .78rem; font-weight: 760; }
+    .role-icon, .module-icon, .quick-icon {
+      display: grid;
+      place-items: center;
+      width: 50px;
+      height: 50px;
+      border-radius: 17px;
+      color: #fff;
+      background: linear-gradient(135deg, var(--tile-a), var(--tile-b));
+      box-shadow: 0 10px 18px rgba(36,107,254,.18);
+      font-weight: 950;
+    }
+
+    .role-card.student { --tile-a: #246bfe; --tile-b: #1bb6d9; }
+    .role-card.teacher { --tile-a: #7659ff; --tile-b: #f06c9b; }
+    .arrow { color: var(--blue); font-size: 1.45rem; font-weight: 950; }
+
+    .login-card { padding: 20px; }
+    .form-grid { display: grid; gap: 12px; margin-top: 16px; }
+    label { display: grid; gap: 7px; color: var(--muted); font-size: .75rem; font-weight: 950; text-transform: uppercase; }
+    input, textarea, select {
+      width: 100%;
+      min-height: 46px;
+      border: 1px solid rgba(95,107,136,.2);
+      border-radius: 14px;
+      padding: 11px 12px;
+      color: var(--ink);
+      background: rgba(255,255,255,.9);
+      outline: 0;
+    }
+
+    textarea { min-height: 94px; resize: vertical; }
+    input:focus, textarea:focus, select:focus { border-color: rgba(36,107,254,.72); box-shadow: 0 0 0 4px rgba(36,107,254,.12); }
+
+    .primary, .ghost, .icon-btn, .tab, .seg-btn {
+      border: 0;
+      border-radius: 14px;
+      min-height: 44px;
+      font-weight: 900;
+    }
+
+    .primary {
+      display: inline-flex;
+      justify-content: center;
+      align-items: center;
+      width: 100%;
+      color: #fff;
+      background: linear-gradient(135deg, #246bfe, #7659ff 54%, #f06c9b);
+      box-shadow: 0 16px 28px rgba(36,107,254,.23);
+    }
+
+    .ghost {
+      color: var(--deep);
+      background: rgba(255,255,255,.7);
+      border: 1px solid var(--line);
+    }
+
+    .app-header {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      display: grid;
+      grid-template-columns: 46px 1fr 46px;
+      gap: 8px;
+      align-items: center;
+      min-height: 70px;
+      padding: calc(8px + env(safe-area-inset-top)) 12px 8px;
+      background: rgba(248,251,255,.86);
+      backdrop-filter: blur(20px);
+      border-bottom: 1px solid rgba(255,255,255,.76);
+    }
+
+    .icon-btn { width: 46px; color: var(--deep); background: rgba(255,255,255,.74); border: 1px solid var(--line); font-size: 1.1rem; }
+    .brand { min-width: 0; display: flex; justify-content: center; align-items: center; gap: 8px; text-align: left; }
+    .brand-logo { width: 42px; height: 42px; object-fit: contain; flex: 0 0 auto; }
+    .brand-text { min-width: 0; }
+    .brand b { display: block; font-size: .9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .brand span { display: block; color: var(--muted); font-size: .68rem; font-weight: 850; }
+
+    main { padding-bottom: calc(92px + env(safe-area-inset-bottom)); }
+    .view { display: none; animation: rise .22s ease; }
+    .view.active { display: block; }
+    @keyframes rise { from { transform: translateY(8px); opacity: .65; } to { transform: translateY(0); opacity: 1; } }
+
+    .hero {
+      margin: 12px;
+      padding: 18px;
+      border-radius: 28px;
+      color: #fff;
+      background: linear-gradient(135deg, rgba(16,26,74,.94), rgba(36,107,254,.84) 48%, rgba(240,108,155,.82));
+      box-shadow: var(--shadow);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .hero.student {
+      background:
+        radial-gradient(circle at 16% 18%, rgba(255,255,255,.24), transparent 25%),
+        linear-gradient(135deg, #0f3d91 0%, #246bfe 48%, #1bb6d9 100%);
+    }
+
+    .hero.teacher {
+      background:
+        radial-gradient(circle at 16% 18%, rgba(255,255,255,.24), transparent 25%),
+        linear-gradient(135deg, #23145e 0%, #7659ff 48%, #f06c9b 100%);
+    }
+    .profile-row { display: grid; grid-template-columns: 64px 1fr; gap: 13px; align-items: center; position: relative; z-index: 1; }
+    .avatar {
+      display: grid;
+      place-items: center;
+      width: 64px;
+      height: 64px;
+      border-radius: 22px;
+      color: var(--deep);
+      background: rgba(255,255,255,.88);
+      border: 1px solid rgba(255,255,255,.76);
+      font-weight: 950;
+      overflow: hidden;
+    }
+
+    .avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+    .name-line {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      min-width: 0;
+    }
+
+    .profile-row h2 { margin: 0 0 4px; font-size: 1.28rem; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .profile-row p { margin: 0; color: rgba(255,255,255,.82); font-weight: 800; }
+    .hero-rating {
+      display: none;
+      flex: 0 0 auto;
+      align-items: center;
+      min-height: 30px;
+      padding: 0 9px;
+      border-radius: 999px;
+      color: #fff;
+      background: rgba(255,255,255,.18);
+      border: 1px solid rgba(255,255,255,.28);
+      box-shadow: 0 10px 20px rgba(16,26,74,.14);
+      font-size: .76rem;
+      font-weight: 950;
+      white-space: nowrap;
+    }
+
+    .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 16px; }
+    .metric {
+      padding: 11px 8px;
+      border-radius: 18px;
+      background: rgba(255,255,255,.16);
+      border: 1px solid rgba(255,255,255,.2);
+      text-align: center;
+    }
+
+    .metric b { display: block; font-size: 1.2rem; }
+    .metric span { color: rgba(255,255,255,.78); font-size: .66rem; font-weight: 950; text-transform: uppercase; }
+
+    .section-title {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 12px;
+      padding: 4px 14px 8px;
+    }
+
+    .section-title h2 { margin: 0; font-size: 1.06rem; }
+    .section-title span { color: var(--muted); font-size: .75rem; font-weight: 850; }
+
+    .module-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 0 12px 14px; }
+    .module {
+      min-height: 92px;
+      padding: 9px 5px;
+      border: 1px solid rgba(255,255,255,.82);
+      border-radius: 18px;
+      color: var(--ink);
+      background: rgba(255,255,255,.72);
+      box-shadow: 0 12px 26px rgba(25,35,80,.1);
+      display: grid;
+      place-items: center;
+      gap: 7px;
+      text-align: center;
+    }
+
+    .module-icon { width: 42px; height: 42px; border-radius: 15px; }
+    .module b { font-size: .64rem; line-height: 1.08; }
+    .module:nth-child(1) { --tile-a: #246bfe; --tile-b: #1bb6d9; }
+    .module:nth-child(2) { --tile-a: #7659ff; --tile-b: #f06c9b; }
+    .module:nth-child(3) { --tile-a: #22c8a6; --tile-b: #20a064; }
+    .module:nth-child(4) { --tile-a: #f8bd45; --tile-b: #e57543; }
+    .module:nth-child(5) { --tile-a: #101a4a; --tile-b: #246bfe; }
+    .module:nth-child(6) { --tile-a: #f06c9b; --tile-b: #e25050; }
+    .module:nth-child(7) { --tile-a: #20a064; --tile-b: #8bd452; }
+    .module:nth-child(8) { --tile-a: #1bb6d9; --tile-b: #7659ff; }
+    .module[data-nav="rating"] .module-icon {
+      background: linear-gradient(135deg, #f8bd45, #f06c9b 58%, #7659ff);
+      color: #fff;
+      font-size: 1.12rem;
+      text-shadow: 0 2px 8px rgba(16,26,74,.22);
+    }
+    .module[data-nav="complaints"] .module-icon {
+      background: linear-gradient(135deg, #e25050, #f8bd45 54%, #246bfe);
+      color: #fff;
+      font-size: 1.02rem;
+      text-shadow: 0 2px 8px rgba(16,26,74,.22);
+    }
+    .module[data-nav="teacherComplaint"] .module-icon {
+      background: linear-gradient(135deg, #101a4a, #e25050 54%, #f8bd45);
+      color: #fff;
+      font-size: .94rem;
+      text-shadow: 0 2px 8px rgba(16,26,74,.22);
+    }
+    .module[data-nav="result"] .module-icon {
+      background: linear-gradient(135deg, #20a064, #1bb6d9 54%, #246bfe);
+      color: #fff;
+      font-size: .94rem;
+      text-shadow: 0 2px 8px rgba(16,26,74,.22);
+    }
+
+    .stack { display: grid; gap: 11px; padding: 0 12px 14px; }
+    .card {
+      border-radius: 20px;
+      padding: 14px;
+      background: rgba(255,255,255,.78);
+      border: 1px solid rgba(255,255,255,.84);
+      box-shadow: 0 13px 32px rgba(25,35,80,.1);
+    }
+
+    .card-head { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
+    .card h3 { margin-bottom: 4px; font-size: 1rem; }
+    .card p { margin-bottom: 0; color: var(--muted); font-weight: 650; }
+    .badge, .status {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 28px;
+      padding: 0 9px;
+      border-radius: 999px;
+      font-size: .68rem;
+      font-weight: 950;
+      white-space: nowrap;
+    }
+
+    .badge { color: var(--deep); background: rgba(36,107,254,.1); }
+    .status.ok { color: #087044; background: rgba(32,160,100,.13); }
+    .status.warn { color: #9a5d00; background: rgba(248,189,69,.2); }
+    .status.bad { color: #a92727; background: rgba(226,80,80,.14); }
+
+    .quick-row { display: grid; grid-template-columns: 46px 1fr auto; gap: 11px; align-items: center; }
+    .quick-icon { width: 46px; height: 46px; border-radius: 16px; background: linear-gradient(135deg, #246bfe, #22c8a6); overflow: hidden; }
+    .quick-icon img { width: 100%; height: 100%; object-fit: cover; }
+    .student-row {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 10px;
+      align-items: center;
+      min-height: 58px;
+      padding: 10px 0;
+      border-top: 1px solid rgba(95,107,136,.12);
+    }
+
+    .student-row:first-child { border-top: 0; padding-top: 0; }
+    .toggle { display: flex; gap: 6px; }
+    .toggle button {
+      width: 38px;
+      min-height: 34px;
+      border: 0;
+      border-radius: 12px;
+      color: var(--muted);
+      background: rgba(89,97,117,.1);
+      font-size: .75rem;
+      font-weight: 950;
+    }
+
+    .toggle button.active[data-mark="present"] { color: #fff; background: var(--green); }
+    .toggle button.active[data-mark="absent"] { color: #fff; background: var(--danger); }
+    .toggle button.active[data-mark="late"] { color: #422900; background: var(--gold); }
+
+    .segmented {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 7px;
+      margin-bottom: 12px;
+      padding: 5px;
+      border-radius: 18px;
+      background: rgba(255,255,255,.6);
+      border: 1px solid rgba(95,107,136,.12);
+    }
+
+    .seg-btn { min-height: 38px; color: var(--muted); background: transparent; }
+    .seg-btn.active { color: #fff; background: linear-gradient(135deg, var(--deep), var(--blue)); }
+
+    .bottom-nav {
+      position: fixed;
+      left: 50%;
+      bottom: 0;
+      z-index: 30;
+      width: min(100%, 520px);
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 6px;
+      padding: 8px 10px calc(8px + env(safe-area-inset-bottom));
+      background: rgba(248,251,255,.88);
+      backdrop-filter: blur(22px);
+      border-top: 1px solid rgba(255,255,255,.78);
+      transform: translateX(-50%);
+    }
+
+    .tab { display: grid; place-items: center; gap: 3px; min-height: 58px; color: var(--muted); background: transparent; font-size: .67rem; }
+    .tab i { font-style: normal; font-size: 1.1rem; }
+    .tab.active { color: #fff; background: linear-gradient(135deg, var(--deep), var(--blue)); }
+    body.student-theme .tab.active { background: linear-gradient(135deg, #0f3d91, #1bb6d9); }
+    body.teacher-theme .tab.active { background: linear-gradient(135deg, #40238f, #f06c9b); }
+
+    .drawer-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 35;
+      background: rgba(15,23,42,.42);
+      opacity: 0;
+      pointer-events: none;
+      transition: .2s ease;
+    }
+
+    .drawer {
+      position: fixed;
+      z-index: 36;
+      top: 0;
+      bottom: 0;
+      left: max(0px, calc(50% - 260px));
+      width: min(86vw, 330px);
+      padding: calc(18px + env(safe-area-inset-top)) 14px 18px;
+      background:
+        radial-gradient(circle at 18% 4%, rgba(36,107,254,.2), transparent 28%),
+        radial-gradient(circle at 86% 12%, rgba(240,108,155,.18), transparent 26%),
+        linear-gradient(180deg, rgba(248,251,255,.98), rgba(242,247,255,.94));
+      backdrop-filter: blur(24px);
+      box-shadow: 24px 0 52px rgba(15,23,42,.22);
+      transform: translateX(-105%);
+      transition: .23s ease;
+      overflow: auto;
+    }
+
+    .drawer-open .drawer-backdrop { opacity: 1; pointer-events: auto; }
+    .drawer-open .drawer { transform: translateX(0); }
+    body.student-theme .drawer {
+      background:
+        radial-gradient(circle at 16% 5%, rgba(36,107,254,.26), transparent 30%),
+        radial-gradient(circle at 88% 12%, rgba(27,182,217,.22), transparent 28%),
+        linear-gradient(180deg, rgba(239,251,255,.98), rgba(231,255,247,.95));
+    }
+    body.teacher-theme .drawer {
+      background:
+        radial-gradient(circle at 16% 5%, rgba(118,89,255,.26), transparent 30%),
+        radial-gradient(circle at 88% 12%, rgba(240,108,155,.24), transparent 28%),
+        linear-gradient(180deg, rgba(250,246,255,.98), rgba(255,242,247,.95));
+    }
+    .drawer-title {
+      padding: 12px;
+      border: 1px solid rgba(255,255,255,.74);
+      border-radius: 20px;
+      background:
+        linear-gradient(135deg, rgba(255,255,255,.82), rgba(255,255,255,.58)),
+        linear-gradient(135deg, rgba(36,107,254,.16), rgba(240,108,155,.14));
+      box-shadow: 0 14px 32px rgba(16,26,74,.12);
+    }
+    body.student-theme .drawer-title {
+      background: linear-gradient(135deg, rgba(255,255,255,.84), rgba(222,249,255,.88));
+    }
+    body.teacher-theme .drawer-title {
+      background: linear-gradient(135deg, rgba(255,255,255,.84), rgba(255,232,246,.88));
+    }
+    .drawer-title b {
+      display: block;
+      color: var(--deep);
+      font-size: .98rem;
+      line-height: 1.12;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      text-shadow: 0 1px 0 rgba(255,255,255,.72), 0 8px 18px rgba(36,107,254,.16);
+    }
+    body.teacher-theme .drawer-title b {
+      color: #40238f;
+      text-shadow: 0 1px 0 rgba(255,255,255,.72), 0 8px 18px rgba(240,108,155,.18);
+    }
+    body.student-theme .drawer-title b {
+      color: #0f3d91;
+      text-shadow: 0 1px 0 rgba(255,255,255,.72), 0 8px 18px rgba(27,182,217,.18);
+    }
+    .drawer-title span { color: var(--muted); font-size: .78rem; font-weight: 760; }
+    .drawer-profile-row {
+      display: grid;
+      grid-template-columns: 44px 1fr;
+      gap: 10px;
+      align-items: center;
+      min-width: 0;
+    }
+    .drawer-photo {
+      display: grid;
+      place-items: center;
+      width: 44px;
+      height: 44px;
+      border-radius: 15px;
+      color: #fff;
+      background: linear-gradient(135deg, var(--deep), var(--blue));
+      font-weight: 950;
+      overflow: hidden;
+    }
+    .drawer-photo img { width: 100%; height: 100%; object-fit: cover; }
+    .profile-link {
+      margin-top: 10px;
+      width: auto;
+      min-height: 34px;
+      padding: 0 12px;
+      border: 0;
+      border-radius: 12px;
+      color: #fff;
+      background: linear-gradient(135deg, var(--deep), var(--blue));
+      font-size: .78rem;
+      font-weight: 900;
+    }
+    body.student-theme .profile-link { background: linear-gradient(135deg, #0f3d91, #1bb6d9); }
+    body.teacher-theme .profile-link { background: linear-gradient(135deg, #40238f, #f06c9b); }
+    .drawer-list { display: grid; gap: 7px; margin-top: 12px; }
+    .drawer-link {
+      width: 100%;
+      min-height: 48px;
+      padding: 0 12px;
+      border: 0;
+      border-radius: 16px;
+      color: var(--ink);
+      background: rgba(255,255,255,.7);
+      border: 1px solid rgba(255,255,255,.74);
+      box-shadow: 0 10px 22px rgba(16,26,74,.07);
+      font-weight: 900;
+      text-align: left;
+    }
+
+    .drawer-link:nth-child(3n + 1) { background: linear-gradient(135deg, rgba(255,255,255,.78), rgba(225,246,255,.76)); }
+    .drawer-link:nth-child(3n + 2) { background: linear-gradient(135deg, rgba(255,255,255,.78), rgba(255,236,247,.76)); }
+    .drawer-link:nth-child(3n) { background: linear-gradient(135deg, rgba(255,255,255,.78), rgba(232,255,245,.76)); }
+
+    .drawer-link.active { color: #fff; background: linear-gradient(135deg, var(--deep), var(--blue)); }
+    body.student-theme .drawer-link.active { background: linear-gradient(135deg, #0f3d91, #1bb6d9); }
+    body.teacher-theme .drawer-link.active { background: linear-gradient(135deg, #40238f, #f06c9b); }
+    .drawer-link.danger { color: #a92727; background: rgba(226,80,80,.1); }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: calc(88px + env(safe-area-inset-bottom));
+      z-index: 60;
+      width: min(92vw, 440px);
+      padding: 12px 14px;
+      border-radius: 16px;
+      color: #fff;
+      background: rgba(16,26,74,.96);
+      box-shadow: 0 18px 38px rgba(16,26,74,.28);
+      transform: translate(-50%, 16px);
+      opacity: 0;
+      pointer-events: none;
+      transition: .2s ease;
+      font-weight: 850;
+    }
+
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+    @media (max-width: 380px) {
+      .module-grid { grid-template-columns: repeat(3, 1fr); }
+      .metrics { grid-template-columns: 1fr 1fr; }
+    }
+
+    @media (min-width: 760px) {
+      .shell { margin-top: 18px; margin-bottom: 18px; min-height: calc(100dvh - 36px); border-radius: 34px; }
+      .bottom-nav { bottom: 18px; border-radius: 24px 24px 34px 34px; }
+      .app-header { border-radius: 34px 34px 0 0; }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <section class="screen center-screen" id="landingScreen">
+      <div class="brand-lockup">
+        <div class="crest"><img src="./assets/anps-logo.png" alt="ANPS school logo" /></div>
+        <div>
+          <p class="eyebrow">Alfred Nobel Public School</p>
+          <h1>ANPS App</h1>
+          <p>Student and teacher portal in one Play Store ready mobile shell.</p>
+        </div>
+      </div>
+      <article class="landing-card glass">
+        <h2>Choose Login</h2>
+        <div class="role-options">
+          <button class="role-card student" data-select-role="student">
+            <span class="role-icon">ST</span>
+            <span><b>Student Login</b></span>
+            <span class="arrow">›</span>
+          </button>
+          <button class="role-card teacher" data-select-role="teacher">
+            <span class="role-icon">TR</span>
+            <span><b>Teacher Login</b></span>
+            <span class="arrow">›</span>
+          </button>
+        </div>
+        <div class="maker-signature" aria-label="Software developer branding">
+          <b>The Brain School App</b>
+          <span>Innovation by Samrat Hazra</span>
+        </div>
+      </article>
+    </section>
+
+    <section class="screen center-screen hidden" id="loginScreen">
+      <article class="login-card glass">
+        <p class="eyebrow" id="loginEyebrow">Login</p>
+        <h1 id="loginTitle">Login</h1>
+        <p id="loginHelp">Enter login id and password.</p>
+        <form class="form-grid" id="loginForm">
+          <label>
+            <span id="loginIdLabel">Login ID</span>
+            <input id="loginId" autocomplete="username" />
+          </label>
+          <label>
+            Password
+            <input id="password" type="password" autocomplete="current-password" />
+          </label>
+          <button class="primary" type="submit">Login</button>
+          <button class="ghost" type="button" id="backToLanding">Back</button>
+        </form>
+      </article>
+    </section>
+
+    <section id="appScreen" class="hidden">
+      <header class="app-header">
+        <button class="icon-btn" id="menuBtn" aria-label="Open menu">☰</button>
+        <div class="brand">
+          <img class="brand-logo" src="./assets/anps-logo.png" alt="ANPS school logo" />
+          <span class="brand-text">
+            <b id="appTitle">ANPS App</b>
+            <span id="appSubtitle">Academic portal</span>
+          </span>
+        </div>
+        <button class="icon-btn" id="syncBtn" aria-label="Sync">↻</button>
+      </header>
+
+      <div class="drawer-backdrop" id="drawerBackdrop"></div>
+      <aside class="drawer" id="drawer" aria-label="App menu">
+        <div class="drawer-title">
+          <div class="drawer-profile-row">
+            <div class="drawer-photo" id="drawerPhoto">ST</div>
+            <div>
+              <b id="drawerName">User</b>
+              <span id="drawerMeta">Role based access</span>
+            </div>
+          </div>
+          <button class="profile-link" type="button" data-nav="profile">View Profile</button>
+        </div>
+        <div class="drawer-list" id="drawerLinks"></div>
+        <div class="drawer-list">
+          <button class="drawer-link danger" id="logoutBtn">Logout</button>
+        </div>
+      </aside>
+
+      <main>
+        <section class="view active" id="dashboardView">
+          <article class="hero" id="heroCard">
+            <div class="profile-row">
+              <div class="avatar" id="userAvatar">ST</div>
+              <div>
+                <div class="name-line">
+                  <h2 id="userName">User</h2>
+                  <span class="hero-rating" id="heroRating">★ 0.0</span>
+                </div>
+                <p id="userMeta">Profile</p>
+              </div>
+            </div>
+            <div class="metrics" id="metricGrid"></div>
+          </article>
+          <div class="section-title">
+            <h2 id="moduleTitle">Dashboard</h2>
+            <span id="moduleScope">Role filtered</span>
+          </div>
+          <div class="module-grid" id="moduleGrid"></div>
+          <div class="section-title">
+            <h2 id="quickTitle">Today</h2>
+            <span id="todayLabel"></span>
+          </div>
+          <div class="stack" id="quickList"></div>
+        </section>
+
+        <section class="view" id="profileView">
+          <div class="section-title"><h2>Profile</h2><span id="profileScope"></span></div>
+          <div class="stack" id="profileList"></div>
+        </section>
+
+        <section class="view" id="feesView">
+          <div class="section-title"><h2>Fees</h2><span id="feesTotal"></span></div>
+          <div class="stack" id="feesList"></div>
+        </section>
+
+        <section class="view" id="receiptView">
+          <div class="section-title"><h2>Receipt</h2><span>Paid records</span></div>
+          <div class="stack" id="receiptList"></div>
+        </section>
+
+        <section class="view" id="resultView">
+          <div class="section-title"><h2>Result</h2><span id="resultTotal"></span></div>
+          <div class="stack" id="resultSummary"></div>
+          <div class="stack" id="resultList"></div>
+        </section>
+
+        <section class="view" id="timetableView">
+          <div class="section-title"><h2>Timetable</h2><span>Own schedule</span></div>
+          <div class="stack" id="timetableList"></div>
+        </section>
+
+        <section class="view" id="syllabusView">
+          <div class="section-title"><h2 id="syllabusTitle">Syllabus</h2><span id="syllabusTotal"></span></div>
+          <div class="stack" id="syllabusFormHost"></div>
+          <div class="stack" id="syllabusList"></div>
+        </section>
+
+        <section class="view" id="homeworkView">
+          <div class="section-title"><h2 id="homeworkTitle">Homework</h2><span id="homeworkTotal"></span></div>
+          <div class="stack" id="homeworkFormHost"></div>
+          <div class="stack" id="homeworkList"></div>
+        </section>
+
+        <section class="view" id="classworkView">
+          <div class="section-title"><h2 id="classworkTitle">Classwork</h2><span id="classworkTotal"></span></div>
+          <div class="stack" id="classworkFormHost"></div>
+          <div class="stack" id="classworkList"></div>
+        </section>
+
+        <section class="view" id="noticeView">
+          <div class="section-title"><h2>Notice</h2><span id="noticeTotal"></span></div>
+          <div class="stack" id="noticeFormHost"></div>
+          <div class="stack" id="noticeList"></div>
+        </section>
+
+        <section class="view" id="attendanceView">
+          <div class="section-title"><h2>Attendance</h2><span id="attendanceScope"></span></div>
+          <div class="stack" id="attendanceHost"></div>
+        </section>
+
+        <section class="view" id="subjectsView">
+          <div class="section-title"><h2>Assigned Subjects</h2><span>Teacher only</span></div>
+          <div class="stack" id="subjectsList"></div>
+        </section>
+
+        <section class="view" id="complaintsView">
+          <div class="section-title"><h2>Complaints</h2><span id="complaintTotal"></span></div>
+          <div class="stack" id="complaintFormHost"></div>
+          <div class="stack" id="complaintList"></div>
+        </section>
+
+        <section class="view" id="teacherComplaintView">
+          <div class="section-title"><h2>Teacher Complaint</h2><span id="teacherComplaintTotal"></span></div>
+          <div class="stack" id="teacherComplaintList"></div>
+        </section>
+
+        <section class="view" id="ratingView">
+          <div class="section-title"><h2 id="ratingTitle">Teacher Rating</h2><span id="ratingTotal"></span></div>
+          <div class="stack" id="ratingFormHost"></div>
+          <div class="stack" id="ratingList"></div>
+        </section>
+
+        <section class="view" id="leaveView">
+          <div class="section-title"><h2>Apply Leave</h2><span id="leaveTotal"></span></div>
+          <div class="stack" id="leaveFormHost"></div>
+          <div class="stack" id="leaveList"></div>
+        </section>
+      </main>
+
+      <nav class="bottom-nav" id="bottomNav" aria-label="Bottom navigation"></nav>
+    </section>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const AppConfig = {
+      mode: "api",
+      apiBaseUrl: "",
+      tokenKey: "anps_mobile_token",
+      roleKey: "anps_mobile_role",
+      userKey: "anps_mobile_user"
+    };
+
+    const todayName = new Intl.DateTimeFormat("en-US", { weekday: "long" }).format(new Date());
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const $ = selector => document.querySelector(selector);
+    let state = { role: null, user: null, workspace: null, attendanceClass: "", language: "en" };
+
+    const AppApi = {
+      async login(role, loginId, password) {
+        if (AppConfig.apiBaseUrl) {
+          const res = await fetch(`${AppConfig.apiBaseUrl}/${role}/login`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ loginId, password })
+          });
+          if (!res.ok) throw new Error("Login failed");
+          return res.json();
+        }
+        throw new Error("ERP API not connected yet");
+      },
+      async workspace(role, userId) {
+        if (AppConfig.apiBaseUrl) {
+          const token = localStorage.getItem(AppConfig.tokenKey);
+          const res = await fetch(`${AppConfig.apiBaseUrl}/${role}/workspace?userId=${encodeURIComponent(userId)}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (!res.ok) throw new Error("Workspace load failed");
+          return res.json();
+        }
+        throw new Error("ERP API not connected yet");
+      },
+      async create(collection, record) {
+        if (AppConfig.apiBaseUrl) {
+          const token = localStorage.getItem(AppConfig.tokenKey);
+          const res = await fetch(`${AppConfig.apiBaseUrl}/${state.role}/${collection}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify(record)
+          });
+          if (!res.ok) throw new Error("Save failed");
+          return res.json();
+        }
+        throw new Error("ERP API not connected yet");
+      }
+    }
+
+    const studentModules = [
+      { id: "fees", label: "Fees", icon: "₹" },
+      { id: "receipt", label: "Receipt", icon: "RC" },
+      { id: "result", label: "Result", icon: "RS" },
+      { id: "timetable", label: "Timetable", icon: "TT" },
+      { id: "syllabus", label: "Syllabus", icon: "SY" },
+      { id: "homework", label: "Homework", icon: "HW" },
+      { id: "classwork", label: "Classwork", icon: "CW" },
+      { id: "notice", label: "Notice", icon: "NT" },
+      { id: "attendance", label: "Attendance", icon: "AT" },
+      { id: "rating", label: "Teacher Rating", icon: "★" },
+      { id: "complaints", label: "Academic Complaint", icon: "!" },
+      { id: "teacherComplaint", label: "Teacher Complaint", icon: "TC" }
+    ];
+
+    const teacherModules = [
+      { id: "dashboard", label: "Today Classes", icon: "TC" },
+      { id: "timetable", label: "My Timetable", icon: "TT" },
+      { id: "subjects", label: "Assigned", icon: "AS" },
+      { id: "result", label: "Result Entry", icon: "RS" },
+      { id: "syllabus", label: "Syllabus Entry", icon: "SY" },
+      { id: "homework", label: "Homework Entry", icon: "HW" },
+      { id: "classwork", label: "Classwork Entry", icon: "CW" },
+      { id: "notice", label: "Notice", icon: "NT" },
+      { id: "complaints", label: "Complaints", icon: "CP" },
+      { id: "attendance", label: "Attendance", icon: "AT" },
+      { id: "rating", label: "Ratings", icon: "★" },
+      { id: "leave", label: "Apply Leave", icon: "LV" }
+    ];
+
+    function toast(message) {
+      const el = $("#toast");
+      el.textContent = message;
+      el.classList.add("show");
+      window.setTimeout(() => el.classList.remove("show"), 1700);
+    }
+
+    function card({ title, meta, body, badge, status = "ok" }) {
+      return `<article class="card"><div class="card-head"><div><h3>${title}</h3><p>${meta}</p></div>${badge ? `<span class="status ${status}">${badge}</span>` : ""}</div>${body ? `<p>${body}</p>` : ""}</article>`;
+    }
+
+    function photoMarkup(user) {
+      if (!user.photo) return user.initials;
+      return `<img src="${user.photo}" alt="${user.name} photo" onerror="this.replaceWith(document.createTextNode('${user.initials}'))">`;
+    }
+
+    function localized(item, key) {
+      if (state.language === "bn" && item[`${key}Bn`]) return item[`${key}Bn`];
+      return item[key];
+    }
+
+    function stars(value) {
+      const score = Math.round(Number(value) || 0);
+      return "★★★★★".slice(0, score) + "☆☆☆☆☆".slice(0, 5 - score);
+    }
+
+    function ratingSummary(ratings) {
+      if (!ratings.length) return { avg: "0.0", count: 0 };
+      const total = ratings.reduce((sum, item) => sum + Number(item.rating || 0), 0);
+      return { avg: (total / ratings.length).toFixed(1), count: ratings.length };
+    }
+
+    function resultSubjectList(result) {
+      return `<div class="stack" style="padding:10px 0 0">${(result.subjects || []).map(subject => `<div class="student-row"><div><b>${subject.subject}</b><span>${subject.marks}/${subject.max}</span></div><span class="badge">${subject.grade}</span></div>`).join("")}</div>`;
+    }
+
+    function languageControl() {
+      return `<article class="card"><div class="segmented"><button class="seg-btn ${state.language === "en" ? "active" : ""}" data-lang="en">English</button><button class="seg-btn ${state.language === "bn" ? "active" : ""}" data-lang="bn">বাংলা</button></div></article>`;
+    }
+
+    function bindLanguageControls() {
+      document.querySelectorAll("[data-lang]").forEach(btn => btn.addEventListener("click", () => {
+        state.language = btn.dataset.lang;
+        renderStudentViews();
+        toast(state.language === "bn" ? "বাংলা চালু হয়েছে" : "English enabled");
+      }));
+    }
+
+    function showScreen(name) {
+      $("#landingScreen").classList.toggle("hidden", name !== "landing");
+      $("#loginScreen").classList.toggle("hidden", name !== "login");
+      $("#appScreen").classList.toggle("hidden", name !== "app");
+    }
+
+    function setupLogin(role) {
+      state.role = role;
+      $("#loginEyebrow").textContent = role === "student" ? "Student Login" : "Teacher Login";
+      $("#loginTitle").textContent = role === "student" ? "Student Portal" : "Teacher Portal";
+      $("#loginHelp").textContent = role === "student" ? "ERP admission no/login id diye login korun." : "ERP teacher/staff login id diye login korun.";
+      $("#loginIdLabel").textContent = role === "student" ? "Admission No / Login ID" : "Teacher / Staff Login ID";
+      $("#loginId").value = "";
+      $("#password").value = "";
+      showScreen("login");
+    }
+
+    function openView(id) {
+      document.querySelectorAll(".view").forEach(view => view.classList.toggle("active", view.id === `${id}View`));
+      document.querySelectorAll("[data-nav]").forEach(btn => btn.classList.toggle("active", btn.dataset.nav === id));
+      document.body.classList.remove("drawer-open");
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function renderNav(modules) {
+      const bottom = state.role === "student"
+        ? [{ id: "dashboard", label: "Home", icon: "⌂" }, { id: "fees", label: "Fees", icon: "₹" }, { id: "homework", label: "Work", icon: "✎" }, { id: "classwork", label: "Class", icon: "□" }, { id: "notice", label: "Notice", icon: "!" }]
+        : [{ id: "dashboard", label: "Home", icon: "⌂" }, { id: "timetable", label: "Time", icon: "□" }, { id: "homework", label: "Work", icon: "✎" }, { id: "classwork", label: "Class", icon: "CW" }, { id: "attendance", label: "Attend", icon: "✓" }];
+      $("#bottomNav").innerHTML = bottom.map(item => `<button class="tab ${item.id === "dashboard" ? "active" : ""}" data-nav="${item.id}"><i>${item.icon}</i><span>${item.label}</span></button>`).join("");
+      $("#drawerLinks").innerHTML = modules.map(item => `<button class="drawer-link" data-nav="${item.id}">${item.label}</button>`).join("");
+      document.querySelectorAll("[data-nav]").forEach(btn => btn.addEventListener("click", () => openView(btn.dataset.nav)));
+    }
+
+    function renderDashboard() {
+      const user = state.user;
+      const ws = state.workspace;
+      const isTeacher = state.role === "teacher";
+      const modules = isTeacher ? teacherModules : studentModules;
+      const todays = ws.timetable.filter(item => item.day === todayName);
+      $("#appTitle").textContent = "Alfred Nobel Public School";
+      $("#appSubtitle").textContent = isTeacher ? `Teacher Portal | ${user.role} - ${user.department}` : `Student Portal | ${user.className} - Roll ${user.roll}`;
+      $("#heroCard").classList.toggle("teacher", isTeacher);
+      $("#heroCard").classList.toggle("student", !isTeacher);
+      $("#userAvatar").innerHTML = photoMarkup(user);
+      $("#userName").textContent = user.name;
+      $("#userMeta").textContent = isTeacher ? `${user.department} | ${user.assignedClass}` : `${user.id} | ${user.className}`;
+      const heroRating = $("#heroRating");
+      if (isTeacher) {
+        const summary = ratingSummary(ws.ratings || []);
+        heroRating.textContent = `★ ${summary.avg}`;
+        heroRating.style.display = "inline-flex";
+      } else {
+        heroRating.style.display = "none";
+      }
+      $("#drawerPhoto").innerHTML = photoMarkup(user);
+      $("#drawerName").textContent = user.name;
+      $("#drawerMeta").textContent = isTeacher ? `${user.id} - ${user.role}` : `${user.id} - Student`;
+      $("#moduleTitle").textContent = isTeacher ? "Teacher Dashboard" : "Student Dashboard";
+      $("#moduleScope").textContent = isTeacher ? "Teacher only" : "Student only";
+      $("#quickTitle").textContent = isTeacher ? "Today Classes" : "Today Schedule";
+      $("#todayLabel").textContent = todayName;
+
+      $("#metricGrid").innerHTML = isTeacher
+        ? `<div class="metric"><b>${todays.length}</b><span>Today</span></div><div class="metric"><b>${ws.subjects.length}</b><span>Subjects</span></div><div class="metric"><b>${ws.students.length}</b><span>Students</span></div>`
+        : `<div class="metric"><b>${user.attendance}</b><span>Attendance</span></div><div class="metric"><b>₹${user.feesDue}</b><span>Due</span></div><div class="metric"><b>${ws.classwork.length}</b><span>Classwork</span></div>`;
+
+      $("#moduleGrid").innerHTML = modules.map(item => `<button class="module" data-nav="${item.id}"><span class="module-icon">${item.icon}</span><b>${item.label}</b></button>`).join("");
+      $("#quickList").innerHTML = todays.length
+        ? todays.map(item => card({ title: `${item.time} | ${isTeacher ? item.className : item.subject}`, meta: isTeacher ? `${item.subject} - ${item.room}` : `${item.room}`, badge: "Today" })).join("")
+        : card({ title: "No class scheduled today", meta: "Schedule empty for today.", badge: "Free", status: "warn" });
+      renderNav(modules);
+    }
+
+    function renderStudentViews() {
+      const user = state.user;
+      const ws = state.workspace;
+      $("#profileScope").textContent = user.id;
+      $("#profileList").innerHTML = [
+        `<article class="card quick-row"><span class="quick-icon">${photoMarkup(user)}</span><div><b>${user.name}</b><span>${user.id} | ${user.className}</span></div><span class="badge">Photo</span></article>`,
+        card({ title: "Student Profile", meta: `${user.name} | ${user.className}`, body: `Roll ${user.roll}, Guardian: ${user.guardian}`, badge: "Active" })
+      ].join("");
+      $("#feesTotal").textContent = user.feesDue ? `₹${user.feesDue} due` : "Clear";
+      $("#feesList").innerHTML = card({ title: "Current Fees Status", meta: user.feesDue ? "Payment pending" : "No due amount", body: `Outstanding amount: ₹${user.feesDue}`, badge: user.feesDue ? "Due" : "Paid", status: user.feesDue ? "warn" : "ok" });
+      $("#receiptList").innerHTML = ws.receipts.map(item => card({ title: item.receiptNo, meta: `${item.date} | ${item.mode}`, body: `Amount paid: ₹${item.amount}`, badge: "Paid" })).join("");
+      $("#resultTotal").textContent = ws.results.length ? `${ws.results.length} published` : "Not published";
+      $("#resultSummary").innerHTML = ws.results.length
+        ? ws.results.map(result => card({ title: `${result.exam} | ${result.grade}`, meta: `${result.total}/${result.maxTotal} | ${result.percentage}`, body: `Status: ${result.status}`, badge: "Published" })).join("")
+        : card({ title: "Result Not Published", meta: "ERP theke result publish hole ekhane dekhabe.", body: "Your marksheet will appear here after school publishes it.", badge: "Pending", status: "warn" });
+      $("#resultList").innerHTML = ws.results.map(result => `<article class="card"><div class="card-head"><div><h3>${result.exam}</h3><p>${result.className} | ${result.percentage}</p></div><span class="status ok">${result.grade}</span></div>${resultSubjectList(result)}</article>`).join("");
+      $("#timetableList").innerHTML = ws.timetable.map(item => card({ title: `${item.day}, ${item.time}`, meta: `${item.subject} - ${item.room}`, badge: item.className })).join("");
+      $("#syllabusTitle").textContent = "Syllabus";
+      $("#syllabusFormHost").innerHTML = "";
+      $("#syllabusTotal").textContent = `${ws.syllabus.length} topics`;
+      $("#syllabusList").innerHTML = ws.syllabus.map(item => card({ title: `${item.subject}`, meta: item.topic, badge: item.progress, status: item.progress === "Completed" ? "ok" : "warn" })).join("");
+      $("#homeworkTitle").textContent = "Homework";
+      $("#homeworkFormHost").innerHTML = "";
+      $("#homeworkTotal").textContent = `${ws.homework.length} assigned`;
+      $("#homeworkList").innerHTML = ws.homework.map(item => card({ title: item.subject, meta: `Due ${item.due}`, body: item.text, badge: "Active" })).join("");
+      $("#classworkTitle").textContent = "Classwork";
+      $("#classworkFormHost").innerHTML = "";
+      $("#classworkTotal").textContent = `${ws.classwork.length} entries`;
+      $("#classworkList").innerHTML = ws.classwork.map(item => card({ title: item.subject, meta: item.date, body: item.text, badge: "Classwork" })).join("");
+      $("#noticeFormHost").innerHTML = languageControl();
+      $("#noticeTotal").textContent = `${ws.notices.length} notices`;
+      $("#noticeList").innerHTML = ws.notices.map(item => card({ title: localized(item, "title"), meta: `${item.audience} | ${item.date}`, body: localized(item, "message"), badge: state.language === "bn" ? "নোটিশ" : "Notice" })).join("");
+      $("#attendanceScope").textContent = user.attendance;
+      $("#attendanceHost").innerHTML = card({ title: "Attendance Summary", meta: `${user.attendance} attendance`, body: "Month-wise attendance API can be connected here.", badge: "Student" });
+      $("#ratingTitle").textContent = "Teacher Rating";
+      $("#ratingTotal").textContent = "Anonymous";
+      $("#ratingFormHost").innerHTML = `<article class="card"><form class="form-grid" id="studentRatingForm"><label>Teacher<select id="ratingTeacher">${ws.teachers.map(teacher => `<option value="${teacher.id}">${teacher.name} - ${teacher.department}</option>`).join("")}</select></label><label>Rating<select id="ratingScore"><option value="5">5 - Excellent</option><option value="4">4 - Very Good</option><option value="3">3 - Good</option><option value="2">2 - Needs Improvement</option><option value="1">1 - Poor</option></select></label><label>Feedback<textarea id="ratingComment" placeholder="Optional feedback"></textarea></label><button class="primary" type="submit">Submit Anonymous Rating</button></form></article>`;
+      $("#ratingList").innerHTML = card({ title: "Anonymous Rating", meta: "Teacher will see average score only.", body: "Teacher app will hide student identity. Main ERP can keep identity for admin audit.", badge: "Private" });
+      $("#subjectsList").innerHTML = "";
+      $("#complaintTotal").textContent = "Education only";
+      $("#complaintFormHost").innerHTML = `<article class="card"><form class="form-grid" id="studentComplaintForm"><label>Education Topic<select id="studentComplaintType"><option>Teaching</option><option>Homework</option><option>Classwork</option><option>Syllabus</option><option>Exam</option><option>Study Material</option></select></label><label>Concern<textarea id="studentComplaintNote" placeholder="Write only education related complaint or concern" required></textarea></label><button class="primary" type="submit">Submit Academic Complaint</button></form></article>`;
+      $("#complaintList").innerHTML = card({ title: "Academic Complaint Only", meta: "Education related issues only", body: "This goes to the class/subject teacher and can be connected to main ERP complaint records.", badge: "Student" });
+      $("#teacherComplaintTotal").textContent = `${ws.teacherComplaints.length} records`;
+      $("#teacherComplaintList").innerHTML = ws.teacherComplaints.length
+        ? ws.teacherComplaints.map(item => card({ title: `${item.type} | ${item.status || "Open"}`, meta: `${item.date} | Teacher complaint`, body: item.note, badge: "Teacher", status: "warn" })).join("")
+        : card({ title: "No Teacher Complaint", meta: "Nothing raised by teachers.", body: "Homework, classwork or behaviour complaints raised by teachers will appear here.", badge: "Clear" });
+      $("#leaveFormHost").innerHTML = "";
+      $("#leaveList").innerHTML = "";
+      bindLanguageControls();
+      bindStudentForms();
+    }
+
+    function subjectOptions() {
+      return state.user.subjects.map(item => `<option value="${item.className}|${item.subject}">${item.className} - ${item.subject}</option>`).join("");
+    }
+
+    function renderTeacherViews() {
+      const user = state.user;
+      const ws = state.workspace;
+      const classes = [...new Set(user.subjects.map(item => item.className))];
+      state.attendanceClass = state.attendanceClass || classes[0];
+      $("#profileScope").textContent = user.id;
+      $("#profileList").innerHTML = [
+        `<article class="card quick-row"><span class="quick-icon">${photoMarkup(user)}</span><div><b>${user.name}</b><span>${user.id} | ${user.department}</span></div><span class="badge">Photo</span></article>`,
+        card({ title: "Teacher Profile", meta: `${user.role} | ${user.department}`, body: `Assigned class: ${user.assignedClass}`, badge: "Staff" })
+      ].join("");
+      $("#timetableList").innerHTML = ws.timetable.map(item => card({ title: `${item.day}, ${item.time}`, meta: `${item.className} - ${item.subject}`, badge: item.room })).join("");
+      $("#subjectsList").innerHTML = ws.subjects.map(item => card({ title: item.className, meta: item.subject, badge: "Assigned" })).join("");
+      $("#resultTotal").textContent = `${ws.results.length} records`;
+      $("#resultSummary").innerHTML = `<article class="card"><form class="form-grid" id="resultForm"><label>Student<select id="resultStudent">${ws.students.map(item => `<option value="${item.admissionId}|${item.name}|${item.className}">${item.name} - ${item.className}</option>`).join("")}</select></label><label>Exam Name<input id="resultExam" placeholder="Exam name" required /></label><label>Marks Summary<input id="resultSummaryInput" placeholder="Example: 86/100" required /></label><label>Grade<select id="resultGrade"><option>A+</option><option>A</option><option>B+</option><option>B</option><option>C</option></select></label><button class="primary" type="submit">Publish Result</button></form></article>`;
+      $("#resultList").innerHTML = ws.results.map(result => card({ title: `${result.exam} | ${result.studentId}`, meta: `${result.className} | ${result.total}/${result.maxTotal} | ${result.percentage}`, body: `Grade: ${result.grade} | Status: ${result.status}`, badge: "Published" })).join("");
+      $("#syllabusTitle").textContent = "Syllabus Entry";
+      $("#syllabusFormHost").innerHTML = `<article class="card"><form class="form-grid" id="syllabusForm"><label>Class and Subject<select id="syllabusSubject">${subjectOptions()}</select></label><label>Topic<input id="syllabusTopic" placeholder="Chapter topic" required /></label><label>Progress<select id="syllabusProgress"><option>Started</option><option>In Progress</option><option>Completed</option></select></label><button class="primary" type="submit">Save Syllabus Entry</button></form></article>`;
+      $("#syllabusTotal").textContent = `${ws.syllabus.length} entries`;
+      $("#syllabusList").innerHTML = ws.syllabus.map(item => card({ title: `${item.className} - ${item.subject}`, meta: item.topic, badge: item.progress, status: item.progress === "Completed" ? "ok" : "warn" })).join("");
+      $("#homeworkTitle").textContent = "Homework Entry";
+      $("#homeworkFormHost").innerHTML = `<article class="card"><form class="form-grid" id="homeworkForm"><label>Class and Subject<select id="homeworkSubject">${subjectOptions()}</select></label><label>Homework<textarea id="homeworkText" placeholder="Homework details" required></textarea></label><label>Due Date<input id="homeworkDue" type="date" value="${todayIso}" required /></label><button class="primary" type="submit">Assign Homework</button></form></article>`;
+      $("#homeworkTotal").textContent = `${ws.homework.length} assigned`;
+      $("#homeworkList").innerHTML = ws.homework.map(item => card({ title: `${item.className} - ${item.subject}`, meta: `Due ${item.due}`, body: item.text, badge: "Active" })).join("");
+      $("#classworkTitle").textContent = "Classwork Entry";
+      $("#classworkFormHost").innerHTML = `<article class="card"><form class="form-grid" id="classworkForm"><label>Class and Subject<select id="classworkSubject">${subjectOptions()}</select></label><label>Classwork<textarea id="classworkText" placeholder="What was taught in class today" required></textarea></label><label>Date<input id="classworkDate" type="date" value="${todayIso}" required /></label><button class="primary" type="submit">Save Classwork</button></form></article>`;
+      $("#classworkTotal").textContent = `${ws.classwork.length} entries`;
+      $("#classworkList").innerHTML = ws.classwork.map(item => card({ title: `${item.className} - ${item.subject}`, meta: item.date, body: item.text, badge: "Classwork" })).join("");
+      $("#noticeFormHost").innerHTML = `<article class="card"><form class="form-grid" id="noticeForm"><label>Audience<select id="noticeAudience">${classes.map(name => `<option>${name}</option>`).join("")}</select></label><label>Title<input id="noticeTitle" placeholder="Notice title" required /></label><label>Message<textarea id="noticeMessage" placeholder="Notice message" required></textarea></label><button class="primary" type="submit">Publish Notice</button></form></article>`;
+      $("#noticeTotal").textContent = `${ws.notices.length} published`;
+      $("#noticeList").innerHTML = ws.notices.map(item => card({ title: item.title, meta: `${item.audience} | ${item.date}`, body: item.message, badge: "Published" })).join("");
+      $("#attendanceScope").textContent = "Teacher tools";
+      const attendanceStudents = ws.students.filter(item => item.className === state.attendanceClass);
+      $("#attendanceHost").innerHTML = `<article class="card"><div class="segmented">${classes.map(name => `<button class="seg-btn ${name === state.attendanceClass ? "active" : ""}" data-class-tab="${name}">${name}</button>`).join("")}</div>${attendanceStudents.map(item => `<div class="student-row"><div><b>${item.name}</b><span>${item.className} - Roll ${item.roll}</span></div><div class="toggle" data-student="${item.id}"><button class="active" data-mark="present">P</button><button data-mark="absent">A</button><button data-mark="late">L</button></div></div>`).join("")}<button class="primary" id="saveAttendanceBtn" type="button">Save Attendance</button></article>`;
+      $("#complaintFormHost").innerHTML = `<article class="card"><form class="form-grid" id="complaintForm"><label>Student<select id="complaintStudent">${ws.students.map(item => `<option value="${item.admissionId}|${item.name}|${item.className}">${item.name} - ${item.className}</option>`).join("")}</select></label><label>Type<select id="complaintType"><option>Homework</option><option>Classwork</option><option>Behaviour</option><option>Attendance</option><option>Academic</option></select></label><label>Note<textarea id="complaintNote" placeholder="Complaint or observation" required></textarea></label><button class="primary" type="submit">Submit Complaint</button></form></article>`;
+      $("#complaintTotal").textContent = `${ws.complaints.length} records`;
+      $("#complaintList").innerHTML = ws.complaints.map(item => card({ title: `${item.studentName} - ${item.type}`, meta: `${item.date}${item.scope === "education" ? " | Education" : ""}`, body: item.note, badge: item.source === "student" ? "Student" : "Logged", status: "warn" })).join("");
+      const summary = ratingSummary(ws.ratings);
+      $("#ratingTitle").textContent = "My Ratings";
+      $("#ratingTotal").textContent = `${summary.avg}/5`;
+      $("#ratingFormHost").innerHTML = "";
+      $("#ratingList").innerHTML = [
+        card({ title: `${stars(summary.avg)} ${summary.avg}/5`, meta: `${summary.count} anonymous ratings`, body: "Student identity is hidden. Only rating summary and anonymous comments are visible.", badge: "Anonymous" }),
+        ...ws.ratings.map(item => card({ title: `${stars(item.rating)} ${item.rating}/5`, meta: item.date, body: item.comment || "No comment", badge: "Anonymous" }))
+      ].join("");
+      $("#leaveTotal").textContent = `${ws.leaves.length} applications`;
+      $("#leaveFormHost").innerHTML = `<article class="card"><form class="form-grid" id="leaveForm"><label>Leave Type<select id="leaveType"><option>Casual Leave</option><option>Sick Leave</option><option>Emergency Leave</option><option>Half Day</option></select></label><label>From<input id="leaveFrom" type="date" value="${todayIso}" required /></label><label>To<input id="leaveTo" type="date" value="${todayIso}" required /></label><label>Reason<textarea id="leaveReason" placeholder="Reason for leave" required></textarea></label><button class="primary" type="submit">Apply Leave</button></form></article>`;
+      $("#leaveList").innerHTML = ws.leaves.map(item => card({ title: `${item.type} | ${item.status}`, meta: `${item.from} to ${item.to}`, body: item.reason, badge: item.status, status: item.status === "Approved" ? "ok" : "warn" })).join("");
+      $("#feesList").innerHTML = "";
+      $("#receiptList").innerHTML = "";
+      bindTeacherForms();
+    }
+
+    function bindTeacherForms() {
+      document.querySelectorAll("[data-class-tab]").forEach(btn => btn.addEventListener("click", () => {
+        state.attendanceClass = btn.dataset.classTab;
+        renderTeacherViews();
+      }));
+      document.querySelectorAll(".toggle button").forEach(btn => btn.addEventListener("click", () => {
+        btn.parentElement.querySelectorAll("button").forEach(item => item.classList.remove("active"));
+        btn.classList.add("active");
+      }));
+      $("#saveAttendanceBtn")?.addEventListener("click", () => toast(`${state.attendanceClass} attendance saved`));
+      $("#syllabusForm")?.addEventListener("submit", async event => {
+        event.preventDefault();
+        const [className, subject] = $("#syllabusSubject").value.split("|");
+        await AppApi.create("syllabus", { teacherId: state.user.id, className, subject, topic: $("#syllabusTopic").value, progress: $("#syllabusProgress").value });
+        state.workspace = await AppApi.workspace("teacher", state.user.id);
+        renderTeacherViews();
+        toast("Syllabus saved");
+      });
+      $("#resultForm")?.addEventListener("submit", async event => {
+        event.preventDefault();
+        const [studentId, studentName, className] = $("#resultStudent").value.split("|");
+        const [marksRaw, maxRaw] = $("#resultSummaryInput").value.split("/");
+        const total = Number(marksRaw) || 0;
+        const maxTotal = Number(maxRaw) || 100;
+        const percentage = maxTotal ? `${((total / maxTotal) * 100).toFixed(1)}%` : "0.0%";
+        await AppApi.create("results", {
+          studentId,
+          studentName,
+          className,
+          exam: $("#resultExam").value,
+          total,
+          maxTotal,
+          percentage,
+          grade: $("#resultGrade").value,
+          status: "Published",
+          subjects: [{ subject: "Overall", marks: total, max: maxTotal, grade: $("#resultGrade").value }]
+        });
+        state.workspace = await AppApi.workspace("teacher", state.user.id);
+        renderTeacherViews();
+        toast("Result published");
+      });
+      $("#homeworkForm")?.addEventListener("submit", async event => {
+        event.preventDefault();
+        const [className, subject] = $("#homeworkSubject").value.split("|");
+        await AppApi.create("homework", { teacherId: state.user.id, className, subject, text: $("#homeworkText").value, due: $("#homeworkDue").value });
+        state.workspace = await AppApi.workspace("teacher", state.user.id);
+        renderTeacherViews();
+        toast("Homework assigned");
+      });
+      $("#classworkForm")?.addEventListener("submit", async event => {
+        event.preventDefault();
+        const [className, subject] = $("#classworkSubject").value.split("|");
+        await AppApi.create("classwork", { teacherId: state.user.id, className, subject, text: $("#classworkText").value, date: $("#classworkDate").value });
+        state.workspace = await AppApi.workspace("teacher", state.user.id);
+        renderTeacherViews();
+        toast("Classwork saved");
+      });
+      $("#noticeForm")?.addEventListener("submit", async event => {
+        event.preventDefault();
+        await AppApi.create("notices", { teacherId: state.user.id, audience: $("#noticeAudience").value, title: $("#noticeTitle").value, message: $("#noticeMessage").value, date: todayIso });
+        state.workspace = await AppApi.workspace("teacher", state.user.id);
+        renderTeacherViews();
+        toast("Notice published");
+      });
+      $("#complaintForm")?.addEventListener("submit", async event => {
+        event.preventDefault();
+        const [studentId, studentName, className] = $("#complaintStudent").value.split("|");
+        await AppApi.create("complaints", { teacherId: state.user.id, studentId, studentName, className, type: $("#complaintType").value, note: $("#complaintNote").value, date: todayIso, source: "teacher", status: "Open" });
+        state.workspace = await AppApi.workspace("teacher", state.user.id);
+        renderTeacherViews();
+        toast("Complaint submitted");
+      });
+      $("#leaveForm")?.addEventListener("submit", async event => {
+        event.preventDefault();
+        await AppApi.create("leaves", { teacherId: state.user.id, from: $("#leaveFrom").value, to: $("#leaveTo").value, type: $("#leaveType").value, reason: $("#leaveReason").value, status: "Pending" });
+        state.workspace = await AppApi.workspace("teacher", state.user.id);
+        renderTeacherViews();
+        toast("Leave application submitted");
+      });
+    }
+
+    function bindStudentForms() {
+      $("#studentRatingForm")?.addEventListener("submit", async event => {
+        event.preventDefault();
+        await AppApi.create("ratings", {
+          teacherId: $("#ratingTeacher").value,
+          studentId: state.user.id,
+          studentName: state.user.name,
+          rating: Number($("#ratingScore").value),
+          comment: $("#ratingComment").value.trim(),
+          date: todayIso,
+          anonymousKey: `anon-${Date.now()}`
+        });
+        state.workspace = await AppApi.workspace("student", state.user.id);
+        renderStudentViews();
+        toast("Anonymous rating submitted");
+      });
+      $("#studentComplaintForm")?.addEventListener("submit", async event => {
+        event.preventDefault();
+        const classTeacher = (state.workspace.teachers || []).find(teacher => teacher.assignedClass === state.user.className) || (state.workspace.teachers || [])[0] || {};
+        await AppApi.create("complaints", {
+          teacherId: classTeacher.id || "",
+          studentId: state.user.id,
+          studentName: state.user.name,
+          className: state.user.className,
+          type: $("#studentComplaintType").value,
+          note: $("#studentComplaintNote").value.trim(),
+          date: todayIso,
+          source: "student",
+          scope: "education",
+          status: "Open"
+        });
+        state.workspace = await AppApi.workspace("student", state.user.id);
+        renderStudentViews();
+        toast("Academic complaint submitted");
+      });
+    }
+
+    async function enterApp(role, user) {
+      state.role = role;
+      state.user = user;
+      state.workspace = await AppApi.workspace(role, user.id);
+      document.body.classList.toggle("student-theme", role === "student");
+      document.body.classList.toggle("teacher-theme", role === "teacher");
+      localStorage.setItem(AppConfig.roleKey, role);
+      localStorage.setItem(AppConfig.userKey, user.id);
+      showScreen("app");
+      renderDashboard();
+      if (role === "student") renderStudentViews();
+      if (role === "teacher") renderTeacherViews();
+      openView("dashboard");
+    }
+
+    document.querySelectorAll("[data-select-role]").forEach(btn => btn.addEventListener("click", () => setupLogin(btn.dataset.selectRole)));
+    $("#backToLanding").addEventListener("click", () => showScreen("landing"));
+    $("#loginForm").addEventListener("submit", async event => {
+      event.preventDefault();
+      try {
+        const result = await AppApi.login(state.role, $("#loginId").value.trim(), $("#password").value);
+        localStorage.setItem(AppConfig.tokenKey, result.token);
+        await enterApp(state.role, result.user);
+        toast("Login successful");
+      } catch (error) {
+        toast(error.message);
+      }
+    });
+    $("#menuBtn").addEventListener("click", () => document.body.classList.add("drawer-open"));
+    $("#drawerBackdrop").addEventListener("click", () => document.body.classList.remove("drawer-open"));
+    $("#syncBtn").addEventListener("click", async () => {
+      if (!state.user) return;
+      state.workspace = await AppApi.workspace(state.role, state.user.id);
+      renderDashboard();
+      state.role === "student" ? renderStudentViews() : renderTeacherViews();
+      toast("Synced");
+    });
+    $("#logoutBtn").addEventListener("click", () => {
+      localStorage.removeItem(AppConfig.tokenKey);
+      localStorage.removeItem(AppConfig.roleKey);
+      localStorage.removeItem(AppConfig.userKey);
+      state = { role: null, user: null, workspace: null, attendanceClass: "", language: "en" };
+      document.body.classList.remove("drawer-open", "student-theme", "teacher-theme");
+      showScreen("landing");
+    });
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape") document.body.classList.remove("drawer-open");
+    });
+  </script>
+</body>
+</html>

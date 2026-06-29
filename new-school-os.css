@@ -479,7 +479,11 @@ h2 { font-size: 1.15rem; }
 }
 
 .topbar-system-strip span,
-.topbar-system-strip button {
+.topbar-system-strip button,
+.topbar-system-strip a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: 32px;
   border: 1px solid #c8d9ee;
   border-radius: 999px;
@@ -489,9 +493,11 @@ h2 { font-size: 1.15rem; }
   font-size: .72rem;
   font-weight: 950;
   white-space: nowrap;
+  text-decoration: none;
 }
 
-.topbar-new-admission {
+.topbar-new-admission,
+.topbar-mobile-app {
   min-height: 42px;
   padding: 0 18px;
   border-radius: 8px;
@@ -500,6 +506,10 @@ h2 { font-size: 1.15rem; }
   box-shadow: 0 12px 24px rgba(23, 104, 172, .22);
   font-size: .88rem;
   white-space: nowrap;
+}
+
+.topbar-mobile-app {
+  background: linear-gradient(135deg, #7c3aed, #2563eb) !important;
 }
 
 .topbar-system-strip span {
