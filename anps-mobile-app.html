@@ -1439,6 +1439,7 @@
 
     function complaintStatusTone(status = "") {
       const clean = normalizeText(status).toLowerCase();
+      if (clean === "review") return "bad";
       if (["accepted", "resolved", "closed"].includes(clean)) return "ok";
       if (["cancelled", "rejected"].includes(clean)) return "bad";
       if (clean === "in progress") return "warn";
@@ -1631,10 +1632,7 @@
       });
       $("#complaintTotal").textContent = `${myComplaints.length} submitted`;
       $("#complaintFormHost").innerHTML = `<article class="card"><form class="form-grid" id="studentComplaintForm"><label>Education Topic<select id="studentComplaintType"><option>Teaching</option><option>Homework</option><option>Classwork</option><option>Syllabus</option><option>Exam</option><option>Study Material</option></select></label><label>Concern<textarea id="studentComplaintNote" placeholder="Write only education related complaint or concern" required></textarea></label><button class="primary" type="submit">Submit Academic Complaint</button></form></article>`;
-      $("#complaintList").innerHTML = [
-        card({ title: "My Complaints", meta: "Submitted complaint status", body: "Main ERP Complaint Book-e status update hole sync korle ekhane dekhabe.", badge: "Status" }),
-        studentComplaintCards(ws.complaints)
-      ].join("");
+      $("#complaintList").innerHTML = studentComplaintCards(ws.complaints);
       $("#teacherComplaintTotal").textContent = `${ws.teacherComplaints.length} records`;
       $("#teacherComplaintList").innerHTML = ws.teacherComplaints.length
         ? ws.teacherComplaints.map(item => card({ title: `${item.type} | ${item.status || "Open"}`, meta: `${item.date} | Teacher complaint`, body: item.note, badge: "Teacher", status: "warn" })).join("")

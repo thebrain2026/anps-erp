@@ -3597,7 +3597,7 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
 }
 
 .complaint-status-pill.open { background: #fff2d6; color: #8b5207; }
-.complaint-status-pill.accepted { background: #dff7ec; color: #087047; }
+.complaint-status-pill.review { background: #ffe5eb; color: #a42e45; }
 .complaint-status-pill.progress { background: #e3efff; color: #2455bd; }
 .complaint-status-pill.done { background: #e4f4ee; color: #116b4e; }
 .complaint-status-pill.cancelled { background: #ffe5eb; color: #a42e45; }

@@ -3557,7 +3557,7 @@ function getComplaintSource(item = {}) {
 
 function getComplaintStatusClass(status = "", priority = "") {
   const clean = String(status || "Open").trim().toLowerCase();
-  if (clean === "accepted") return "accepted";
+  if (clean === "review" || clean === "accepted") return "review";
   if (clean === "cancelled" || clean === "rejected") return "cancelled";
   if (clean === "in progress") return "progress";
   if (clean === "resolved" || clean === "closed") return "done";
@@ -3662,15 +3662,15 @@ function openComplaintReviewModal(index) {
 function acceptComplaintReview() {
   const item = complaintRecords[activeComplaintReviewIndex];
   if (!item) return;
-  item.status = "Accepted";
-  item.reviewStatus = "Accepted";
+  item.status = "Review";
+  item.reviewStatus = "Review";
   item.cancelReason = "";
   item.reviewedAt = new Date().toISOString();
   item.reviewedBy = getCurrentTopbarRole();
   saveAppState();
   renderComplaintsDesk();
   closeComplaintReviewModal();
-  showToast("Complaint accepted.");
+  showToast("Complaint marked for review.");
 }
 
 function cancelComplaintReviewWithReason() {
