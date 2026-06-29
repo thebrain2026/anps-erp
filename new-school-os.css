@@ -707,6 +707,17 @@ h2 { font-size: 1.15rem; }
   font-size: .86rem;
 }
 
+.primary-mini {
+  background: #173b78;
+  border-color: #173b78;
+  color: #fff;
+}
+
+.primary-mini:hover {
+  background: #0f2e61;
+  border-color: #0f2e61;
+}
+
 .map-link {
   display: inline-flex;
   align-items: center;
@@ -1008,6 +1019,14 @@ h2 { font-size: 1.15rem; }
   align-items: flex-start;
   gap: 14px;
   margin-bottom: 16px;
+}
+
+.panel-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .bars {

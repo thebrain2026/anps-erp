@@ -4262,6 +4262,60 @@ function getStudentLoginIdFromAdmissionNo(admissionNo = "") {
   return `anps${trailingNumber}`;
 }
 
+function getStudentPortalPassword(student = {}) {
+  return String(
+    student.mobile
+    || student.fatherMobile
+    || student.motherMobile
+    || student.guardianMobile
+    || student.phone
+    || ""
+  ).trim();
+}
+
+function buildStudentUserAccount(student = {}, existing = {}) {
+  return {
+    admissionNo: student.admissionNo || existing.admissionNo || "",
+    studentName: student.name || existing.studentName || "",
+    klass: student.klass || existing.klass || "",
+    loginId: getStudentLoginIdFromAdmissionNo(student.admissionNo || existing.admissionNo),
+    password: existing.password || getStudentPortalPassword(student),
+    status: existing.status || "Active",
+    appPermissions: getStudentUserPermissionValues(existing)
+  };
+}
+
+function autoFillStudentUserAccounts() {
+  const activeStudents = getActiveStudents();
+  let created = 0;
+  let updated = 0;
+  let skipped = 0;
+  activeStudents.forEach(student => {
+    const loginId = getStudentLoginIdFromAdmissionNo(student.admissionNo);
+    const password = getStudentPortalPassword(student);
+    const existingIndex = studentUserAccounts.findIndex(account =>
+      normalizeAdmissionNo(account.admissionNo) === normalizeAdmissionNo(student.admissionNo)
+      || String(account.loginId || "").toLowerCase() === loginId.toLowerCase()
+    );
+    if (existingIndex < 0 && !password) {
+      skipped += 1;
+      return;
+    }
+    if (existingIndex >= 0) {
+      const existing = studentUserAccounts[existingIndex];
+      studentUserAccounts[existingIndex] = buildStudentUserAccount(student, existing);
+      updated += 1;
+      return;
+    }
+    studentUserAccounts.unshift(buildStudentUserAccount(student));
+    created += 1;
+  });
+  normalizeStudentUserLoginIds();
+  saveAppState();
+  renderStudentUserLogin();
+  showToast(`Student users ready: ${created} new, ${updated} updated${skipped ? `, ${skipped} skipped - mobile missing` : ""}.`);
+}
+
 function normalizeStudentUserLoginIds() {
   let changed = false;
   studentUserAccounts.forEach(account => {
@@ -9857,7 +9911,11 @@ document.getElementById("studentUserSelect")?.addEventListener("change", event =
   if (!student || !studentUserAccessForm) return;
   studentUserAccessForm.elements.admissionNoDisplay.value = student.admissionNo || "";
   studentUserAccessForm.elements.loginId.value = getStudentLoginIdFromAdmissionNo(student.admissionNo);
-  studentUserAccessForm.elements.password.value = student.mobile || student.fatherMobile || student.motherMobile || "";
+  studentUserAccessForm.elements.password.value = getStudentPortalPassword(student);
+});
+
+document.getElementById("autoFillStudentUsers")?.addEventListener("click", () => {
+  autoFillStudentUserAccounts();
 });
 
 document.getElementById("idCardStudentSelect")?.addEventListener("change", renderStudentIdCardModule);
