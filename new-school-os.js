@@ -3542,16 +3542,21 @@ function renderComplaintsDesk() {
   if (!rows) return;
   rows.innerHTML = filtered.map((item) => {
     const index = complaintRecords.indexOf(item);
+    const forType = item.forType || (item.studentId || item.studentName ? "Student" : item.teacherId ? "Teacher" : "General");
+    const personName = item.personName || item.studentName || item.teacherName || "-";
+    const category = item.category || item.type || "-";
+    const details = item.details || item.note || "-";
+    const source = item.source === "student" ? "Student App" : item.source === "teacher" ? "Teacher App" : (item.source || "Front Office");
     return `
       <tr>
         <td>${formatDateDDMMYYYY(item.date)}</td>
-        <td><span class="badge ${item.forType === "Teacher" ? "amber" : item.forType === "Student" ? "green" : "blue"}">${escapeHtml(item.forType || "-")}</span></td>
-        <td><strong>${escapeHtml(item.personName || "-")}</strong><br><small>${escapeHtml(item.mobile || item.classSection || "")}</small></td>
-        <td>${escapeHtml(item.category || "-")}</td>
+        <td><span class="badge ${forType === "Teacher" ? "amber" : forType === "Student" ? "green" : "blue"}">${escapeHtml(forType)}</span></td>
+        <td><strong>${escapeHtml(personName)}</strong><br><small>${escapeHtml(item.mobile || item.classSection || item.className || "")}</small></td>
+        <td>${escapeHtml(category)}</td>
         <td>${escapeHtml(item.priority || "Normal")}</td>
-        <td>${escapeHtml(item.details || "-")}</td>
+        <td>${escapeHtml(details)}</td>
         <td><span class="badge ${item.status === "Resolved" || item.status === "Closed" ? "green" : item.priority === "Urgent" ? "red" : "amber"}">${escapeHtml(item.status || "Open")}</span></td>
-        <td>${escapeHtml(item.source || "Front Office")}</td>
+        <td>${escapeHtml(source)}</td>
         <td>
           <button class="icon-action edit" type="button" data-edit-complaint="${index}" title="Edit complaint" aria-label="Edit complaint">✎</button>
           <button class="icon-action delete" type="button" data-delete-complaint="${index}" title="Delete complaint" aria-label="Delete complaint">×</button>

@@ -1684,7 +1684,26 @@
       $("#complaintForm")?.addEventListener("submit", async event => {
         event.preventDefault();
         const [studentId, studentName, className] = $("#complaintStudent").value.split("|");
-        await AppApi.create("complaints", { teacherId: state.user.id, studentId, studentName, className, type: $("#complaintType").value, note: $("#complaintNote").value, date: todayIso, source: "teacher", status: "Open" });
+        const type = $("#complaintType").value;
+        const note = $("#complaintNote").value.trim();
+        await AppApi.create("complaints", {
+          teacherId: state.user.id,
+          studentId,
+          studentName,
+          className,
+          classSection: className,
+          type,
+          note,
+          date: todayIso,
+          forType: "Student",
+          personName: studentName,
+          category: type,
+          priority: "Normal",
+          details: note,
+          receivedBy: state.user.name || "Teacher",
+          source: "Teacher App",
+          status: "Open"
+        });
         state.workspace = await AppApi.workspace("teacher", state.user.id);
         renderTeacherViews();
         toast("Complaint submitted");
@@ -1717,15 +1736,25 @@
       $("#studentComplaintForm")?.addEventListener("submit", async event => {
         event.preventDefault();
         const classTeacher = (state.workspace.teachers || []).find(teacher => teacher.assignedClass === state.user.className) || (state.workspace.teachers || [])[0] || {};
+        const type = $("#studentComplaintType").value;
+        const note = $("#studentComplaintNote").value.trim();
         await AppApi.create("complaints", {
           teacherId: classTeacher.id || "",
           studentId: state.user.id,
           studentName: state.user.name,
           className: state.user.className,
-          type: $("#studentComplaintType").value,
-          note: $("#studentComplaintNote").value.trim(),
+          classSection: state.user.className,
+          type,
+          note,
           date: todayIso,
-          source: "student",
+          forType: "Student",
+          personName: state.user.name,
+          mobile: "",
+          category: type,
+          priority: "Normal",
+          details: note,
+          receivedBy: "Student App",
+          source: "Student App",
           scope: "education",
           status: "Open"
         });
