@@ -885,6 +885,7 @@
 
     const todayName = new Intl.DateTimeFormat("en-US", { weekday: "long" }).format(new Date());
     const todayIso = new Date().toISOString().slice(0, 10);
+    const academicMonths = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
     const $ = selector => document.querySelector(selector);
     let state = { role: null, user: null, workspace: null, attendanceClass: "", language: "en" };
 
@@ -1012,14 +1013,68 @@
       return [student.klass || student.className || student.class, student.sectionName || student.section].filter(Boolean).join(" ").trim() || "-";
     }
 
-    function studentDueAmount(erpState = {}, student = {}) {
-      const admissionNo = normalizeAdmission(student.admissionNo);
-      const paid = Object.values(student.payments || {}).reduce((sum, list) => {
-        return sum + (Array.isArray(list) ? list.reduce((rowSum, item) => rowSum + Number(item.amount || item.paid || item.total || 0), 0) : 0);
+    function sessionYears(erpState = {}) {
+      const session = normalizeText(erpState.activeSession || erpState.selectedSession || "2026-27");
+      const [start, end] = session.split("-");
+      let startYear = Number(start) || new Date().getFullYear();
+      if (startYear < 100) startYear += 2000;
+      const endYear = end && end.length === 2 ? Number(`${String(startYear).slice(0, 2)}${end}`) : startYear + 1;
+      return { startYear, endYear };
+    }
+
+    function academicMonthDate(erpState = {}, month, day = 1) {
+      const {startYear, endYear} = sessionYears(erpState);
+      const monthIndex = academicMonths.indexOf(month);
+      const year = monthIndex >= 0 && monthIndex <= 8 ? startYear : endYear;
+      const calendarMonth = {
+        Apr: 3, May: 4, Jun: 5, Jul: 6, Aug: 7, Sep: 8,
+        Oct: 9, Nov: 10, Dec: 11, Jan: 0, Feb: 1, Mar: 2
+      }[month];
+      return new Date(year, calendarMonth, day);
+    }
+
+    function selectedMonthsToDate(erpState = {}, months = []) {
+      const selected = Array.isArray(months) && months.length ? months : academicMonths;
+      const today = new Date();
+      return selected.filter(month => academicMonthDate(erpState, month, 1) <= today);
+    }
+
+    function sessionPaymentsForStudent(erpState = {}, admissionNo = "") {
+      const paymentBooks = erpState.collectedPayments || {};
+      const session = erpState.activeSession || erpState.selectedSession || Object.keys(paymentBooks)[0] || "";
+      const sessionPayments = paymentBooks[session] || {};
+      const normalizedAdmission = normalizeAdmission(admissionNo);
+      const matchedKey = Object.keys(sessionPayments).find(key => normalizeAdmission(key) === normalizedAdmission);
+      const ledgerPayments = matchedKey ? sessionPayments[matchedKey] || [] : [];
+      const directPayments = Object.values((findStudentByLogin(erpState, admissionNo) || {}).payments || {}).flat();
+      return [...ledgerPayments, ...directPayments].filter(Boolean);
+    }
+
+    function allocationPaidTotal(payments = [], feeHeads = []) {
+      const wanted = new Set(feeHeads);
+      return payments.reduce((sum, payment) => {
+        const allocations = payment.allocations || [];
+        if (!allocations.length && wanted.has(payment.head)) return sum + Number(payment.amount || payment.paid || payment.total || 0);
+        return sum + allocations
+          .filter(allocation => wanted.has(allocation.head))
+          .reduce((allocationSum, allocation) => allocationSum + Number(allocation.amount || 0), 0);
       }, 0);
-      const receipts = (erpState.feeReceipts || erpState.fees || []).filter(item => normalizeAdmission(item.admissionNo) === admissionNo);
-      const receiptPaid = receipts.reduce((sum, item) => sum + Number(item.amount || item.totalAmount || item.paid || 0), 0);
-      return Math.max(0, Number(student.openingDue || 0) + Number(student.tuitionFee || 0) + Number(student.transportFee || 0) - paid - receiptPaid);
+    }
+
+    function studentDueAmount(erpState = {}, student = {}) {
+      const payments = sessionPaymentsForStudent(erpState, student.admissionNo);
+      const monthlyItems = [
+        {amount: Number(student.tuitionFee || 0), months: student.feeMonths, heads: ["Tuition Fee"]},
+        {amount: Number(student.transportFee || 0), months: student.transportMonths, heads: ["Transport Fees"]},
+        {amount: Number(student.dayBoardingFee || 0) + Number(student.dayBoardingTransportFee || 0), months: student.dayBoardingMonths, heads: ["Day Boarding Fees"]},
+        {amount: Number(student.roboticsFee || 0), months: student.roboticsMonths, heads: ["Robotics Fees"]},
+        {amount: Number(student.othersFee || 0), months: student.othersMonths, heads: ["Tiffin Fees"]}
+      ];
+      const expectedTillDate = monthlyItems.reduce((sum, item) => {
+        return sum + (item.amount * selectedMonthsToDate(erpState, item.months).length);
+      }, 0);
+      const paidTillDate = monthlyItems.reduce((sum, item) => sum + allocationPaidTotal(payments, item.heads), 0);
+      return Math.max(0, expectedTillDate - paidTillDate);
     }
 
     function studentReceipts(erpState = {}, student = {}) {
