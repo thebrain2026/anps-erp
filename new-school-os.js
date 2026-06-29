@@ -4259,7 +4259,7 @@ function getStudentLoginIdFromAdmissionNo(admissionNo = "") {
   const parts = clean.split(/[^A-Za-z0-9]+/).filter(Boolean);
   const lastPart = parts.length ? parts[parts.length - 1] : clean;
   const trailingNumber = String(lastPart).match(/\d+$/)?.[0] || lastPart;
-  return `ANPS-${trailingNumber}`;
+  return `anps${trailingNumber}`;
 }
 
 function normalizeStudentUserLoginIds() {

@@ -1382,9 +1382,10 @@ def read_state_record():
 def verify_login(username, password):
     state = read_state() or fresh_state()
     wanted = str(username or "").strip()
+    wanted_lower = wanted.lower()
     supplied = str(password or "")
     for user in state.get("authUsers", []) or []:
-        if str(user.get("id") or "").strip() != wanted:
+        if str(user.get("id") or "").strip().lower() != wanted_lower:
             continue
         if user.get("status") != "Active":
             return None
@@ -1396,7 +1397,7 @@ def verify_login(username, password):
             }
     for user in state.get("userAccessAccounts", []) or []:
         login_id = str(user.get("loginId") or user.get("id") or user.get("username") or "").strip()
-        if login_id != wanted:
+        if login_id.lower() != wanted_lower:
             continue
         if user.get("status") != "Active":
             return None
@@ -1408,7 +1409,7 @@ def verify_login(username, password):
             }
     for user in state.get("studentUserAccounts", []) or []:
         login_id = str(user.get("loginId") or user.get("id") or "").strip()
-        if login_id != wanted:
+        if login_id.lower() != wanted_lower:
             continue
         if user.get("status") != "Active":
             return None
