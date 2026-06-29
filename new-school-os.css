@@ -3038,26 +3038,50 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
 }
 
 .student-app-permissions {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 7px;
   grid-column: 1 / -1;
-  min-height: 38px;
-  padding: 7px 9px;
   border: 1px solid #c8d9ee;
   border-radius: 7px;
   background: #f7fbff;
   max-width: 100%;
 }
 
-.student-app-permissions span {
-  color: var(--muted);
-  font-size: .78rem;
+.student-app-permissions summary {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  padding: 0 11px;
+  color: #174f81;
+  cursor: pointer;
+  font-size: .8rem;
   font-weight: 950;
+  list-style: none;
 }
 
-.student-app-permissions label {
+.student-app-permissions summary::-webkit-details-marker {
+  display: none;
+}
+
+.student-app-permissions summary::after {
+  content: "▾";
+  margin-left: auto;
+  color: #1f4d8f;
+  transition: transform .16s ease;
+}
+
+.student-app-permissions[open] summary::after {
+  transform: rotate(180deg);
+}
+
+.student-app-permission-list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  padding: 0 9px 9px;
+  border-top: 1px solid #d7e5f4;
+}
+
+.student-app-permission-list label {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -3066,7 +3090,7 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   font-weight: 900;
 }
 
-.student-app-permissions input {
+.student-app-permission-list input {
   width: 14px;
   height: 14px;
   accent-color: #0f766e;
@@ -3083,6 +3107,21 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
 
 .student-user-panel table {
   min-width: 860px;
+}
+
+.mobile-activity-panel {
+  background: linear-gradient(135deg, #ffffff 0%, #eefdf8 52%, #fff3d4 100%);
+}
+
+.mobile-activity-table table {
+  min-width: 920px;
+}
+
+.mobile-activity-table td:nth-child(5),
+.mobile-activity-table td:nth-child(6),
+.mobile-activity-table td:nth-child(7) {
+  white-space: nowrap;
+  font-weight: 850;
 }
 
 .id-card-layout {

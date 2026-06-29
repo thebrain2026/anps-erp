@@ -226,6 +226,36 @@
     textarea { min-height: 94px; resize: vertical; }
     input:focus, textarea:focus, select:focus { border-color: rgba(36,107,254,.72); box-shadow: 0 0 0 4px rgba(36,107,254,.12); }
 
+    .password-field {
+      position: relative;
+      display: grid;
+    }
+
+    .password-field input {
+      padding-right: 50px;
+    }
+
+    .password-toggle {
+      position: absolute;
+      top: 50%;
+      right: 8px;
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border: 0;
+      border-radius: 11px;
+      color: var(--deep);
+      background: rgba(36,107,254,.1);
+      transform: translateY(-50%);
+    }
+
+    .password-toggle svg {
+      width: 19px;
+      height: 19px;
+      fill: currentColor;
+    }
+
     .primary, .ghost, .icon-btn, .tab, .seg-btn {
       border: 0;
       border-radius: 14px;
@@ -718,7 +748,12 @@
           </label>
           <label>
             Password
-            <input id="password" type="password" autocomplete="current-password" />
+            <span class="password-field">
+              <input id="password" type="password" autocomplete="current-password" />
+              <button class="password-toggle" id="togglePassword" type="button" aria-label="Show password" aria-pressed="false">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5c5 0 8.7 4.3 10 7-1.3 2.7-5 7-10 7s-8.7-4.3-10-7c1.3-2.7 5-7 10-7Zm0 2C8.6 7 5.8 9.5 4.3 12c1.5 2.5 4.3 5 7.7 5s6.2-2.5 7.7-5C18.2 9.5 15.4 7 12 7Zm0 2.5A2.5 2.5 0 1 1 12 14a2.5 2.5 0 0 1 0-5Z"/></svg>
+              </button>
+            </span>
           </label>
           <button class="primary" type="submit">Login</button>
           <button class="ghost" type="button" id="backToLanding">Back</button>
@@ -888,6 +923,7 @@
     const academicMonths = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
     const $ = selector => document.querySelector(selector);
     let state = { role: null, user: null, workspace: null, attendanceClass: "", language: "en" };
+    let activitySession = { startedAt: "", lastSavedAt: 0, timer: null };
 
     const AppApi = {
       token() {
@@ -942,6 +978,68 @@
         state.erpState = saved.state || erpState;
         state.erpUpdatedAt = saved.updated_at || "";
         return entry;
+      },
+      async saveStateWithConflictRetry(erpState, updatedAt = "") {
+        const postState = async (statePayload, baseUpdatedAt) => {
+          const headers = {"Content-Type": "application/json"};
+          const token = this.token();
+          if (token) headers.Authorization = `Bearer ${token}`;
+          const res = await fetch(`${AppConfig.apiBaseUrl}/state`, {
+            method: "POST",
+            headers,
+            body: JSON.stringify({state: statePayload, base_updated_at: baseUpdatedAt || ""})
+          });
+          const payload = await res.json().catch(() => ({}));
+          return {res, payload};
+        };
+        const first = await postState(erpState, updatedAt);
+        if (first.res.ok && first.payload.ok !== false) return first.payload;
+        if (first.res.status === 409 && first.payload?.state) {
+          const retry = await postState(first.payload.state, first.payload.updated_at || "");
+          if (retry.res.ok && retry.payload.ok !== false) return retry.payload;
+          throw new Error(retry.payload.error || "ERP API request failed");
+        }
+        throw new Error(first.payload.error || "ERP API request failed");
+      },
+      async recordStudentActivity(status = "Active") {
+        if (state.role !== "student" || !state.user?.id) return;
+        const latest = await this.request("/state", { method: "GET" });
+        const erpState = latest.state || {};
+        const now = new Date();
+        const nowIso = now.toISOString();
+        const startedAt = activitySession.startedAt || nowIso;
+        const list = Array.isArray(erpState.mobileAppActivity) ? [...erpState.mobileAppActivity] : [];
+        const admissionNo = normalizeText(state.user.id);
+        const loginId = normalizeText(state.user.loginId || localStorage.getItem(AppConfig.userKey) || state.user.id);
+        const existingIndex = list.findIndex(item =>
+          normalizeAdmission(item.admissionNo) === normalizeAdmission(admissionNo)
+          || normalizeText(item.loginId).toLowerCase() === loginId.toLowerCase()
+        );
+        const previous = existingIndex >= 0 ? list[existingIndex] : {};
+        const lastSavedAt = activitySession.lastSavedAt || Date.parse(previous.lastSeenAt || previous.lastOpenedAt || startedAt) || now.getTime();
+        const additionalSeconds = Math.max(0, Math.round((now.getTime() - lastSavedAt) / 1000));
+        const record = {
+          ...previous,
+          loginId,
+          admissionNo,
+          studentName: state.user.name || previous.studentName || "",
+          klass: state.user.className || previous.klass || "",
+          role: "Student",
+          firstOpenedAt: previous.firstOpenedAt || nowIso,
+          lastOpenedAt: status === "Active" && !previous.currentSessionStartedAt ? nowIso : (previous.lastOpenedAt || nowIso),
+          currentSessionStartedAt: status === "Active" ? startedAt : "",
+          lastSeenAt: nowIso,
+          totalSeconds: Math.max(0, Number(previous.totalSeconds) || 0) + additionalSeconds,
+          sessionCount: Math.max(0, Number(previous.sessionCount) || 0) + (status === "Active" && !previous.currentSessionStartedAt ? 1 : 0),
+          status
+        };
+        if (existingIndex >= 0) list[existingIndex] = record;
+        else list.unshift(record);
+        erpState.mobileAppActivity = list;
+        const saved = await this.saveStateWithConflictRetry(erpState, latest.updated_at || "");
+        state.erpState = saved.state || erpState;
+        state.erpUpdatedAt = saved.updated_at || "";
+        activitySession.lastSavedAt = now.getTime();
       }
     }
 
@@ -963,6 +1061,7 @@
       const name = normalizeText(user.full_name || user.name || user.username || "User");
       return {
         id: normalizeText(user.username || user.id || user.loginId),
+        loginId: normalizeText(user.username || user.loginId || user.id),
         name,
         role: roleName,
         department: normalizeText(user.department || roleName),
@@ -1326,7 +1425,32 @@
       $("#loginIdLabel").textContent = role === "student" ? "Admission No / Login ID" : "Teacher / Staff Login ID";
       $("#loginId").value = "";
       $("#password").value = "";
+      $("#password").type = "password";
+      $("#togglePassword").setAttribute("aria-label", "Show password");
+      $("#togglePassword").setAttribute("aria-pressed", "false");
       showScreen("login");
+    }
+
+    async function saveStudentActivity(status = "Active", quiet = true) {
+      try {
+        await AppApi.recordStudentActivity(status);
+      } catch (error) {
+        if (!quiet) toast("App activity save hoyni.");
+        console.warn("Student app activity update failed.", error);
+      }
+    }
+
+    function startStudentActivityTracking() {
+      clearInterval(activitySession.timer);
+      activitySession = { startedAt: new Date().toISOString(), lastSavedAt: Date.now(), timer: null };
+      saveStudentActivity("Active");
+      activitySession.timer = setInterval(() => saveStudentActivity("Active"), 60 * 1000);
+    }
+
+    async function stopStudentActivityTracking() {
+      clearInterval(activitySession.timer);
+      activitySession.timer = null;
+      await saveStudentActivity("Closed");
     }
 
     function openView(id) {
@@ -1624,10 +1748,19 @@
       if (role === "student") renderStudentViews();
       if (role === "teacher") renderTeacherViews();
       openView("dashboard");
+      if (role === "student") startStudentActivityTracking();
     }
 
     document.querySelectorAll("[data-select-role]").forEach(btn => btn.addEventListener("click", () => setupLogin(btn.dataset.selectRole)));
     $("#backToLanding").addEventListener("click", () => showScreen("landing"));
+    $("#togglePassword").addEventListener("click", () => {
+      const input = $("#password");
+      const showing = input.type === "text";
+      input.type = showing ? "password" : "text";
+      $("#togglePassword").setAttribute("aria-label", showing ? "Show password" : "Hide password");
+      $("#togglePassword").setAttribute("aria-pressed", String(!showing));
+      input.focus();
+    });
     $("#loginForm").addEventListener("submit", async event => {
       event.preventDefault();
       try {
@@ -1648,13 +1781,23 @@
       state.role === "student" ? renderStudentViews() : renderTeacherViews();
       toast("Synced");
     });
-    $("#logoutBtn").addEventListener("click", () => {
+    $("#logoutBtn").addEventListener("click", async () => {
+      await stopStudentActivityTracking();
       localStorage.removeItem(AppConfig.tokenKey);
       localStorage.removeItem(AppConfig.roleKey);
       localStorage.removeItem(AppConfig.userKey);
       state = { role: null, user: null, workspace: null, attendanceClass: "", language: "en" };
       document.body.classList.remove("drawer-open", "student-theme", "teacher-theme");
       showScreen("landing");
+    });
+    document.addEventListener("visibilitychange", () => {
+      if (!state.user || state.role !== "student") return;
+      if (document.hidden) saveStudentActivity("Closed");
+      else {
+        activitySession.startedAt = new Date().toISOString();
+        activitySession.lastSavedAt = Date.now();
+        saveStudentActivity("Active");
+      }
     });
     document.addEventListener("keydown", event => {
       if (event.key === "Escape") document.body.classList.remove("drawer-open");

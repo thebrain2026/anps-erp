@@ -20,6 +20,7 @@ const roles = [];
 const designations = [];
 const userAccessAccounts = [];
 const studentUserAccounts = [];
+const mobileAppActivity = [];
 const rolePermissions = {};
 const rolePermissionAudit = {};
 const staffAttendanceRecords = [];
@@ -281,6 +282,7 @@ const titleMap = {
   masterAdmin: "Master Admin",
   userAccessSettings: "User Access & Permissions",
   studentUserLogin: "Student User Login",
+  mobileAppActivity: "Mobile App Activity",
   securityMaintenance: "Security Maintenance",
   securityDuplicateReceipts: "Duplicate Receipts",
   securityAlertSolver: "Alert Solver",
@@ -310,7 +312,7 @@ const ACCESS_PERMISSION_GROUPS = [
   {name: "Reports", modules: ["reportStudentInformation", "dailyCollectionReport", "entireSchoolFeesReport"]},
   {name: "Academic", modules: ["classTimetable", "teacherTimetable", "syllabus", "teacherComplaint", "holidayReport", "annualCalendar"]},
   {name: "Certificate", modules: ["studentIdCard", "teacherIdCard"]},
-  {name: "Settings", modules: ["masterAdmin", "userAccessSettings", "studentUserLogin"]},
+  {name: "Settings", modules: ["masterAdmin", "userAccessSettings", "studentUserLogin", "mobileAppActivity"]},
   {name: "Security", modules: ["securityMaintenance", "securityDuplicateReceipts", "securityAlertSolver", "securityRoleHealth"]},
   {name: "Transport", modules: ["transportFeesMaster", "transportFineSetup", "transportPickupPoint", "transportRoute", "transportVehicle", "transportAssignVehicle", "transportRoutePickupPoint", "studentTransportFees", "nonTransportStudents"]}
 ];
@@ -400,6 +402,7 @@ function getAppStateSnapshot() {
     designations,
     userAccessAccounts,
     studentUserAccounts,
+    mobileAppActivity,
     rolePermissions,
     rolePermissionAudit,
     staffAttendanceRecords,
@@ -663,6 +666,7 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
     designations: ["name"],
     userAccessAccounts: ["loginId", "id", "username"],
     studentUserAccounts: ["loginId", "admissionNo"],
+    mobileAppActivity: ["loginId", "admissionNo"],
     admissionEnquiries: ["id", "mobile", "studentName"],
     complaintRecords: ["id", "complaintNo", "subject"],
     staffAttendanceRecords: ["id", "staffId", "date"],
@@ -899,6 +903,9 @@ function applySavedState(saved = {}) {
     if (Array.isArray(saved.studentUserAccounts)) {
       studentUserAccounts.splice(0, studentUserAccounts.length, ...saved.studentUserAccounts);
     }
+    if (Array.isArray(saved.mobileAppActivity)) {
+      mobileAppActivity.splice(0, mobileAppActivity.length, ...saved.mobileAppActivity);
+    }
     if (saved.rolePermissions && typeof saved.rolePermissions === "object") {
       Object.keys(rolePermissions).forEach(role => delete rolePermissions[role]);
       Object.assign(rolePermissions, saved.rolePermissions);
@@ -1060,6 +1067,7 @@ function applyProductionCleanSeedOnce() {
   notices.splice(0, notices.length);
   admissionEnquiries.splice(0, admissionEnquiries.length);
   complaintRecords.splice(0, complaintRecords.length);
+  mobileAppActivity.splice(0, mobileAppActivity.length);
   staffMembers.splice(0, staffMembers.length);
   departments.splice(0, departments.length);
   roles.splice(0, roles.length);
@@ -1431,6 +1439,7 @@ function renderActiveView(viewName = document.querySelector(".view.active")?.id 
   if (viewName === "teacherIdCard") renderTeacherIdCardModule();
   if (viewName === "userAccessSettings") renderUserAccessSettings();
   if (viewName === "studentUserLogin") renderStudentUserLogin();
+  if (viewName === "mobileAppActivity") renderMobileAppActivity();
   if (viewName === "securityMaintenance") renderSecurityMaintenance();
   if (viewName === "securityDuplicateReceipts") renderDuplicateReceiptUtility();
   if (viewName === "securityAlertSolver") renderAlertSolverPage();
@@ -4372,7 +4381,8 @@ function renderStudentUserRows() {
     const permissions = getStudentUserPermissionValues(account);
     return `
       <tr>
-        <td><strong>${escapeHtml(account.studentName || student.name || "-")}</strong><small>${escapeHtml(account.admissionNo || "")}</small></td>
+        <td><strong>${escapeHtml(account.studentName || student.name || "-")}</strong></td>
+        <td>${escapeHtml(account.admissionNo || "-")}</td>
         <td>${escapeHtml(account.klass || student.klass || "-")}</td>
         <td>${escapeHtml(loginId || account.loginId || "-")}</td>
         <td>${escapeHtml(account.password || "-")}</td>
@@ -4393,8 +4403,92 @@ function renderStudentUserRows() {
         </td>
       </tr>
     `;
-  }).join("") || `<tr><td colspan="7">No student user saved yet.</td></tr>`;
+  }).join("") || `<tr><td colspan="8">No student user saved yet.</td></tr>`;
   if (summary) summary.textContent = `${filteredAccounts.length} of ${studentUserAccounts.length} student users`;
+}
+
+function formatDateTimeLabel(value) {
+  const date = value ? new Date(value) : null;
+  if (!date || Number.isNaN(date.getTime())) return "-";
+  return `${formatDateDDMMYYYY(date)} ${date.toLocaleTimeString("en-IN", {hour: "2-digit", minute: "2-digit"})}`;
+}
+
+function formatUsageDuration(totalSeconds = 0) {
+  const seconds = Math.max(0, Math.round(Number(totalSeconds) || 0));
+  const hours = Math.floor(seconds / 3600);
+  const minutes = Math.floor((seconds % 3600) / 60);
+  if (hours) return `${hours}h ${minutes}m`;
+  if (minutes) return `${minutes}m`;
+  return `${seconds}s`;
+}
+
+function getMobileActivityStatus(activity = {}) {
+  if (activity.status === "Active") {
+    const lastSeen = Date.parse(activity.lastSeenAt || activity.lastOpenedAt || "");
+    if (Number.isFinite(lastSeen) && Date.now() - lastSeen <= 5 * 60 * 1000) return "Active";
+    return "Idle";
+  }
+  return activity.status || "Closed";
+}
+
+function renderMobileActivityClassFilter() {
+  const select = document.getElementById("mobileActivityClassFilter");
+  if (!select) return;
+  const currentValue = select.value;
+  const classes = [...new Set(mobileAppActivity.map(activity => {
+    const student = findStudentByAdmissionNo(activity.admissionNo) || {};
+    return splitStudentClassSection(activity.klass || activity.className || student.klass || "").klass;
+  }).filter(Boolean))].sort((a, b) => a.localeCompare(b, undefined, {numeric: true}));
+  select.innerHTML = `<option value="">All Classes</option>${classes.map(klass => `<option value="${escapeHtml(klass)}">${escapeHtml(klass)}</option>`).join("")}`;
+  if (currentValue && classes.includes(currentValue)) select.value = currentValue;
+}
+
+function renderMobileAppActivity() {
+  const rows = document.getElementById("mobileActivityRows");
+  const summary = document.getElementById("mobileActivitySummary");
+  if (!rows) return;
+  renderMobileActivityClassFilter();
+  const selectedClass = document.getElementById("mobileActivityClassFilter")?.value || "";
+  const selectedStatus = document.getElementById("mobileActivityStatusFilter")?.value || "";
+  const search = String(document.getElementById("mobileActivitySearch")?.value || "").trim().toLowerCase();
+  const filtered = mobileAppActivity
+    .map(activity => {
+      const student = findStudentByAdmissionNo(activity.admissionNo) || {};
+      const classInfo = splitStudentClassSection(activity.klass || activity.className || student.klass || "");
+      return {activity, student, classInfo, status: getMobileActivityStatus(activity)};
+    })
+    .filter(({activity, student, classInfo, status}) => {
+      const statusGroup = status === "Active" ? "Active" : "Closed";
+      const haystack = [
+        activity.studentName,
+        student.name,
+        activity.admissionNo,
+        activity.loginId,
+        activity.klass,
+        student.klass
+      ].join(" ").toLowerCase();
+      return (!selectedClass || classInfo.klass === selectedClass)
+        && (!selectedStatus || statusGroup === selectedStatus)
+        && (!search || haystack.includes(search));
+    })
+    .sort((a, b) => Date.parse(b.activity.lastSeenAt || b.activity.lastOpenedAt || "") - Date.parse(a.activity.lastSeenAt || a.activity.lastOpenedAt || ""));
+  rows.innerHTML = filtered.map(({activity, student, status}) => {
+    const statusClass = status === "Active" ? "stable" : status === "Idle" ? "watch" : "pending";
+    return `
+      <tr>
+        <td><strong>${escapeHtml(activity.studentName || student.name || "-")}</strong></td>
+        <td>${escapeHtml(activity.admissionNo || "-")}</td>
+        <td>${escapeHtml(activity.klass || activity.className || student.klass || "-")}</td>
+        <td>${escapeHtml(activity.loginId || "-")}</td>
+        <td>${formatDateTimeLabel(activity.lastOpenedAt)}</td>
+        <td>${formatDateTimeLabel(activity.lastSeenAt)}</td>
+        <td>${formatUsageDuration(activity.totalSeconds)}</td>
+        <td><span class="status-pill ${statusClass}">${escapeHtml(status)}</span></td>
+      </tr>
+    `;
+  }).join("") || `<tr><td colspan="8">No mobile app activity yet.</td></tr>`;
+  const activeCount = mobileAppActivity.filter(activity => getMobileActivityStatus(activity) === "Active").length;
+  if (summary) summary.textContent = `${activeCount} active | ${mobileAppActivity.length} total`;
 }
 
 function renderUserAccessSettings() {
@@ -9953,6 +10047,9 @@ document.getElementById("autoFillStudentUsers")?.addEventListener("click", () =>
 
 document.getElementById("studentUserClassFilter")?.addEventListener("change", renderStudentUserRows);
 document.getElementById("studentUserSearch")?.addEventListener("input", renderStudentUserRows);
+document.getElementById("mobileActivityClassFilter")?.addEventListener("change", renderMobileAppActivity);
+document.getElementById("mobileActivityStatusFilter")?.addEventListener("change", renderMobileAppActivity);
+document.getElementById("mobileActivitySearch")?.addEventListener("input", renderMobileAppActivity);
 
 document.getElementById("idCardStudentSelect")?.addEventListener("change", renderStudentIdCardModule);
 document.getElementById("studentIdContactType")?.addEventListener("change", renderStudentIdCardModule);
@@ -11864,12 +11961,13 @@ document.body.addEventListener("click", event => {
         }
       });
       saveAppState();
-      renderStudents();
-      renderDisabledStudents();
-      renderFeeBookStudentOptions();
-      renderDueFeesSearch();
-      renderStudentUserLogin();
-      renderStudentIdCardModule();
+  renderStudents();
+  renderDisabledStudents();
+  renderFeeBookStudentOptions();
+  renderDueFeesSearch();
+  renderStudentUserLogin();
+  renderMobileAppActivity();
+  renderStudentIdCardModule();
       renderStudentTransportFees();
       renderNonTransportStudents();
       renderTransportRoutePickupPoints();

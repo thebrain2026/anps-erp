@@ -121,6 +121,7 @@
             <button data-view="masterAdmin" type="button">Master Admin</button>
             <button data-view="userAccessSettings" type="button">User Access & Permissions</button>
             <button data-view="studentUserLogin" type="button">Student User Login</button>
+            <button data-view="mobileAppActivity" type="button">Mobile App Activity</button>
           </div>
         </div>
         <div class="nav-group" id="securityNavGroup">
@@ -2069,14 +2070,16 @@
                   <option>Disabled</option>
                 </select>
               </label>
-              <div class="student-app-permissions">
-                <span>App Access</span>
-                <label><input type="checkbox" name="appPermissions" value="Notices" checked /> Notices</label>
-                <label><input type="checkbox" name="appPermissions" value="Class Timetable" checked /> Class Timetable</label>
-                <label><input type="checkbox" name="appPermissions" value="Fees" checked /> Fees</label>
-                <label><input type="checkbox" name="appPermissions" value="Attendance" checked /> Attendance</label>
-                <label><input type="checkbox" name="appPermissions" value="Homework" checked /> Homework</label>
-              </div>
+              <details class="student-app-permissions">
+                <summary>App Access Options</summary>
+                <div class="student-app-permission-list">
+                  <label><input type="checkbox" name="appPermissions" value="Notices" checked /> Notices</label>
+                  <label><input type="checkbox" name="appPermissions" value="Class Timetable" checked /> Class Timetable</label>
+                  <label><input type="checkbox" name="appPermissions" value="Fees" checked /> Fees</label>
+                  <label><input type="checkbox" name="appPermissions" value="Attendance" checked /> Attendance</label>
+                  <label><input type="checkbox" name="appPermissions" value="Homework" checked /> Homework</label>
+                </div>
+              </details>
               <button class="primary-action" type="submit">Save Student User</button>
             </form>
             <div class="student-user-filter-bar">
@@ -2091,9 +2094,49 @@
             </div>
             <div class="table-wrap compact-table">
               <table>
-                <thead><tr><th>Student Name</th><th>Class</th><th>Login ID</th><th>Password</th><th>App Access</th><th>Status</th><th>Action</th></tr></thead>
+                <thead><tr><th>Student Name</th><th>Admission No.</th><th>Class</th><th>Login ID</th><th>Password</th><th>App Access</th><th>Status</th><th>Action</th></tr></thead>
                 <tbody id="studentUserRows">
-                  <tr><td colspan="7">No student user saved yet.</td></tr>
+                  <tr><td colspan="8">No student user saved yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="mobileAppActivity">
+        <div class="settings-access-layout">
+          <section class="panel student-user-panel mobile-activity-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Student App</p>
+                <h2>Mobile App Activity</h2>
+                <small>Kon student app open korche, last open time, active status and usage time ekhane dekha jabe.</small>
+              </div>
+              <span class="status-pill stable" id="mobileActivitySummary">0 active users</span>
+            </div>
+            <div class="student-user-filter-bar">
+              <label>Class
+                <select id="mobileActivityClassFilter">
+                  <option value="">All Classes</option>
+                </select>
+              </label>
+              <label>Status
+                <select id="mobileActivityStatusFilter">
+                  <option value="">All Status</option>
+                  <option value="Active">Active</option>
+                  <option value="Closed">Closed</option>
+                </select>
+              </label>
+              <label>Search
+                <input id="mobileActivitySearch" type="search" placeholder="Name, admission no, login ID" />
+              </label>
+            </div>
+            <div class="table-wrap compact-table mobile-activity-table">
+              <table>
+                <thead><tr><th>Student Name</th><th>Admission No.</th><th>Class</th><th>Login ID</th><th>Last Open</th><th>Last Seen</th><th>Use Time</th><th>Status</th></tr></thead>
+                <tbody id="mobileActivityRows">
+                  <tr><td colspan="8">No mobile app activity yet.</td></tr>
                 </tbody>
               </table>
             </div>
