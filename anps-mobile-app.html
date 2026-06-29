@@ -1450,9 +1450,11 @@
       const status = item.status || "Open";
       const tone = complaintStatusTone(status);
       const reason = normalizeText(item.cancelReason);
+      const solution = normalizeText(item.solutionNote || item.solution);
       const reviewedBy = normalizeText(item.reviewedBy);
       const reviewedLine = reviewedBy ? `Reviewed by ${reviewedBy}` : "School will review this complaint.";
-      return `<span class="complaint-status-bar ${tone}"><b>Status: ${status}</b><span>${reason ? `Reason: ${reason}` : reviewedLine}</span></span>`;
+      const note = reason ? `Reason: ${reason}` : solution ? `Solution: ${solution}` : reviewedLine;
+      return `<span class="complaint-status-bar ${tone}"><b>Status: ${status}</b><span>${note}</span></span>`;
     }
 
     function studentComplaintCards(complaints = []) {

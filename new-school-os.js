@@ -333,6 +333,7 @@ const combinedCollectionForm = document.getElementById("combinedCollectionForm")
 const complaintReviewModal = document.getElementById("complaintReviewModal");
 const complaintReviewBody = document.getElementById("complaintReviewBody");
 const complaintReviewReason = document.getElementById("complaintReviewReason");
+const complaintReviewSolution = document.getElementById("complaintReviewSolution");
 const sessionSelect = document.getElementById("sessionSelect");
 const newSessionInput = document.getElementById("newSessionInput");
 const feeMasterForm = document.getElementById("feeMasterForm");
@@ -3615,6 +3616,7 @@ function closeComplaintReviewModal() {
   activeComplaintReviewIndex = -1;
   complaintReviewModal?.setAttribute("aria-hidden", "true");
   if (complaintReviewReason) complaintReviewReason.value = "";
+  if (complaintReviewSolution) complaintReviewSolution.value = "";
   document.body.classList.remove("modal-open");
 }
 
@@ -3623,6 +3625,7 @@ function openComplaintReviewModal(index) {
   if (!item || !complaintReviewModal || !complaintReviewBody) return;
   activeComplaintReviewIndex = index;
   if (complaintReviewReason) complaintReviewReason.value = item.cancelReason || "";
+  if (complaintReviewSolution) complaintReviewSolution.value = item.solutionNote || item.solution || "";
   const status = item.status || "Open";
   complaintReviewBody.innerHTML = `
     <div class="complaint-review-card">
@@ -3654,6 +3657,7 @@ function openComplaintReviewModal(index) {
       <p>${escapeHtml(getComplaintDetails(item))}</p>
     </div>
     ${item.cancelReason ? `<div class="complaint-review-card full"><span>Cancel Reason</span><p>${escapeHtml(item.cancelReason)}</p></div>` : ""}
+    ${item.solutionNote || item.solution ? `<div class="complaint-review-card full"><span>Solution</span><p>${escapeHtml(item.solutionNote || item.solution)}</p></div>` : ""}
   `;
   complaintReviewModal.setAttribute("aria-hidden", "false");
   document.body.classList.add("modal-open");
@@ -3671,6 +3675,27 @@ function acceptComplaintReview() {
   renderComplaintsDesk();
   closeComplaintReviewModal();
   showToast("Complaint marked for review.");
+}
+
+function solveComplaintReviewWithNote() {
+  const item = complaintRecords[activeComplaintReviewIndex];
+  if (!item) return;
+  const solution = String(complaintReviewSolution?.value || "").trim();
+  if (!solution) {
+    showToast("Solution / closing note likhun.");
+    complaintReviewSolution?.focus();
+    return;
+  }
+  item.status = "Closed";
+  item.reviewStatus = "Closed";
+  item.solutionNote = solution;
+  item.cancelReason = "";
+  item.reviewedAt = new Date().toISOString();
+  item.reviewedBy = getCurrentTopbarRole();
+  saveAppState();
+  renderComplaintsDesk();
+  closeComplaintReviewModal();
+  showToast("Complaint solved and closed.");
 }
 
 function cancelComplaintReviewWithReason() {
@@ -11255,6 +11280,7 @@ document.getElementById("cancelCombinedCollection").addEventListener("click", cl
 document.getElementById("closeComplaintReview")?.addEventListener("click", closeComplaintReviewModal);
 document.getElementById("acceptComplaintReviewAction")?.addEventListener("click", acceptComplaintReview);
 document.getElementById("cancelComplaintReviewAction")?.addEventListener("click", cancelComplaintReviewWithReason);
+document.getElementById("solveComplaintReviewAction")?.addEventListener("click", solveComplaintReviewWithNote);
 
 disableReasonModal.addEventListener("click", event => {
   if (event.target === disableReasonModal) closeDisableReasonModal();
