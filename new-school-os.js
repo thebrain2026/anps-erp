@@ -1047,7 +1047,11 @@ function applySavedState(saved = {}) {
         if (village && !findTransportVillageByName(village)) transportVillages.push(village);
       });
     }
+    const fixedTransportVillageNames = applyTransportVillageNameFixes();
     dedupeTransportVillages();
+    if (fixedTransportVillageNames) {
+      setTimeout(() => saveAppState(), 0);
+    }
   } catch (error) {
     console.warn("Could not load saved school data.", error);
   }
@@ -7205,15 +7209,101 @@ function normalizeVillageName(value = "") {
   return String(value).trim().replace(/\s+/g, " ").toLowerCase();
 }
 
+const TRANSPORT_VILLAGE_NAME_FIXES = new Map([
+  ["bara balun", "Barabalun"],
+  ["bara-balun", "Barabalun"],
+  ["bara_balun", "Barabalun"],
+  ["barabalun", "Barabalun"],
+  ["samamnti", "Samanti"],
+  ["samamanti", "Samanti"],
+  ["sammanti", "Samanti"],
+  ["samanti", "Samanti"]
+]);
+
+function canonicalTransportVillageName(value = "") {
+  const clean = String(value || "").trim().replace(/\s+/g, " ");
+  if (!clean) return "";
+  const key = normalizeVillageName(clean);
+  return TRANSPORT_VILLAGE_NAME_FIXES.get(key) || TRANSPORT_VILLAGE_NAME_FIXES.get(key.replace(/[-_]+/g, " ")) || clean;
+}
+
 function findTransportVillageByName(name, exceptName = "") {
   const target = normalizeVillageName(name);
   const except = normalizeVillageName(exceptName);
   return transportVillages.find(village => normalizeVillageName(village) === target && normalizeVillageName(village) !== except);
 }
 
+function renameTransportVillageReferences(oldName = "", newName = "") {
+  const cleanOld = normalizeVillageName(oldName);
+  const cleanNewName = canonicalTransportVillageName(newName);
+  if (!cleanOld || !cleanNewName) return false;
+  const cleanNew = normalizeVillageName(cleanNewName);
+  let changed = false;
+  transportVillages.forEach((village, index) => {
+    if (normalizeVillageName(village) === cleanOld && village !== cleanNewName) {
+      transportVillages[index] = cleanNewName;
+      changed = true;
+    }
+  });
+  Object.keys(transportVillageDistances).forEach(village => {
+    if (normalizeVillageName(village) === cleanOld && village !== cleanNewName) {
+      if (!transportVillageDistances[cleanNewName]) transportVillageDistances[cleanNewName] = transportVillageDistances[village];
+      delete transportVillageDistances[village];
+      changed = true;
+    }
+  });
+  Object.keys(transportVillageFees).forEach(village => {
+    if (normalizeVillageName(village) === cleanOld && village !== cleanNewName) {
+      transportVillageFees[cleanNewName] = {...(transportVillageFees[cleanNewName] || {}), ...(transportVillageFees[village] || {})};
+      delete transportVillageFees[village];
+      changed = true;
+    }
+  });
+  transportRoutePickupPoints.forEach(point => {
+    if (normalizeVillageName(point.villageName || "") === cleanOld && point.villageName !== cleanNewName) {
+      point.villageName = cleanNewName;
+      changed = true;
+    }
+  });
+  students.forEach(student => {
+    if (normalizeVillageName(student.villageTown || "") === cleanOld && student.villageTown !== cleanNewName) {
+      student.villageTown = cleanNewName;
+      changed = true;
+    }
+  });
+  admissionEnquiries.forEach(enquiry => {
+    if (normalizeVillageName(enquiry.villageTown || "") === cleanOld && enquiry.villageTown !== cleanNewName) {
+      enquiry.villageTown = cleanNewName;
+      changed = true;
+    }
+  });
+  return changed;
+}
+
+function applyTransportVillageNameFixes() {
+  let changed = false;
+  const names = new Set([
+    ...transportVillages,
+    ...Object.keys(transportVillageDistances),
+    ...Object.keys(transportVillageFees),
+    ...transportRoutePickupPoints.map(point => point.villageName),
+    ...students.map(student => student.villageTown),
+    ...admissionEnquiries.map(enquiry => enquiry.villageTown)
+  ].map(name => String(name || "").trim()).filter(Boolean));
+  names.forEach(name => {
+    const canonical = canonicalTransportVillageName(name);
+    if (canonical && (canonical !== name || normalizeVillageName(canonical) !== normalizeVillageName(name))) {
+      changed = renameTransportVillageReferences(name, canonical) || changed;
+    }
+  });
+  if (changed) dedupeTransportVillages();
+  return changed;
+}
+
 function dedupeTransportVillages() {
   const seen = new Set();
   for (let index = transportVillages.length - 1; index >= 0; index -= 1) {
+    transportVillages[index] = canonicalTransportVillageName(transportVillages[index]);
     const key = normalizeVillageName(transportVillages[index]);
     if (!key || seen.has(key)) {
       transportVillages.splice(index, 1);
@@ -7368,7 +7458,7 @@ function getRoutePickupVillages() {
   return [...new Set([
     ...transportVillages,
     ...getActiveStudents().map(student => student.villageTown)
-  ].map(village => String(village || "").trim()).filter(Boolean))]
+  ].map(village => canonicalTransportVillageName(village)).filter(Boolean))]
     .sort((a, b) => a.localeCompare(b, "en", {sensitivity: "base"}));
 }
 
@@ -10058,7 +10148,7 @@ document.getElementById("transportPickupPoint").addEventListener("change", event
   const input = event.target.closest("[data-village-name]");
   if (!input) return;
   const oldName = input.dataset.villageName;
-  const newName = String(input.value || "").trim();
+  const newName = canonicalTransportVillageName(input.value || "");
   if (!newName) {
     input.value = oldName;
     return;
@@ -10068,16 +10158,8 @@ document.getElementById("transportPickupPoint").addEventListener("change", event
     showToast(`${newName} already exists.`);
     return;
   }
-  const index = transportVillages.indexOf(oldName);
-  if (index >= 0) transportVillages[index] = newName;
-  if (transportVillageDistances[oldName]) {
-    transportVillageDistances[newName] = transportVillageDistances[oldName];
-    delete transportVillageDistances[oldName];
-  }
-  if (transportVillageFees[oldName]) {
-    transportVillageFees[newName] = transportVillageFees[oldName];
-    delete transportVillageFees[oldName];
-  }
+  renameTransportVillageReferences(oldName, newName);
+  dedupeTransportVillages();
   saveAppState();
   renderTransportVillages();
   renderAdmissionVillageTownOptions(admissionForm.elements.villageTown?.value || "");
@@ -10629,7 +10711,7 @@ admissionEnquiryForm?.addEventListener("submit", event => {
     guardianName: String(data.get("guardianName") || "").trim(),
     mobile: String(data.get("mobile") || "").trim(),
     className: String(data.get("className") || "").trim(),
-    villageTown: String(data.get("villageTown") || "").trim(),
+    villageTown: canonicalTransportVillageName(data.get("villageTown") || ""),
     source: String(data.get("source") || "Walk-in").trim(),
     status: String(data.get("status") || "New").trim(),
     remarks: String(data.get("remarks") || "").trim()
@@ -11256,7 +11338,7 @@ if (transportVillageForm) {
   transportVillageForm.addEventListener("submit", event => {
     event.preventDefault();
     const data = new FormData(transportVillageForm);
-    const villageName = String(data.get("villageName") || "").trim();
+    const villageName = canonicalTransportVillageName(data.get("villageName") || "");
     const distanceKm = String(data.get("distanceKm") || "").trim();
     const newStudentFee = Number(data.get("newStudentFee") || 0);
     const promotedStudentFee = Number(data.get("promotedStudentFee") || 0);
@@ -11444,7 +11526,7 @@ if (transportRoutePickupForm) {
     event.preventDefault();
     const data = new FormData(transportRoutePickupForm);
     const routeName = String(data.get("routeName") || "").trim();
-    const villageName = String(data.get("villageName") || "").trim();
+    const villageName = canonicalTransportVillageName(data.get("villageName") || "");
     const shift = String(data.get("shift") || "").trim();
     const time = String(data.get("time") || "").trim();
     const sequence = String(data.get("sequence") || "").trim();
@@ -11935,7 +12017,7 @@ admissionForm.addEventListener("submit", event => {
     nationality: String(data.get("nationality") || "").trim(),
     religion: String(data.get("religion") || "").trim(),
     motherTongue: String(data.get("motherTongue") || "").trim(),
-    villageTown: String(data.get("villageTown") || "").trim(),
+    villageTown: canonicalTransportVillageName(data.get("villageTown") || ""),
     fatherName,
     fatherOccupation: "",
     fatherQualification: String(data.get("fatherQualification") || "").trim(),
