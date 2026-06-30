@@ -33,7 +33,9 @@ ALLOWED_ORIGINS = [
 ]
 STATE_KEY = "anps_erp_state_v1"
 MAX_BODY = 20 * 1024 * 1024
-DB_SCHEMA_VERSION = 2
+DB_SCHEMA_VERSION = 3
+DEFAULT_SCHOOL_ID = os.environ.get("ANPS_DEFAULT_SCHOOL_ID", "anps").strip() or "anps"
+DEFAULT_SCHOOL_NAME = os.environ.get("ANPS_DEFAULT_SCHOOL_NAME", "Alfred Nobel Public School").strip() or "Alfred Nobel Public School"
 SESSION_TTL_DAYS = 7
 SENSITIVE_STATIC_SUFFIXES = {
     ".db",
@@ -97,7 +99,7 @@ SESSION_TOKENS = {}
 
 def create_session_token(user):
     token = secrets.token_urlsafe(32)
-    user_data = dict(user or {})
+    user_data = ensure_user_school(dict(user or {}))
     expires_at = (datetime.utcnow() + timedelta(days=SESSION_TTL_DAYS)).isoformat(timespec="seconds") + "Z"
     SESSION_TOKENS[token] = {
         "user": user_data,
@@ -118,6 +120,48 @@ def create_session_token(user):
     return token
 
 
+def default_school():
+    return {
+        "id": DEFAULT_SCHOOL_ID,
+        "school_id": DEFAULT_SCHOOL_ID,
+        "name": DEFAULT_SCHOOL_NAME,
+        "status": "Active",
+        "plan": "Single School",
+        "created_at": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+    }
+
+
+def normalize_school_id(value):
+    clean = "".join(ch.lower() if ch.isalnum() else "-" for ch in str(value or "").strip())
+    clean = "-".join(part for part in clean.split("-") if part)
+    return clean or DEFAULT_SCHOOL_ID
+
+
+def ensure_state_school(value):
+    if not isinstance(value, dict):
+        return value
+    schools = value.get("schools")
+    if not isinstance(schools, list):
+        schools = []
+    school_id = normalize_school_id(value.get("school_id") or value.get("schoolId") or DEFAULT_SCHOOL_ID)
+    has_school = any(normalize_school_id(item.get("school_id") or item.get("id")) == school_id for item in schools if isinstance(item, dict))
+    if not has_school:
+        schools.insert(0, {**default_school(), "id": school_id, "school_id": school_id})
+    value["schools"] = schools
+    value["school_id"] = school_id
+    value["schoolId"] = school_id
+    return value
+
+
+def ensure_user_school(user):
+    if not isinstance(user, dict):
+        user = {}
+    school_id = normalize_school_id(user.get("school_id") or user.get("schoolId") or DEFAULT_SCHOOL_ID)
+    user["school_id"] = school_id
+    user["schoolId"] = school_id
+    return user
+
+
 def get_session_user(token):
     if token in SESSION_TOKENS:
         session = SESSION_TOKENS[token]
@@ -125,7 +169,7 @@ def get_session_user(token):
             return session.get("user") or {}
         SESSION_TOKENS.pop(token, None)
     if token and hmac.compare_digest(token, SERVER_TOKEN):
-        return {"username": "system", "full_name": "System", "role_name": "Administrator"}
+        return ensure_user_school({"username": "system", "full_name": "System", "role_name": "Administrator"})
     if token:
         try:
             with connect() as conn:
@@ -135,7 +179,7 @@ def get_session_user(token):
                 if row["expires_at"] <= datetime.utcnow().isoformat(timespec="seconds") + "Z":
                     conn.execute("DELETE FROM auth_sessions WHERE token = ?", (token,))
                     return None
-                user = json.loads(row["user_json"] or "{}")
+                user = ensure_user_school(json.loads(row["user_json"] or "{}"))
                 SESSION_TOKENS[token] = {"user": user, "expires_at": row["expires_at"]}
                 return user
         except Exception:
@@ -242,6 +286,16 @@ def init_db():
         conn.execute("DELETE FROM auth_sessions WHERE expires_at <= CURRENT_TIMESTAMP")
         conn.executescript(
             """
+            CREATE TABLE IF NOT EXISTS schools (
+                school_id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                status TEXT DEFAULT 'Active',
+                plan TEXT,
+                raw_json TEXT NOT NULL,
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            );
+
             CREATE TABLE IF NOT EXISTS students (
                 admission_no TEXT PRIMARY KEY,
                 name TEXT NOT NULL,
@@ -568,6 +622,7 @@ def init_db():
             );
             """
         )
+        ensure_default_school_row(conn)
         conn.execute(
             """
             INSERT INTO schema_meta (key, value, updated_at)
@@ -777,7 +832,39 @@ def upsert_json_row(conn, table, key_columns, data, values):
     conn.execute(sql, [values[col] for col in columns])
 
 
+def ensure_default_school_row(conn, state=None):
+    state = ensure_state_school(state or fresh_state())
+    schools = state.get("schools") if isinstance(state, dict) else []
+    if not isinstance(schools, list) or not schools:
+        schools = [default_school()]
+    for school in schools:
+        if not isinstance(school, dict):
+            continue
+        school_id = normalize_school_id(school.get("school_id") or school.get("schoolId") or school.get("id"))
+        row = {
+            **default_school(),
+            **school,
+            "id": school_id,
+            "school_id": school_id,
+        }
+        upsert_json_row(
+            conn,
+            "schools",
+            ["school_id"],
+            row,
+            {
+                "school_id": school_id,
+                "name": row.get("name") or DEFAULT_SCHOOL_NAME,
+                "status": row.get("status") or "Active",
+                "plan": row.get("plan") or "Single School",
+                "raw_json": json.dumps(row, ensure_ascii=False),
+            },
+        )
+
+
 def sync_state_tables(conn, state):
+    state = ensure_state_school(state or {})
+    ensure_default_school_row(conn, state)
     for table in (
         "students",
         "guardians",
@@ -1374,13 +1461,15 @@ def read_state_record():
     if not row:
         return None
     return {
-        "state": json.loads(row["value"]),
+        "state": ensure_state_school(json.loads(row["value"])),
         "updated_at": row["updated_at"],
     }
 
 
 def verify_login(username, password):
     state = read_state() or fresh_state()
+    state = ensure_state_school(state)
+    school_id = normalize_school_id(state.get("school_id") or DEFAULT_SCHOOL_ID)
     wanted = str(username or "").strip()
     wanted_lower = wanted.lower()
     supplied = str(password or "")
@@ -1394,6 +1483,8 @@ def verify_login(username, password):
                 "username": user.get("id"),
                 "full_name": user.get("name") or user.get("id"),
                 "role_name": user.get("role") or "Administrator",
+                "school_id": school_id,
+                "school_name": DEFAULT_SCHOOL_NAME,
             }
     for user in state.get("userAccessAccounts", []) or []:
         login_id = str(user.get("loginId") or user.get("id") or user.get("username") or "").strip()
@@ -1406,6 +1497,8 @@ def verify_login(username, password):
                 "username": login_id,
                 "full_name": user.get("staffName") or user.get("name") or login_id,
                 "role_name": user.get("role") or "Staff",
+                "school_id": normalize_school_id(user.get("school_id") or user.get("schoolId") or school_id),
+                "school_name": user.get("schoolName") or DEFAULT_SCHOOL_NAME,
             }
     for user in state.get("studentUserAccounts", []) or []:
         login_id = str(user.get("loginId") or user.get("id") or "").strip()
@@ -1418,17 +1511,22 @@ def verify_login(username, password):
                 "username": login_id,
                 "full_name": user.get("studentName") or user.get("name") or login_id,
                 "role_name": "Student",
+                "school_id": normalize_school_id(user.get("school_id") or user.get("schoolId") or school_id),
+                "school_name": user.get("schoolName") or DEFAULT_SCHOOL_NAME,
             }
     if wanted == "admin" and hmac.compare_digest(supplied, "admin123"):
         return {
             "username": "admin",
             "full_name": "Administrator",
             "role_name": "Administrator",
+            "school_id": school_id,
+            "school_name": DEFAULT_SCHOOL_NAME,
         }
     return None
 
 
 def write_state(value):
+    value = ensure_state_school(value)
     raw = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
     with connect() as conn:
         conn.execute(
@@ -1475,6 +1573,7 @@ def write_state(value):
 
 def table_rows(table, limit=500):
     allowed = {
+        "schools",
         "students",
         "guardians",
         "admission_forms",
@@ -1741,6 +1840,7 @@ def summary():
     with connect() as conn:
         tables = {}
         for table in (
+            "schools",
             "students",
             "guardians",
             "admission_forms",
@@ -1768,6 +1868,7 @@ def summary():
         ):
             tables[table] = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
         raw_tables = dict(tables)
+        school_rows = conn.execute("SELECT school_id, name, status, plan FROM schools ORDER BY name COLLATE NOCASE").fetchall()
         effective_students = effective_student_list_count(conn)
         active_admissions = conn.execute(
             "SELECT COUNT(*) FROM admission_forms WHERE disabled = 0"
@@ -1794,6 +1895,11 @@ def summary():
     return {
         "ok": True,
         "database": str(DB_PATH),
+        "tenant": {
+            "mode": "single-school-ready",
+            "default_school_id": DEFAULT_SCHOOL_ID,
+            "schools": [dict(row) for row in school_rows],
+        },
         "tables": tables,
         "raw_tables": raw_tables,
         "dashboard": {
@@ -1817,6 +1923,7 @@ def summary():
 
 def schema_tables():
     return [
+        "schools",
         "students",
         "guardians",
         "admission_forms",
@@ -1889,6 +1996,7 @@ def validate_database():
         user_count = conn.execute("SELECT COUNT(*) count FROM user_accounts").fetchone()["count"]
         backup_count = conn.execute("SELECT COUNT(*) count FROM state_backups").fetchone()["count"]
         village_count = conn.execute("SELECT COUNT(*) count FROM transport_villages").fetchone()["count"]
+        school_count = conn.execute("SELECT COUNT(*) count FROM schools WHERE COALESCE(status, '') != 'Disabled'").fetchone()["count"]
 
     if active_students == 0:
         issues.append({"level": "warning", "module": "setup", "message": "No active student records yet"})
@@ -1902,6 +2010,8 @@ def validate_database():
         issues.append({"level": "warning", "module": "backup", "message": "No backup created yet"})
     if village_count == 0:
         issues.append({"level": "warning", "module": "transport", "message": "No pickup point villages synced yet"})
+    if school_count == 0:
+        issues.append({"level": "error", "module": "tenant", "message": "No active school tenant found"})
 
     totals = {
         "errors": sum(1 for issue in issues if issue["level"] == "error"),
@@ -1921,6 +2031,11 @@ def readiness_report():
         "warnings": warnings,
         "database": str(DB_PATH),
         "schema_version": str(DB_SCHEMA_VERSION),
+        "tenant": {
+            "mode": "single-school-ready",
+            "default_school_id": DEFAULT_SCHOOL_ID,
+            "note": "Core tables still run as one ANPS school. Full school_id isolation is the next migration phase.",
+        },
     }
 
 
@@ -1934,6 +2049,18 @@ def audit_log(limit=100):
             LIMIT ?
             """,
             (limit,),
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def list_schools():
+    with connect() as conn:
+        rows = conn.execute(
+            """
+            SELECT school_id, name, status, plan, created_at, updated_at
+            FROM schools
+            ORDER BY name COLLATE NOCASE
+            """
         ).fetchall()
     return [dict(row) for row in rows]
 
@@ -1985,6 +2112,9 @@ def clear_state_backups():
 def fresh_state():
     return {
         "students": [],
+        "schools": [default_school()],
+        "school_id": DEFAULT_SCHOOL_ID,
+        "schoolId": DEFAULT_SCHOOL_ID,
         "attendance": [],
         "fees": [],
         "pipeline": [],
@@ -2205,6 +2335,11 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
                 "ok": True,
                 "schema_version": str(DB_SCHEMA_VERSION),
                 "tables": schema_tables(),
+                "tenant": {
+                    "mode": "single-school-ready",
+                    "default_school_id": DEFAULT_SCHOOL_ID,
+                    "schools_table": "schools",
+                },
             })
         if path == "/api/validate-state":
             if not self.authorized():
@@ -2223,6 +2358,10 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
                 return
             token = self.headers.get("Authorization", "").replace("Bearer ", "", 1).strip()
             return self.json_response({"ok": True, "user": get_session_user(token) or {}})
+        if path == "/api/schools":
+            if not self.authorized():
+                return
+            return self.json_response({"ok": True, "schools": list_schools(), "default_school_id": DEFAULT_SCHOOL_ID})
         if path == "/api/module/students":
             if not self.authorized():
                 return
