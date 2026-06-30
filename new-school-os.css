@@ -5707,6 +5707,55 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   background: linear-gradient(135deg, #f8fcff, #eef8f4);
 }
 
+.route-pickup-helper {
+  margin: 4px 0 12px;
+  padding: 10px 12px;
+  border: 1px solid #cfe6f1;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #f5fbff, #ecfdf5);
+  color: #244057;
+  font-size: .84rem;
+  font-weight: 850;
+}
+
+.route-pickup-inline-select,
+.route-pickup-inline-input {
+  width: 100%;
+  min-width: 130px;
+  min-height: 34px;
+  border: 1px solid #cbdde9;
+  border-radius: 6px;
+  background: #fff;
+  color: #172033;
+  padding: 0 9px;
+  font-size: .82rem;
+  font-weight: 850;
+}
+
+.route-pickup-inline-select.small {
+  min-width: 160px;
+}
+
+.route-pickup-inline-input.tiny {
+  min-width: 74px;
+}
+
+.route-pickup-mapped td:first-child {
+  border-left: 4px solid #0f766e;
+}
+
+.route-pickup-unmapped td:first-child {
+  border-left: 4px solid #e2e8f0;
+}
+
+.route-pickup-more {
+  display: inline-block;
+  margin-top: 3px;
+  color: #0f766e;
+  font-size: .74rem;
+  font-weight: 900;
+}
+
 .transport-route-count-panel label {
   display: grid;
   grid-template-columns: 135px 1fr;

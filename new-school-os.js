@@ -7135,6 +7135,93 @@ function renderRoutePickupOptions() {
   }
 }
 
+function getRoutePickupPointForVillage(villageName = "") {
+  const cleanVillage = normalizeVillageName(villageName);
+  return transportRoutePickupPoints.find(point =>
+    normalizeVillageName(point.villageName || "") === cleanVillage
+  ) || null;
+}
+
+function sortTransportRoutePickupPoints() {
+  transportRoutePickupPoints.sort((a, b) =>
+    String(a.routeName || "").localeCompare(String(b.routeName || ""), undefined, {numeric: true}) ||
+    Number(a.sequence || 999) - Number(b.sequence || 999) ||
+    String(a.villageName || "").localeCompare(String(b.villageName || ""), undefined, {numeric: true}) ||
+    String(a.shift || "").localeCompare(String(b.shift || ""), undefined, {numeric: true})
+  );
+}
+
+function removeRoutePickupVillageMapping(villageName = "") {
+  const cleanVillage = normalizeVillageName(villageName);
+  for (let i = transportRoutePickupPoints.length - 1; i >= 0; i -= 1) {
+    if (normalizeVillageName(transportRoutePickupPoints[i].villageName || "") === cleanVillage) {
+      transportRoutePickupPoints.splice(i, 1);
+    }
+  }
+}
+
+function upsertRoutePickupVillageMapping(villageName = "", patch = {}) {
+  const cleanVillageName = String(villageName || "").trim();
+  if (!cleanVillageName) return false;
+  if (Object.prototype.hasOwnProperty.call(patch, "routeName") && !String(patch.routeName || "").trim()) {
+    removeRoutePickupVillageMapping(cleanVillageName);
+    sortTransportRoutePickupPoints();
+    return true;
+  }
+  const matching = transportRoutePickupPoints
+    .map((point, index) => ({point, index}))
+    .filter(item => normalizeVillageName(item.point.villageName || "") === normalizeVillageName(cleanVillageName));
+  const first = matching[0]?.point || {};
+  const routeName = Object.prototype.hasOwnProperty.call(patch, "routeName")
+    ? String(patch.routeName || "").trim()
+    : String(first.routeName || "").trim();
+  if (!routeName) return false;
+  const shift = Object.prototype.hasOwnProperty.call(patch, "shift")
+    ? String(patch.shift || "").trim()
+    : String(first.shift || "Morning Pickup").trim();
+  const time = Object.prototype.hasOwnProperty.call(patch, "time")
+    ? String(patch.time || "").trim()
+    : String(first.time || "").trim();
+  const sequence = Object.prototype.hasOwnProperty.call(patch, "sequence")
+    ? String(patch.sequence || "").trim()
+    : String(first.sequence || "").trim();
+  if (matching.length) {
+    matching.forEach(({point}, index) => {
+      point.routeName = routeName;
+      point.villageName = cleanVillageName;
+      if (index === 0) {
+        point.shift = shift || "Morning Pickup";
+        point.time = time;
+        point.sequence = sequence;
+      }
+    });
+  } else {
+    transportRoutePickupPoints.push({
+      routeName,
+      villageName: cleanVillageName,
+      shift: shift || "Morning Pickup",
+      time,
+      sequence
+    });
+  }
+  const seen = new Set();
+  for (let i = transportRoutePickupPoints.length - 1; i >= 0; i -= 1) {
+    const point = transportRoutePickupPoints[i];
+    const key = [
+      normalizeVillageName(point.villageName || ""),
+      String(point.routeName || "").trim().toLowerCase(),
+      String(point.shift || "").trim().toLowerCase()
+    ].join("|");
+    if (seen.has(key)) {
+      transportRoutePickupPoints.splice(i, 1);
+    } else {
+      seen.add(key);
+    }
+  }
+  sortTransportRoutePickupPoints();
+  return true;
+}
+
 function studentTakesTransport(student = {}) {
   const services = Array.isArray(student.otherServices) ? student.otherServices : [];
   return Boolean(
@@ -7267,32 +7354,55 @@ function renderTransportRoutePickupPoints() {
     renderTransportRouteStudentCounts();
     return;
   }
-  const html = transportRoutePickupPoints.flatMap((point, index) => {
+  const villages = getRoutePickupVillages();
+  const routeOptions = transportRoutes.map(route =>
+    `<option value="${escapeHtml(route.routeName || "")}">${escapeHtml(route.routeName || "")}</option>`
+  ).join("");
+  const tripOptions = ["Morning Pickup", "Second Shift Drop - 11:45", "Day Shift Drop"];
+  const html = villages.map((villageName, index) => {
+    const point = getRoutePickupPointForVillage(villageName) || {};
     const assignment = getTransportAssignment(point.routeName, point.shift) || {};
     const vehicle = getTransportVehicleByNo(assignment.vehicleNo) || {};
     const vehicleLabel = assignment.vehicleNo
       ? `${vehicle.vehicleName || assignment.vehicleName || "Vehicle"} (${assignment.vehicleNo})`
       : "No vehicle assigned";
-    const studentsForVillage = getTransportStudentsByVillage(point.villageName);
-    const studentRows = studentsForVillage.length ? studentsForVillage : [null];
-    return studentRows.map(student => `
-      <tr>
-        <td><strong>${escapeHtml(point.routeName || "-")}</strong></td>
-        <td>${escapeHtml(point.villageName || "-")}</td>
-        <td>${student ? escapeHtml(student.admissionNo || "-") : "-"}</td>
-        <td>${student ? escapeHtml(student.name || "-") : "<span class=\"repeat-student-cell\">No transport student in this village</span>"}</td>
-        <td>${escapeHtml(vehicleLabel)}</td>
-        <td>${escapeHtml(point.shift || "-")}</td>
-        <td>${escapeHtml(point.time || "-")}</td>
-        <td>${escapeHtml(point.sequence || "-")}</td>
+    const studentsForVillage = getTransportStudentsByVillage(point.villageName || villageName);
+    const studentPreview = studentsForVillage.slice(0, 3).map(student =>
+      `${escapeHtml(student.admissionNo || "-")} · ${escapeHtml(student.name || "-")}`
+    ).join("<br>");
+    const remainingCount = studentsForVillage.length > 3 ? `<span class="route-pickup-more">+${studentsForVillage.length - 3} more</span>` : "";
+    return `
+      <tr class="${point.routeName ? "route-pickup-mapped" : "route-pickup-unmapped"}">
+        <td><strong>${escapeHtml(villageName || "-")}</strong></td>
+        <td>
+          <select class="route-pickup-inline-select" data-route-pickup-route="${escapeHtml(villageName)}">
+            <option value="">Select route</option>
+            ${routeOptions}
+          </select>
+        </td>
+        <td>
+          ${studentsForVillage.length ? `<strong>${studentsForVillage.length}</strong><br>${studentPreview}${remainingCount}` : "<span class=\"repeat-student-cell\">No transport student in this village</span>"}
+        </td>
+        <td>${escapeHtml(point.routeName ? vehicleLabel : "-")}</td>
+        <td>
+          <select class="route-pickup-inline-select small" data-route-pickup-shift="${escapeHtml(villageName)}">
+            ${tripOptions.map(trip => `<option value="${trip}"${(point.shift || "Morning Pickup") === trip ? " selected" : ""}>${trip}</option>`).join("")}
+          </select>
+        </td>
+        <td><input class="route-pickup-inline-input" data-route-pickup-time="${escapeHtml(villageName)}" value="${escapeHtml(point.time || "")}" placeholder="08:00 AM"></td>
+        <td><input class="route-pickup-inline-input tiny" data-route-pickup-sequence="${escapeHtml(villageName)}" type="number" min="1" value="${escapeHtml(point.sequence || "")}" placeholder="${index + 1}"></td>
         <td class="inline-actions">
-          <button class="icon-action edit" type="button" data-edit-transport-pickup="${index}" title="Edit pickup point" aria-label="Edit pickup point">✎</button>
-          <button class="icon-action delete" type="button" data-delete-transport-pickup="${index}" title="Delete pickup point" aria-label="Delete pickup point">×</button>
+          <button class="icon-action edit" type="button" data-save-transport-pickup="${escapeHtml(villageName)}" title="Save pickup point" aria-label="Save pickup point">✓</button>
+          <button class="icon-action delete" type="button" data-delete-transport-pickup-village="${escapeHtml(villageName)}" title="Clear pickup route" aria-label="Clear pickup route">×</button>
         </td>
       </tr>
-    `);
+    `;
   }).join("");
-  rows.innerHTML = html || `<tr><td colspan="9">No route pickup points mapped yet.</td></tr>`;
+  rows.innerHTML = html || `<tr><td colspan="8">No pickup village entered yet.</td></tr>`;
+  rows.querySelectorAll("[data-route-pickup-route]").forEach(select => {
+    const point = getRoutePickupPointForVillage(select.dataset.routePickupRoute || "");
+    select.value = point?.routeName || "";
+  });
   renderTransportRouteStudentCounts();
 }
 
@@ -9744,38 +9854,70 @@ document.getElementById("transportAssignVehicleRows")?.addEventListener("click",
 });
 
 document.getElementById("transportRoutePickupRows")?.addEventListener("click", event => {
-  const editButton = event.target.closest("[data-edit-transport-pickup]");
-  const deleteButton = event.target.closest("[data-delete-transport-pickup]");
-  if (editButton) {
-    const index = Number(editButton.dataset.editTransportPickup);
-    const point = transportRoutePickupPoints[index];
-    if (!point || !transportRoutePickupForm) return;
-    editingTransportPickupIndex = index;
-    renderRoutePickupOptions();
-    transportRoutePickupForm.elements.routeName.value = point.routeName || "";
-    transportRoutePickupForm.elements.villageName.value = point.villageName || "";
-    transportRoutePickupForm.elements.shift.value = point.shift || "";
-    transportRoutePickupForm.elements.time.value = point.time || "";
-    transportRoutePickupForm.elements.sequence.value = point.sequence || "";
-    transportRoutePickupForm.querySelector("button[type='submit']").textContent = "Update Pickup Point";
-    transportRoutePickupForm.scrollIntoView({behavior: "smooth", block: "center"});
-    return;
-  }
-  if (deleteButton) {
-    const index = Number(deleteButton.dataset.deleteTransportPickup);
-    const point = transportRoutePickupPoints[index];
-    if (!point) return;
-    if (!confirm(`Delete pickup mapping for ${point.villageName || ""}?`)) return;
-    transportRoutePickupPoints.splice(index, 1);
-    editingTransportPickupIndex = -1;
-    if (transportRoutePickupForm) {
-      transportRoutePickupForm.reset();
-      transportRoutePickupForm.querySelector("button[type='submit']").textContent = "Map Pickup Point";
+  const saveButton = event.target.closest("[data-save-transport-pickup]");
+  const deleteVillageButton = event.target.closest("[data-delete-transport-pickup-village]");
+  if (saveButton) {
+    const villageName = saveButton.dataset.saveTransportPickup || "";
+    const row = saveButton.closest("tr");
+    const routeName = row?.querySelector("[data-route-pickup-route]")?.value || "";
+    const shift = row?.querySelector("[data-route-pickup-shift]")?.value || "Morning Pickup";
+    const time = row?.querySelector("[data-route-pickup-time]")?.value || "";
+    const sequence = row?.querySelector("[data-route-pickup-sequence]")?.value || "";
+    if (!routeName) {
+      showToast("Select route first.");
+      return;
     }
+    upsertRoutePickupVillageMapping(villageName, {routeName, shift, time, sequence});
     saveAppState();
     renderTransportRoutePickupPoints();
-    showToast("Pickup mapping deleted.");
+    showToast(`${villageName} pickup route saved.`);
+    return;
   }
+  if (deleteVillageButton) {
+    const villageName = deleteVillageButton.dataset.deleteTransportPickupVillage || "";
+    if (!villageName) return;
+    if (!confirm(`Clear route mapping for ${villageName}?`)) return;
+    removeRoutePickupVillageMapping(villageName);
+    editingTransportPickupIndex = -1;
+    sortTransportRoutePickupPoints();
+    saveAppState();
+    renderTransportRoutePickupPoints();
+    showToast(`${villageName} route cleared.`);
+  }
+});
+
+document.getElementById("transportRoutePickupRows")?.addEventListener("change", event => {
+  const routeSelect = event.target.closest("[data-route-pickup-route]");
+  const shiftSelect = event.target.closest("[data-route-pickup-shift]");
+  const input = routeSelect || shiftSelect;
+  if (!input) return;
+  const villageName = input.dataset.routePickupRoute || input.dataset.routePickupShift || "";
+  const row = input.closest("tr");
+  const routeName = row?.querySelector("[data-route-pickup-route]")?.value || "";
+  const shift = row?.querySelector("[data-route-pickup-shift]")?.value || "Morning Pickup";
+  const time = row?.querySelector("[data-route-pickup-time]")?.value || "";
+  const sequence = row?.querySelector("[data-route-pickup-sequence]")?.value || "";
+  if (!upsertRoutePickupVillageMapping(villageName, {routeName, shift, time, sequence})) return;
+  saveAppState();
+  renderTransportRoutePickupPoints();
+  showToast(routeName ? `${villageName} route mapped.` : `${villageName} route cleared.`);
+});
+
+document.getElementById("transportRoutePickupRows")?.addEventListener("focusout", event => {
+  const timeInput = event.target.closest("[data-route-pickup-time]");
+  const sequenceInput = event.target.closest("[data-route-pickup-sequence]");
+  const input = timeInput || sequenceInput;
+  if (!input) return;
+  const villageName = input.dataset.routePickupTime || input.dataset.routePickupSequence || "";
+  const row = input.closest("tr");
+  const routeName = row?.querySelector("[data-route-pickup-route]")?.value || "";
+  if (!routeName) return;
+  const shift = row?.querySelector("[data-route-pickup-shift]")?.value || "Morning Pickup";
+  const time = row?.querySelector("[data-route-pickup-time]")?.value || "";
+  const sequence = row?.querySelector("[data-route-pickup-sequence]")?.value || "";
+  if (!upsertRoutePickupVillageMapping(villageName, {routeName, shift, time, sequence})) return;
+  saveAppState();
+  renderTransportRoutePickupPoints();
 });
 
 document.getElementById("routePickupCountRoute")?.addEventListener("change", renderTransportRouteStudentCounts);

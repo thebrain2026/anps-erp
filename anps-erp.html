@@ -2557,33 +2557,7 @@
       <section class="view" id="transportRoutePickupPoint">
         <div class="panel">
           <div class="panel-head"><div><p class="eyebrow">Transport</p><h2>Route Pickup Point</h2></div></div>
-          <form class="fee-master-form transport-route-pickup-form" id="transportRoutePickupForm">
-            <label>Route
-              <select name="routeName" id="routePickupRouteSelect" required>
-                <option value="">Select route</option>
-              </select>
-            </label>
-            <label>Village / Pickup Point
-              <select name="villageName" id="routePickupVillageSelect" required>
-                <option value="">Select village</option>
-              </select>
-            </label>
-            <label>Trip
-              <select name="shift" required>
-                <option value="">Select trip</option>
-                <option>Morning Pickup</option>
-                <option>Second Shift Drop - 11:45</option>
-                <option>Day Shift Drop</option>
-              </select>
-            </label>
-            <label>Time
-              <input name="time" placeholder="08:00 AM" />
-            </label>
-            <label>Sequence
-              <input name="sequence" type="number" min="1" placeholder="1" />
-            </label>
-            <button class="primary-action" type="submit">Map Pickup Point</button>
-          </form>
+          <div class="route-pickup-helper">Pickup Point page-er village name automatic ekhane asbe. Village-er pase route select korlei mapping save hobe.</div>
           <div class="transport-route-count-panel">
             <label>Route Student Count
               <select id="routePickupCountRoute">
@@ -2595,7 +2569,7 @@
             </div>
           </div>
           <div id="routePickupStudentDetails" class="transport-route-student-details" hidden></div>
-          <div class="table-wrap"><table><thead><tr><th>Route</th><th>Pickup Point</th><th>Admission No.</th><th>Student</th><th>Vehicle</th><th>Trip</th><th>Time</th><th>Sequence</th><th>Action</th></tr></thead><tbody id="transportRoutePickupRows"><tr><td colspan="9">No route pickup points mapped yet.</td></tr></tbody></table></div>
+          <div class="table-wrap"><table><thead><tr><th>Village / Pickup Point</th><th>Route Name</th><th>Transport Student</th><th>Vehicle</th><th>Trip</th><th>Time</th><th>Sequence</th><th>Action</th></tr></thead><tbody id="transportRoutePickupRows"><tr><td colspan="8">No pickup village entered yet.</td></tr></tbody></table></div>
         </div>
       </section>
 
