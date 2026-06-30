@@ -7500,11 +7500,15 @@ function renderTransportVehicleAssignments() {
 }
 
 function getRoutePickupVillages() {
-  return [...new Set([
-    ...transportVillages,
-    ...getActiveStudents().map(student => student.villageTown)
-  ].map(village => canonicalTransportVillageName(village)).filter(Boolean))]
+  return [...new Set(getActiveStudents()
+    .map(student => canonicalTransportVillageName(student.villageTown))
+    .filter(Boolean))]
     .sort((a, b) => a.localeCompare(b, "en", {sensitivity: "base"}));
+}
+
+function hasRoutePickupStudentVillage(villageName = "") {
+  const cleanVillage = normalizeVillageName(villageName);
+  return Boolean(cleanVillage && getRoutePickupVillages().some(village => normalizeVillageName(village) === cleanVillage));
 }
 
 function renderRoutePickupOptions() {
@@ -7648,6 +7652,7 @@ function getTransportStudentsByVillage(villageName = "") {
 function getTransportRouteStudentSummary() {
   const summary = new Map();
   transportRoutePickupPoints.forEach(point => {
+    if (!hasRoutePickupStudentVillage(point.villageName)) return;
     const routeName = String(point.routeName || "").trim();
     if (!routeName) return;
     if (!summary.has(routeName)) {
@@ -7766,6 +7771,7 @@ function renderRoutePickupStudentReport() {
   if (!filter || !summaryBox || !rows) return;
   const selected = filter.value;
   const routeNames = [...new Set(transportRoutePickupPoints
+    .filter(point => hasRoutePickupStudentVillage(point.villageName))
     .map(point => String(point.routeName || "").trim())
     .filter(Boolean))]
     .sort((a, b) => a.localeCompare(b, undefined, {numeric: true}));
@@ -7775,6 +7781,7 @@ function renderRoutePickupStudentReport() {
   filter.value = routeNames.includes(selected) ? selected : "";
 
   const mappedPoints = transportRoutePickupPoints
+    .filter(point => hasRoutePickupStudentVillage(point.villageName))
     .filter(point => String(point.routeName || "").trim())
     .filter(point => !filter.value || String(point.routeName || "").trim() === filter.value)
     .sort((a, b) =>
@@ -7902,7 +7909,7 @@ function renderTransportRoutePickupPoints() {
       </tr>
     `;
   }).join("");
-  rows.innerHTML = html || `<tr><td colspan="8">No pickup village entered yet.</td></tr>`;
+  rows.innerHTML = html || `<tr><td colspan="8">No admitted student village found yet.</td></tr>`;
   rows.querySelectorAll("[data-route-pickup-route]").forEach(select => {
     const point = getRoutePickupPointForVillage(select.dataset.routePickupRoute || "");
     select.value = point?.routeName || "";
