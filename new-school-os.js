@@ -108,6 +108,9 @@ if (IS_PRODUCTION_RENDER && localStorage.getItem("school_api_base")) {
   localStorage.removeItem("school_api_base");
 }
 let backendSaveTimer = null;
+let backendSaveInFlight = false;
+let backendQueuedSnapshot = null;
+let backendQueuedRollbackRawState = "";
 let backendAutoSyncTimer = null;
 let backendReconnectTimer = null;
 let backendSyncReady = false;
@@ -119,9 +122,9 @@ let backendLastHealthOkAt = 0;
 const BACKEND_SAVE_DEBOUNCE_MS = 250;
 const BACKEND_AUTO_SYNC_INTERVAL_MS = 3000;
 const BACKEND_LOCAL_SAVE_GUARD_MS = 5000;
-const BACKEND_OFFLINE_FAIL_THRESHOLD = 3;
-const BACKEND_HEALTH_GRACE_MS = 30000;
-const BACKEND_FETCH_TIMEOUT_MS = 8000;
+const BACKEND_OFFLINE_FAIL_THRESHOLD = 5;
+const BACKEND_HEALTH_GRACE_MS = 60000;
+const BACKEND_FETCH_TIMEOUT_MS = 25000;
 const ACADEMIC_MONTHS = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
 const DEFAULT_ADMISSION_CLASSES = ["Nursery", "Class I", "Class II", "Class III", "Class IV", "Class V", "Class VI", "Class VII", "Class VIII", "Class IX", "Class X", "Class XI", "Class XII"];
 const DEFAULT_ADMISSION_SECTIONS = ["Amber", "Ruby", "A", "B", "C", "IGCSE", "IB", "Science", "Commerce"];
@@ -721,6 +724,10 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
   return merged;
 }
 
+function canApplyBackendSaveResult() {
+  return !backendQueuedSnapshot && !backendSaveTimer;
+}
+
 async function putBackendState(snapshot, allowMergeRetry = true) {
   const response = await backendFetch("/api/state", {
     method: "PUT",
@@ -731,8 +738,10 @@ async function putBackendState(snapshot, allowMergeRetry = true) {
     const conflict = await response.json().catch(() => ({}));
     const mergedState = mergeStateSnapshots(conflict?.state || {}, snapshot);
     backendLastUpdatedAt = conflict?.updated_at || backendLastUpdatedAt;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(mergedState));
-    applySavedState(mergedState);
+    if (canApplyBackendSaveResult()) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(mergedState));
+      applySavedState(mergedState);
+    }
     const retryResponse = await backendFetch("/api/state", {
       method: "PUT",
       headers: backendHeaders({"Content-Type": "application/json"}),
@@ -740,7 +749,7 @@ async function putBackendState(snapshot, allowMergeRetry = true) {
     });
     if (!retryResponse.ok) throw new Error(`Backend merge save failed ${retryResponse.status}`);
     const retryResult = await retryResponse.json().catch(() => ({}));
-    if (retryResult?.state && typeof retryResult.state === "object") {
+    if (retryResult?.state && typeof retryResult.state === "object" && canApplyBackendSaveResult()) {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(retryResult.state));
       applySavedState(retryResult.state);
     }
@@ -748,7 +757,7 @@ async function putBackendState(snapshot, allowMergeRetry = true) {
   }
   if (!response.ok) throw new Error(`Backend save failed ${response.status}`);
   const result = await response.json().catch(() => ({}));
-  if (result?.state && typeof result.state === "object") {
+  if (result?.state && typeof result.state === "object" && canApplyBackendSaveResult()) {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(result.state));
     applySavedState(result.state);
   }
@@ -838,33 +847,69 @@ function queueBackendSave(snapshot = getAppStateSnapshot(), rollbackRawState = "
     return false;
   }
   backendLastLocalSaveAt = Date.now();
+  backendQueuedSnapshot = snapshot;
+  backendQueuedRollbackRawState = rollbackRawState || backendQueuedRollbackRawState || "";
+  storePendingBackendSnapshot(snapshot);
+  setTopbarSaveStatus("saving");
   clearTimeout(backendSaveTimer);
-  backendSaveTimer = setTimeout(async () => {
-    backendSaveTimer = null;
-    try {
-      setTopbarSaveStatus("saving");
-      const hasToken = await ensureBackendToken();
-      if (!hasToken) {
-        showNoInternetSaveWarning();
-        if (rollbackRawState) restoreStateFromRaw(rollbackRawState);
-        return;
-      }
-      const result = await putBackendState(snapshot);
-      if (result?.updated_at) backendLastUpdatedAt = result.updated_at;
-      backendLastLocalSaveAt = Date.now();
-      localStorage.removeItem(BACKEND_PENDING_STATE_KEY);
-      setTopbarSaveStatus("saved");
-    } catch (error) {
-      markBackendConnectionIssue();
-      localStorage.removeItem(BACKEND_PENDING_STATE_KEY);
-      if (rollbackRawState) restoreStateFromRaw(rollbackRawState);
-      scheduleBackendReconnect();
-      showToast("No internet/server connection. Entry not saved. Please reconnect and save again.", "error", 6000);
-      console.warn("Backend save failed; local change rolled back.", error);
+  backendSaveTimer = setTimeout(processBackendSaveQueue, BACKEND_SAVE_DEBOUNCE_MS);
+  return true;
+}
+
+async function processBackendSaveQueue() {
+  backendSaveTimer = null;
+  if (backendSaveInFlight || backendHydrating) return;
+  if (!backendQueuedSnapshot) return;
+  if (!canSaveOnlineNow()) {
+    const rollbackRawState = backendQueuedRollbackRawState;
+    backendQueuedSnapshot = null;
+    backendQueuedRollbackRawState = "";
+    localStorage.removeItem(BACKEND_PENDING_STATE_KEY);
+    showNoInternetSaveWarning();
+    if (rollbackRawState) restoreStateFromRaw(rollbackRawState);
+    setTopbarSaveStatus("saved");
+    return;
+  }
+  const snapshot = backendQueuedSnapshot;
+  const rollbackRawState = backendQueuedRollbackRawState;
+  backendQueuedSnapshot = null;
+  backendQueuedRollbackRawState = "";
+  backendSaveInFlight = true;
+  try {
+    setTopbarSaveStatus("saving");
+    const hasToken = await ensureBackendToken();
+    if (!hasToken) {
+      showNoInternetSaveWarning();
+      if (!backendQueuedSnapshot && rollbackRawState) restoreStateFromRaw(rollbackRawState);
+      return;
+    }
+    const result = await putBackendState(snapshot);
+    markBackendOnline();
+    if (result?.updated_at) backendLastUpdatedAt = result.updated_at;
+    backendLastLocalSaveAt = Date.now();
+    if (!backendQueuedSnapshot) localStorage.removeItem(BACKEND_PENDING_STATE_KEY);
+  } catch (error) {
+    markBackendConnectionIssue();
+    if (!backendQueuedSnapshot && rollbackRawState) restoreStateFromRaw(rollbackRawState);
+    if (!backendQueuedSnapshot) localStorage.removeItem(BACKEND_PENDING_STATE_KEY);
+    scheduleBackendReconnect();
+    if (!backendQueuedSnapshot) showToast("No internet/server connection. Entry not saved. Please reconnect and save again.", "error", 6000);
+    console.warn(
+      backendQueuedSnapshot
+        ? "Backend save failed; latest queued change will retry."
+        : "Backend save failed; local change rolled back.",
+      error
+    );
+  } finally {
+    backendSaveInFlight = false;
+    if (backendQueuedSnapshot) {
+      storePendingBackendSnapshot(backendQueuedSnapshot);
+      clearTimeout(backendSaveTimer);
+      backendSaveTimer = setTimeout(processBackendSaveQueue, BACKEND_SAVE_DEBOUNCE_MS);
+    } else {
       setTopbarSaveStatus("saved");
     }
-  }, BACKEND_SAVE_DEBOUNCE_MS);
-  return true;
+  }
 }
 
 function saveAppState() {
@@ -9800,6 +9845,8 @@ function isBackendAutoSyncPaused() {
   if (backendHydrating || document.hidden) return true;
   if (document.body.classList.contains("modal-open")) return true;
   if (backendSaveTimer) return true;
+  if (backendSaveInFlight) return true;
+  if (backendQueuedSnapshot) return true;
   if (localStorage.getItem(BACKEND_PENDING_STATE_KEY)) return true;
   if (Date.now() - backendLastLocalSaveAt < BACKEND_LOCAL_SAVE_GUARD_MS) return true;
   return false;
