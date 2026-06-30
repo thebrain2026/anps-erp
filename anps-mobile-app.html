@@ -501,6 +501,36 @@
       background: linear-gradient(135deg, #14b8a6, #f59e0b);
     }
 
+    .bengali-translate-action {
+      justify-self: start;
+      margin-top: 10px;
+      padding: 8px 12px;
+      border: 0;
+      border-radius: 12px;
+      color: #fff;
+      background: linear-gradient(135deg, #ef4444, #f59e0b);
+      font-size: .74rem;
+      font-weight: 950;
+      box-shadow: 0 10px 22px rgba(239, 68, 68, .18);
+    }
+
+    .bengali-homework-text {
+      display: none;
+      margin-top: 10px;
+      padding: 11px 12px;
+      border: 1px solid rgba(239, 68, 68, .18);
+      border-radius: 14px;
+      color: #7f1d1d;
+      background: linear-gradient(135deg, rgba(255, 247, 237, .96), rgba(254, 242, 242, .94));
+      font-size: .86rem;
+      font-weight: 850;
+      line-height: 1.45;
+    }
+
+    .bengali-homework-text.show {
+      display: block;
+    }
+
     .section-title {
       display: flex;
       justify-content: space-between;
@@ -1597,6 +1627,93 @@
       return `<article class="card ${className}"><div class="card-head"><div><h3>${title}</h3><p>${meta}</p></div>${badge ? `<span class="status ${status}">${badge}</span>` : ""}</div>${body ? `<p>${body}</p>` : ""}</article>`;
     }
 
+    function isJuniorClass(className = "") {
+      const clean = normalizeText(className).toLowerCase().replace(/[^a-z0-9]/g, "");
+      return ["nursery", "lkg", "ukg"].some(name => clean.includes(name));
+    }
+
+    function bengaliHomeworkText(text = "") {
+      const original = normalizeText(text);
+      if (!original) return "";
+      if (/[\u0980-\u09FF]/.test(original)) return original;
+      const phraseMap = [
+        [/write\s+([a-z])\s+to\s+([a-z])/gi, "$1 থেকে $2 লিখবে"],
+        [/write\s+numbers?\s+(\d+)\s+to\s+(\d+)/gi, "$1 থেকে $2 পর্যন্ত সংখ্যা লিখবে"],
+        [/learn\s+the\s+poem/gi, "কবিতাটি শিখবে"],
+        [/read\s+the\s+chapter/gi, "অধ্যায়টি পড়বে"],
+        [/complete\s+the\s+worksheet/gi, "ওয়ার্কশিট সম্পূর্ণ করবে"],
+        [/bring\s+your\s+book/gi, "বই নিয়ে আসবে"],
+        [/bring\s+colour\s+pencils?/gi, "রঙ পেন্সিল নিয়ে আসবে"],
+        [/practice\s+writing/gi, "লেখা অনুশীলন করবে"],
+        [/draw\s+and\s+colour/gi, "আঁকবে এবং রং করবে"],
+        [/memorize/gi, "মুখস্থ করবে"]
+      ];
+      const wordMap = {
+        homework: "হোমওয়ার্ক",
+        write: "লিখবে",
+        read: "পড়বে",
+        learn: "শিখবে",
+        practice: "অনুশীলন করবে",
+        complete: "সম্পূর্ণ করবে",
+        draw: "আঁকবে",
+        colour: "রং",
+        color: "রং",
+        page: "পৃষ্ঠা",
+        pages: "পৃষ্ঠা",
+        book: "বই",
+        copy: "খাতা",
+        notebook: "খাতা",
+        worksheet: "ওয়ার্কশিট",
+        poem: "কবিতা",
+        rhyme: "ছড়া",
+        alphabet: "বর্ণমালা",
+        letters: "অক্ষর",
+        letter: "অক্ষর",
+        number: "সংখ্যা",
+        numbers: "সংখ্যা",
+        table: "নামতা",
+        addition: "যোগ",
+        subtraction: "বিয়োগ",
+        bengali: "বাংলা",
+        english: "ইংরেজি",
+        math: "গণিত",
+        maths: "গণিত",
+        evs: "পরিবেশ",
+        tomorrow: "আগামীকাল",
+        today: "আজ",
+        and: "এবং",
+        to: "থেকে",
+        the: "",
+        a: "",
+        an: "",
+        in: "তে",
+        on: "তে"
+      };
+      let translated = original;
+      phraseMap.forEach(([pattern, replacement]) => {
+        translated = translated.replace(pattern, replacement);
+      });
+      translated = translated.replace(/\b[A-Za-z]+\b/g, word => wordMap[word.toLowerCase()] || word);
+      translated = translated.replace(/\s+/g, " ").trim();
+      return translated || original;
+    }
+
+    function studentHomeworkCard(item = {}, user = {}) {
+      const className = item.className || user.className || "Class";
+      const body = normalizeText(item.text);
+      const showTranslator = isJuniorClass(user.className) || isJuniorClass(className);
+      const translated = bengaliHomeworkText(body);
+      const translator = showTranslator ? `<button class="bengali-translate-action" type="button" data-bengali-homework>বাংলায় দেখুন</button><div class="bengali-homework-text">${translated || "বাংলা অনুবাদ পাওয়া যায়নি।"}</div>` : "";
+      return `<article class="card homework-card">
+        <div class="card-head">
+          <div><h3>${item.subject || "Homework"}</h3><p>${className} | Due ${item.due || "-"}</p></div>
+          <span class="status warn">Homework</span>
+        </div>
+        ${body ? `<p>${body}</p>` : ""}
+        ${translator}
+      </article>`;
+    }
+
     function photoMarkup(user) {
       if (!user.photo) return user.initials;
       return `<img src="${user.photo}" alt="${user.name} photo" onerror="this.replaceWith(document.createTextNode('${user.initials}'))">`;
@@ -1825,7 +1942,7 @@
       $("#homeworkTitle").textContent = "Homework";
       $("#homeworkFormHost").innerHTML = "";
       $("#homeworkTotal").textContent = `${ws.homework.length} assigned`;
-      $("#homeworkList").innerHTML = ws.homework.map(item => card({ title: item.subject || "Homework", meta: `${item.className || user.className || "Class"} | Due ${item.due || "-"}`, body: item.text, badge: "Homework", status: "warn", className: "homework-card" })).join("");
+      $("#homeworkList").innerHTML = ws.homework.map(item => studentHomeworkCard(item, user)).join("");
       $("#classworkTitle").textContent = "Classwork";
       $("#classworkFormHost").innerHTML = "";
       $("#classworkTotal").textContent = `${ws.classwork.length} entries`;
@@ -2088,6 +2205,13 @@
     }
 
     function bindStudentForms() {
+      document.querySelectorAll("[data-bengali-homework]").forEach(button => {
+        button.addEventListener("click", () => {
+          const target = button.nextElementSibling;
+          target?.classList.toggle("show");
+          button.textContent = target?.classList.contains("show") ? "বাংলা লুকান" : "বাংলায় দেখুন";
+        });
+      });
       document.querySelectorAll("[data-complaint-satisfied]").forEach(button => {
         button.addEventListener("click", async () => {
           const complaintId = button.dataset.complaintSatisfied || "";
