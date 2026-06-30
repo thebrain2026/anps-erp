@@ -33,10 +33,35 @@ ALLOWED_ORIGINS = [
 ]
 STATE_KEY = "anps_erp_state_v1"
 MAX_BODY = 20 * 1024 * 1024
-DB_SCHEMA_VERSION = 3
+DB_SCHEMA_VERSION = 4
 DEFAULT_SCHOOL_ID = os.environ.get("ANPS_DEFAULT_SCHOOL_ID", "anps").strip() or "anps"
 DEFAULT_SCHOOL_NAME = os.environ.get("ANPS_DEFAULT_SCHOOL_NAME", "Alfred Nobel Public School").strip() or "Alfred Nobel Public School"
 SESSION_TTL_DAYS = 7
+TENANT_TABLES = {
+    "students",
+    "guardians",
+    "admission_forms",
+    "fee_receipts",
+    "fee_payment_allocations",
+    "classes",
+    "sections",
+    "sessions",
+    "staff_members",
+    "fee_master",
+    "fee_groups",
+    "transport_villages",
+    "transport_routes",
+    "transport_vehicles",
+    "transport_vehicle_assignments",
+    "transport_route_pickup_points",
+    "user_accounts",
+    "role_permissions",
+    "notices",
+    "complaints",
+    "timetable_entries",
+    "syllabus_entries",
+    "holiday_reports",
+}
 SENSITIVE_STATIC_SUFFIXES = {
     ".db",
     ".db-shm",
@@ -150,6 +175,44 @@ def ensure_state_school(value):
     value["schools"] = schools
     value["school_id"] = school_id
     value["schoolId"] = school_id
+    for key in (
+        "students",
+        "admissionForms",
+        "fees",
+        "staffMembers",
+        "staff",
+        "classes",
+        "sections",
+        "sessions",
+        "transportRoutes",
+        "transportVehicles",
+        "transportVehicleAssignments",
+        "transportRoutePickupPoints",
+        "userAccessAccounts",
+        "studentUserAccounts",
+        "notices",
+        "complaintRecords",
+        "classTimetableEntries",
+        "syllabusEntries",
+        "holidayReports",
+        "homework",
+        "attendance",
+    ):
+        items = value.get(key)
+        if not isinstance(items, list):
+            continue
+        for item in items:
+            if isinstance(item, dict):
+                item.setdefault("school_id", school_id)
+                item.setdefault("schoolId", school_id)
+    for session_data in (value.get("financeSessions") or {}).values() if isinstance(value.get("financeSessions"), dict) else []:
+        if not isinstance(session_data, dict):
+            continue
+        for key in ("feeMaster", "feeGroups"):
+            for item in session_data.get(key, []) or []:
+                if isinstance(item, dict):
+                    item.setdefault("school_id", school_id)
+                    item.setdefault("schoolId", school_id)
     return value
 
 
@@ -160,6 +223,12 @@ def ensure_user_school(user):
     user["school_id"] = school_id
     user["schoolId"] = school_id
     return user
+
+
+def school_id_from_state(state=None):
+    if isinstance(state, dict):
+        return normalize_school_id(state.get("school_id") or state.get("schoolId") or DEFAULT_SCHOOL_ID)
+    return DEFAULT_SCHOOL_ID
 
 
 def get_session_user(token):
@@ -260,6 +329,24 @@ def connect():
     conn.execute("PRAGMA busy_timeout = 5000")
     conn.execute("PRAGMA foreign_keys = ON")
     return conn
+
+
+def table_has_column(conn, table, column):
+    return any(row["name"] == column for row in conn.execute(f"PRAGMA table_info({table})").fetchall())
+
+
+def ensure_tenant_columns(conn):
+    for table in sorted(TENANT_TABLES):
+        exists = conn.execute(
+            "SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?",
+            (table,),
+        ).fetchone()
+        if not exists:
+            continue
+        if not table_has_column(conn, table, "school_id"):
+            conn.execute(f"ALTER TABLE {table} ADD COLUMN school_id TEXT DEFAULT '{DEFAULT_SCHOOL_ID}'")
+        conn.execute(f"UPDATE {table} SET school_id = ? WHERE school_id IS NULL OR school_id = ''", (DEFAULT_SCHOOL_ID,))
+        conn.execute(f"CREATE INDEX IF NOT EXISTS idx_{table}_school_id ON {table} (school_id)")
 
 
 def init_db():
@@ -623,6 +710,7 @@ def init_db():
             """
         )
         ensure_default_school_row(conn)
+        ensure_tenant_columns(conn)
         conn.execute(
             """
             INSERT INTO schema_meta (key, value, updated_at)
@@ -817,6 +905,15 @@ def full_name(form):
 
 
 def upsert_json_row(conn, table, key_columns, data, values):
+    if table in TENANT_TABLES and "school_id" not in values:
+        values = {
+            "school_id": normalize_school_id(
+                (data or {}).get("school_id")
+                or (data or {}).get("schoolId")
+                or DEFAULT_SCHOOL_ID
+            ),
+            **values,
+        }
     columns = list(values)
     placeholders = ", ".join("?" for _ in columns)
     updates = ", ".join(
@@ -864,6 +961,7 @@ def ensure_default_school_row(conn, state=None):
 
 def sync_state_tables(conn, state):
     state = ensure_state_school(state or {})
+    school_id = school_id_from_state(state)
     ensure_default_school_row(conn, state)
     for table in (
         "students",
@@ -890,7 +988,10 @@ def sync_state_tables(conn, state):
         "syllabus_entries",
         "holiday_reports",
     ):
-        conn.execute(f"DELETE FROM {table}")
+        if table in TENANT_TABLES and table_has_column(conn, table, "school_id"):
+            conn.execute(f"DELETE FROM {table} WHERE school_id = ?", (school_id,))
+        else:
+            conn.execute(f"DELETE FROM {table}")
 
     for student in state.get("students", []) or []:
         admission_no = student.get("id") or student.get("admissionNo")
@@ -1062,17 +1163,18 @@ def sync_state_tables(conn, state):
                         conn.execute(
                             """
                             INSERT INTO fee_payment_allocations
-                                (receipt_no, admission_no, fee_head, fee_month, amount, is_fine, raw_json)
-                            VALUES (?, ?, ?, ?, ?, ?, ?)
+                                (school_id, receipt_no, admission_no, fee_head, fee_month, amount, is_fine, raw_json)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                             """,
                             (
+                                school_id,
                                 str(receipt_no),
                                 str(admission_no),
                                 head,
                                 allocation.get("month") or "",
                                 money(allocation.get("amount")),
                                 1 if "fine" in head.lower() else 0,
-                                json.dumps({**allocation, "session": session}, ensure_ascii=False),
+                                json.dumps({**allocation, "session": session, "school_id": school_id, "schoolId": school_id}, ensure_ascii=False),
                             ),
                         )
 
@@ -1602,7 +1704,10 @@ def table_rows(table, limit=500):
     if table not in allowed:
         raise ValueError("Unknown table")
     with connect() as conn:
-        rows = conn.execute(f"SELECT * FROM {table} LIMIT ?", (limit,)).fetchall()
+        if table in TENANT_TABLES and table_has_column(conn, table, "school_id"):
+            rows = conn.execute(f"SELECT * FROM {table} WHERE school_id = ? LIMIT ?", (DEFAULT_SCHOOL_ID, limit)).fetchall()
+        else:
+            rows = conn.execute(f"SELECT * FROM {table} LIMIT ?", (limit,)).fetchall()
     return [dict(row) for row in rows]
 
 
@@ -1643,8 +1748,8 @@ def paged_query(base_sql, params=None, count_sql=None, count_params=None, limit=
 
 
 def list_students(params):
-    filters = []
-    values = []
+    filters = ["s.school_id = ?"]
+    values = [DEFAULT_SCHOOL_ID]
     search = first_query_value(params, "search")
     class_name = first_query_value(params, "class")
     section = first_query_value(params, "section")
@@ -1692,17 +1797,17 @@ def list_students(params):
             g.local_guardian_name,
             g.local_guardian_mobile
         FROM students s
-        LEFT JOIN guardians g ON g.admission_no = s.admission_no
+        LEFT JOIN guardians g ON g.admission_no = s.admission_no AND g.school_id = s.school_id
         {where}
         ORDER BY s.class_name COLLATE NOCASE, s.section COLLATE NOCASE, s.name COLLATE NOCASE
     """
-    count_sql = f"SELECT COUNT(*) FROM students s LEFT JOIN guardians g ON g.admission_no = s.admission_no {where}"
+    count_sql = f"SELECT COUNT(*) FROM students s LEFT JOIN guardians g ON g.admission_no = s.admission_no AND g.school_id = s.school_id {where}"
     return paged_query(sql, values, count_sql, values, first_query_value(params, "limit", "100"), first_query_value(params, "offset", "0"))
 
 
 def list_fee_receipts(params):
-    filters = []
-    values = []
+    filters = ["school_id = ?"]
+    values = [DEFAULT_SCHOOL_ID]
     search = first_query_value(params, "search")
     date_from = first_query_value(params, "from")
     date_to = first_query_value(params, "to")
@@ -1738,8 +1843,8 @@ def list_fee_receipts(params):
 def list_transport_students(params):
     route_name = first_query_value(params, "route")
     village_name = first_query_value(params, "village")
-    filters = ["COALESCE(s.status, '') NOT IN ('Disabled', 'Inactive')"]
-    values = []
+    filters = ["s.school_id = ?", "COALESCE(s.status, '') NOT IN ('Disabled', 'Inactive')"]
+    values = [DEFAULT_SCHOOL_ID]
     if village_name:
         filters.append("s.city = ?")
         values.append(village_name)
@@ -1758,24 +1863,24 @@ def list_transport_students(params):
             rp.trip_shift,
             va.vehicle_name
         FROM students s
-        LEFT JOIN transport_route_pickup_points rp ON rp.village_name = s.city
-        LEFT JOIN transport_vehicle_assignments va ON va.route_name = rp.route_name AND va.trip_shift = rp.trip_shift
+        LEFT JOIN transport_route_pickup_points rp ON rp.village_name = s.city AND rp.school_id = s.school_id
+        LEFT JOIN transport_vehicle_assignments va ON va.route_name = rp.route_name AND va.trip_shift = rp.trip_shift AND va.school_id = s.school_id
         {where}
         ORDER BY rp.route_name COLLATE NOCASE, s.city COLLATE NOCASE, s.name COLLATE NOCASE
     """
     count_sql = f"""
         SELECT COUNT(DISTINCT s.admission_no)
         FROM students s
-        LEFT JOIN transport_route_pickup_points rp ON rp.village_name = s.city
-        LEFT JOIN transport_vehicle_assignments va ON va.route_name = rp.route_name AND va.trip_shift = rp.trip_shift
+        LEFT JOIN transport_route_pickup_points rp ON rp.village_name = s.city AND rp.school_id = s.school_id
+        LEFT JOIN transport_vehicle_assignments va ON va.route_name = rp.route_name AND va.trip_shift = rp.trip_shift AND va.school_id = s.school_id
         {where}
     """
     return paged_query(sql, values, count_sql, values, first_query_value(params, "limit", "100"), first_query_value(params, "offset", "0"))
 
 
 def list_staff(params):
-    filters = []
-    values = []
+    filters = ["school_id = ?"]
+    values = [DEFAULT_SCHOOL_ID]
     search = first_query_value(params, "search")
     designation = first_query_value(params, "designation")
     department = first_query_value(params, "department")
@@ -1803,19 +1908,19 @@ def module_report(params):
     month = first_query_value(params, "month")
     with connect() as conn:
         data = {
-            "students": conn.execute("SELECT COUNT(*) FROM students WHERE COALESCE(status, '') NOT IN ('Disabled', 'Inactive')").fetchone()[0],
-            "staff": conn.execute("SELECT COUNT(*) FROM staff_members WHERE COALESCE(status, '') NOT IN ('Disabled', 'Inactive')").fetchone()[0],
-            "receipts": conn.execute("SELECT COUNT(*) FROM fee_receipts").fetchone()[0],
-            "bank": conn.execute("SELECT COALESCE(SUM(bank_amount), 0) FROM fee_receipts").fetchone()[0],
-            "cash": conn.execute("SELECT COALESCE(SUM(cash_amount), 0) FROM fee_receipts").fetchone()[0],
-            "fine": conn.execute("SELECT COALESCE(SUM(fine), 0) FROM fee_receipts").fetchone()[0],
-            "total": conn.execute("SELECT COALESCE(SUM(net_paid), 0) FROM fee_receipts").fetchone()[0],
+            "students": conn.execute("SELECT COUNT(*) FROM students WHERE school_id = ? AND COALESCE(status, '') NOT IN ('Disabled', 'Inactive')", (DEFAULT_SCHOOL_ID,)).fetchone()[0],
+            "staff": conn.execute("SELECT COUNT(*) FROM staff_members WHERE school_id = ? AND COALESCE(status, '') NOT IN ('Disabled', 'Inactive')", (DEFAULT_SCHOOL_ID,)).fetchone()[0],
+            "receipts": conn.execute("SELECT COUNT(*) FROM fee_receipts WHERE school_id = ?", (DEFAULT_SCHOOL_ID,)).fetchone()[0],
+            "bank": conn.execute("SELECT COALESCE(SUM(bank_amount), 0) FROM fee_receipts WHERE school_id = ?", (DEFAULT_SCHOOL_ID,)).fetchone()[0],
+            "cash": conn.execute("SELECT COALESCE(SUM(cash_amount), 0) FROM fee_receipts WHERE school_id = ?", (DEFAULT_SCHOOL_ID,)).fetchone()[0],
+            "fine": conn.execute("SELECT COALESCE(SUM(fine), 0) FROM fee_receipts WHERE school_id = ?", (DEFAULT_SCHOOL_ID,)).fetchone()[0],
+            "total": conn.execute("SELECT COALESCE(SUM(net_paid), 0) FROM fee_receipts WHERE school_id = ?", (DEFAULT_SCHOOL_ID,)).fetchone()[0],
         }
         if month:
             data["month"] = month
             data["month_total"] = conn.execute(
-                "SELECT COALESCE(SUM(net_paid), 0) FROM fee_receipts WHERE fee_month LIKE ?",
-                (f"%{month}%",),
+                "SELECT COALESCE(SUM(net_paid), 0) FROM fee_receipts WHERE school_id = ? AND fee_month LIKE ?",
+                (DEFAULT_SCHOOL_ID, f"%{month}%"),
             ).fetchone()[0]
     return data
 
@@ -1823,12 +1928,12 @@ def module_report(params):
 def effective_student_list_count(conn):
     form_names = {
         str(row["student_name"] or "").strip().lower()
-        for row in conn.execute("SELECT student_name FROM admission_forms WHERE disabled = 0").fetchall()
+        for row in conn.execute("SELECT student_name FROM admission_forms WHERE school_id = ? AND disabled = 0", (DEFAULT_SCHOOL_ID,)).fetchall()
         if str(row["student_name"] or "").strip()
     }
-    active_forms = conn.execute("SELECT COUNT(*) FROM admission_forms WHERE disabled = 0").fetchone()[0]
+    active_forms = conn.execute("SELECT COUNT(*) FROM admission_forms WHERE school_id = ? AND disabled = 0", (DEFAULT_SCHOOL_ID,)).fetchone()[0]
     standalone_students = 0
-    for row in conn.execute("SELECT name FROM students").fetchall():
+    for row in conn.execute("SELECT name FROM students WHERE school_id = ?", (DEFAULT_SCHOOL_ID,)).fetchall():
         name = str(row["name"] or "").strip().lower()
         if name and name in form_names:
             continue
@@ -1866,25 +1971,33 @@ def summary():
             "holiday_reports",
             "audit_events",
         ):
-            tables[table] = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
+            if table in TENANT_TABLES and table_has_column(conn, table, "school_id"):
+                tables[table] = conn.execute(f"SELECT COUNT(*) FROM {table} WHERE school_id = ?", (DEFAULT_SCHOOL_ID,)).fetchone()[0]
+            else:
+                tables[table] = conn.execute(f"SELECT COUNT(*) FROM {table}").fetchone()[0]
         raw_tables = dict(tables)
         school_rows = conn.execute("SELECT school_id, name, status, plan FROM schools ORDER BY name COLLATE NOCASE").fetchall()
         effective_students = effective_student_list_count(conn)
         active_admissions = conn.execute(
-            "SELECT COUNT(*) FROM admission_forms WHERE disabled = 0"
+            "SELECT COUNT(*) FROM admission_forms WHERE school_id = ? AND disabled = 0",
+            (DEFAULT_SCHOOL_ID,),
         ).fetchone()[0]
         disabled_admissions = raw_tables["admission_forms"] - active_admissions
         fee_total = conn.execute(
-            "SELECT COALESCE(SUM(net_paid), 0) FROM fee_receipts"
+            "SELECT COALESCE(SUM(net_paid), 0) FROM fee_receipts WHERE school_id = ?",
+            (DEFAULT_SCHOOL_ID,),
         ).fetchone()[0]
         fine_total = conn.execute(
-            "SELECT COALESCE(SUM(fine), 0) FROM fee_receipts"
+            "SELECT COALESCE(SUM(fine), 0) FROM fee_receipts WHERE school_id = ?",
+            (DEFAULT_SCHOOL_ID,),
         ).fetchone()[0]
         bank_total = conn.execute(
-            "SELECT COALESCE(SUM(bank_amount), 0) FROM fee_receipts"
+            "SELECT COALESCE(SUM(bank_amount), 0) FROM fee_receipts WHERE school_id = ?",
+            (DEFAULT_SCHOOL_ID,),
         ).fetchone()[0]
         cash_total = conn.execute(
-            "SELECT COALESCE(SUM(cash_amount), 0) FROM fee_receipts"
+            "SELECT COALESCE(SUM(cash_amount), 0) FROM fee_receipts WHERE school_id = ?",
+            (DEFAULT_SCHOOL_ID,),
         ).fetchone()[0]
         schema_row = conn.execute(
             "SELECT value FROM schema_meta WHERE key = 'schema_version'"
@@ -1968,11 +2081,13 @@ def validate_database():
 
         duplicate_receipts = conn.execute(
             """
-            SELECT receipt_no, COUNT(*) count
+            SELECT school_id, receipt_no, COUNT(*) count
             FROM fee_receipts
-            GROUP BY receipt_no
+            WHERE school_id = ?
+            GROUP BY school_id, receipt_no
             HAVING COUNT(*) > 1
-            """
+            """,
+            (DEFAULT_SCHOOL_ID,),
         ).fetchall()
         for row in duplicate_receipts:
             issues.append({"level": "error", "module": "fees", "message": f"Duplicate receipt: {row['receipt_no']}"})
@@ -1981,21 +2096,23 @@ def validate_database():
             """
             SELECT COUNT(*) count
             FROM fee_payment_allocations a
-            LEFT JOIN fee_receipts r ON r.receipt_no = a.receipt_no
-            WHERE r.receipt_no IS NULL
-            """
+            LEFT JOIN fee_receipts r ON r.receipt_no = a.receipt_no AND r.school_id = a.school_id
+            WHERE a.school_id = ? AND r.receipt_no IS NULL
+            """,
+            (DEFAULT_SCHOOL_ID,),
         ).fetchone()["count"]
         if orphan_allocations:
             issues.append({"level": "error", "module": "fees", "message": f"{orphan_allocations} receipt allocation rows have no receipt"})
 
         active_students = conn.execute(
-            "SELECT COUNT(*) count FROM students WHERE COALESCE(status, '') NOT IN ('Disabled', 'Inactive')"
+            "SELECT COUNT(*) count FROM students WHERE school_id = ? AND COALESCE(status, '') NOT IN ('Disabled', 'Inactive')",
+            (DEFAULT_SCHOOL_ID,),
         ).fetchone()["count"]
-        staff_count = conn.execute("SELECT COUNT(*) count FROM staff_members").fetchone()["count"]
-        fee_master_count = conn.execute("SELECT COUNT(*) count FROM fee_master").fetchone()["count"]
-        user_count = conn.execute("SELECT COUNT(*) count FROM user_accounts").fetchone()["count"]
+        staff_count = conn.execute("SELECT COUNT(*) count FROM staff_members WHERE school_id = ?", (DEFAULT_SCHOOL_ID,)).fetchone()["count"]
+        fee_master_count = conn.execute("SELECT COUNT(*) count FROM fee_master WHERE school_id = ?", (DEFAULT_SCHOOL_ID,)).fetchone()["count"]
+        user_count = conn.execute("SELECT COUNT(*) count FROM user_accounts WHERE school_id = ?", (DEFAULT_SCHOOL_ID,)).fetchone()["count"]
         backup_count = conn.execute("SELECT COUNT(*) count FROM state_backups").fetchone()["count"]
-        village_count = conn.execute("SELECT COUNT(*) count FROM transport_villages").fetchone()["count"]
+        village_count = conn.execute("SELECT COUNT(*) count FROM transport_villages WHERE school_id = ?", (DEFAULT_SCHOOL_ID,)).fetchone()["count"]
         school_count = conn.execute("SELECT COUNT(*) count FROM schools WHERE COALESCE(status, '') != 'Disabled'").fetchone()["count"]
 
     if active_students == 0:
