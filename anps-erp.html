@@ -1990,7 +1990,7 @@
               </label>
               <button class="primary-action" type="submit">Save School</button>
             </form>
-            <div class="security-output" id="schoolManagementOutput">School-wise login/settings next phase-e connect hobe.</div>
+            <div class="security-output" id="schoolManagementOutput">School-wise login binding User Access & Permissions page-e connected.</div>
           </section>
           <section class="panel role-permission-panel">
             <div class="panel-head">
@@ -2043,6 +2043,11 @@
                   <option value="">Select Role</option>
                 </select>
               </label>
+              <label>School
+                <select name="schoolId" id="accessUserSchoolSelect" required>
+                  <option value="anps">Alfred Nobel Public School</option>
+                </select>
+              </label>
               <label>Login ID
                 <input name="loginId" placeholder="email or user id" required />
               </label>
@@ -2059,9 +2064,9 @@
             </form>
             <div class="table-wrap compact-table">
               <table>
-                <thead><tr><th>Staff</th><th>Role</th><th>Login ID</th><th>Password</th><th>Status</th><th>Action</th></tr></thead>
+                <thead><tr><th>Staff</th><th>Role</th><th>School</th><th>Login ID</th><th>Password</th><th>Status</th><th>Action</th></tr></thead>
                 <tbody id="userAccessRows">
-                  <tr><td colspan="6">No user login saved yet.</td></tr>
+                  <tr><td colspan="7">No user login saved yet.</td></tr>
                 </tbody>
               </table>
             </div>

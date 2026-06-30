@@ -75,6 +75,8 @@ const financeSessions = {
 };
 
 let activeSession = "2026-27";
+let activeSchoolId = "anps";
+let activeSchoolName = "Alfred Nobel Public School";
 let activeFeeStudentAdmissionNo = "";
 let activeLedgerAdmissionNo = "";
 let activeFeeReturnView = "finance";
@@ -413,6 +415,9 @@ function getAppStateSnapshot() {
     complaintRecords,
     staffMembers,
     schools,
+    school_id: activeSchoolId,
+    schoolId: activeSchoolId,
+    schoolName: activeSchoolName,
     departments,
     roles,
     designations,
@@ -908,6 +913,8 @@ function applySavedState(saved = {}) {
       schools.splice(0, schools.length, ...saved.schools);
     }
     ensureDefaultSchool();
+    activeSchoolId = normalizeSchoolId(saved.school_id || saved.schoolId || getLoggedInBackendUser()?.school_id || activeSchoolId || "anps");
+    activeSchoolName = saved.schoolName || getSchoolById(activeSchoolId)?.name || activeSchoolName;
     if (Array.isArray(saved.departments)) {
       departments.splice(0, departments.length, ...saved.departments);
     }
@@ -1271,6 +1278,7 @@ function ensureLoginOverlay() {
       localStorage.setItem(BACKEND_TOKEN_KEY, result.token);
       localStorage.removeItem(BACKEND_LOGGED_OUT_KEY);
       if (result.user) localStorage.setItem(BACKEND_USER_KEY, JSON.stringify(result.user));
+      syncActiveSchoolFromUser(result.user);
       overlay.classList.add("hidden");
       backendSyncReady = true;
       updateTopbarSystemStatus();
@@ -1295,6 +1303,18 @@ function getLoggedInBackendUser() {
   } catch {
     return null;
   }
+}
+
+function getSchoolById(schoolId = activeSchoolId) {
+  const cleanId = normalizeSchoolId(schoolId);
+  return schools.find(school => normalizeSchoolId(school.school_id || school.id) === cleanId) || schools[0] || null;
+}
+
+function syncActiveSchoolFromUser(user = getLoggedInBackendUser()) {
+  const schoolId = normalizeSchoolId(user?.school_id || user?.schoolId || activeSchoolId || "anps");
+  const school = getSchoolById(schoolId);
+  activeSchoolId = schoolId;
+  activeSchoolName = user?.school_name || user?.schoolName || school?.name || activeSchoolName || "Alfred Nobel Public School";
 }
 
 function getCurrentTopbarRole() {
@@ -1391,7 +1411,11 @@ function scheduleBackendReconnect() {
 function updateTopbarSystemStatus() {
   const role = document.getElementById("topbarCurrentRole");
   const alerts = document.getElementById("topbarAlerts");
-  if (role) role.textContent = getCurrentTopbarRole();
+  syncActiveSchoolFromUser();
+  if (role) {
+    role.textContent = getCurrentTopbarRole();
+    role.title = `${activeSchoolName} (${activeSchoolId})`;
+  }
   updateRoleBasedNavigation();
   if (alerts) {
     const report = typeof getSystemHealthReport === "function" ? getSystemHealthReport() : {issues: []};
@@ -4400,6 +4424,7 @@ function renderUserAccessRows() {
     <tr>
       <td><strong>${escapeHtml(account.staffName || "-")}</strong><small>${escapeHtml(account.staffId || "")}</small></td>
       <td>${escapeHtml(account.role || "-")}${protectedAccount ? `<small class="system-lock-note">Protected</small>` : ""}</td>
+      <td>${escapeHtml(account.schoolName || getSchoolById(account.school_id || account.schoolId)?.name || "Alfred Nobel Public School")}<small>${escapeHtml(account.school_id || account.schoolId || "anps")}</small></td>
       <td>${escapeHtml(account.loginId || "-")}</td>
       <td>${escapeHtml(account.password || "-")}</td>
       <td><span class="status-pill ${account.status === "Active" ? "stable" : "pending"}">${escapeHtml(account.status || "Active")}</span></td>
@@ -4418,7 +4443,7 @@ function renderUserAccessRows() {
       </td>
     </tr>
   `;
-  }).join("") || `<tr><td colspan="6">No user login saved yet.</td></tr>`;
+  }).join("") || `<tr><td colspan="7">No user login saved yet.</td></tr>`;
   if (summary) summary.textContent = `${userAccessAccounts.length} users saved`;
 }
 
@@ -4668,6 +4693,7 @@ function renderMobileAppActivity() {
 }
 
 function renderUserAccessSettings() {
+  renderSchoolSelectOptions(document.getElementById("accessUserSchoolSelect"));
   renderAccessRoleOptions();
   renderAccessStaffOptions();
   const selectedRole = document.getElementById("accessPermissionRole")?.value || roles[0]?.name || "";
@@ -4717,6 +4743,20 @@ function ensureDefaultSchool() {
   }
 }
 
+function renderSchoolSelectOptions(select, selectedId = "anps") {
+  if (!select) return;
+  ensureDefaultSchool();
+  const selected = normalizeSchoolId(selectedId || activeSchoolId || "anps");
+  select.innerHTML = schools
+    .filter(school => String(school.status || "Active") !== "Disabled")
+    .map(school => {
+      const schoolId = normalizeSchoolId(school.school_id || school.id);
+      return `<option value="${escapeHtml(schoolId)}">${escapeHtml(school.name || schoolId)}</option>`;
+    })
+    .join("");
+  setSelectValue(select, selected);
+}
+
 async function loadSchoolsFromBackend() {
   try {
     const response = await backendFetch(`/api/schools?v=${Date.now()}`, {headers: backendHeaders(), cache: "no-store"});
@@ -4732,6 +4772,7 @@ async function loadSchoolsFromBackend() {
       })));
       ensureDefaultSchool();
       renderSchoolManagement(false);
+      renderSchoolSelectOptions(document.getElementById("accessUserSchoolSelect"));
     }
   } catch (error) {
     console.warn("Could not load school registry.", error);
@@ -4785,6 +4826,7 @@ async function saveSchoolManagementForm(event) {
   form.reset();
   form.querySelector("button[type='submit']").textContent = "Save School";
   renderSchoolManagement(false);
+  renderSchoolSelectOptions(document.getElementById("accessUserSchoolSelect"));
   saveAppState();
   try {
     const response = await backendFetch("/api/schools", {
@@ -4805,6 +4847,7 @@ async function saveSchoolManagementForm(event) {
       })));
     }
     renderSchoolManagement(false);
+    renderSchoolSelectOptions(document.getElementById("accessUserSchoolSelect"));
     document.getElementById("schoolManagementOutput").innerHTML = `<strong>${escapeHtml(school.name)} saved.</strong><br>School ID: ${escapeHtml(school.school_id)} | Status: ${escapeHtml(school.status)}`;
     showToast(`${school.name} school saved.`);
   } catch (error) {
@@ -4822,6 +4865,7 @@ function resetUserAccessForm() {
   editingUserAccessIndex = -1;
   if (userAccessForm) {
     userAccessForm.reset();
+    renderSchoolSelectOptions(userAccessForm.elements.schoolId, activeSchoolId || "anps");
     userAccessForm.querySelector("button[type='submit']").textContent = "Save User Login";
   }
 }
@@ -10891,10 +10935,15 @@ if (userAccessForm) {
     const data = new FormData(userAccessForm);
     const staffId = String(data.get("staffId") || "").trim();
     const staff = getStaffByStaffId(staffId);
+    const schoolId = normalizeSchoolId(data.get("schoolId") || activeSchoolId || "anps");
+    const school = getSchoolById(schoolId);
     const account = {
       staffId,
       staffName: staff ? staff.name : "",
       role: String(data.get("role") || "").trim(),
+      school_id: schoolId,
+      schoolId,
+      schoolName: school?.name || "Alfred Nobel Public School",
       loginId: String(data.get("loginId") || "").trim(),
       password: String(data.get("password") || "").trim(),
       status: String(data.get("status") || "Active").trim() || "Active"
@@ -10936,6 +10985,9 @@ if (masterAdminForm) {
       staffId: "",
       staffName: "Master Admin",
       role: "Master Admin",
+      school_id: "anps",
+      schoolId: "anps",
+      schoolName: "Alfred Nobel Public School",
       loginId,
       password,
       status: "Active"
@@ -11993,11 +12045,13 @@ document.body.addEventListener("click", event => {
       editingUserAccessIndex = index;
       setSelectValue(userAccessForm.elements.staffId, account.staffId || "");
       setSelectValue(userAccessForm.elements.role, account.role || "");
+      setSelectValue(userAccessForm.elements.schoolId, account.school_id || account.schoolId || "anps");
       userAccessForm.elements.loginId.value = account.loginId || "";
       userAccessForm.elements.password.value = account.password || "";
       setSelectValue(userAccessForm.elements.status, account.status || "Active");
       userAccessForm.querySelector("button[type='submit']").textContent = "Update User Login";
       setView("userAccessSettings");
+      setSelectValue(userAccessForm.elements.schoolId, account.school_id || account.schoolId || "anps");
       showToast(`${account.loginId} ready to edit.`);
     }
   }
