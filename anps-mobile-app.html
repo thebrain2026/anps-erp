@@ -1754,6 +1754,118 @@
       return translated || original;
     }
 
+    function bengaliNoticeText(text = "") {
+      const original = normalizeText(text);
+      if (!original) return "";
+      if (/[\u0980-\u09FF]/.test(original)) return original;
+      const phraseMap = [
+        [/\b(?:the\s+)?students?\s+(?:are\s+)?(?:here\s*by|hereby)\s+(?:inform|informed|notified)\s+that\b/gi, "ছাত্রছাত্রীদের জানানো যাচ্ছে যে"],
+        [/\bthis\s+is\s+to\s+(?:inform|notify)\s+(?:all\s+)?students?\s+that\b/gi, "ছাত্রছাত্রীদের জানানো যাচ্ছে যে"],
+        [/\b(?:all\s+)?students?\s+(?:are\s+)?(?:requested|instructed)\s+to\b/gi, "সব ছাত্রছাত্রীকে বলা হচ্ছে"],
+        [/\b(?:our\s+)?school\s+(?:will\s+remain|shall\s+remain)\s+closed\b/gi, "আমাদের স্কুল বন্ধ থাকবে"],
+        [/\b(?:our\s+)?school\s+is\s+going\s+to\s+(?:be\s+)?closed\b/gi, "আমাদের স্কুল বন্ধ থাকবে"],
+        [/\b(?:our\s+)?school\s+is\s+going\s+to\b/gi, "আমাদের স্কুল"],
+        [/\bparents?\s+meeting\b/gi, "অভিভাবক সভা"],
+        [/\bwear\s+(?:the\s+)?school\s+uniform\b/gi, "স্কুল ইউনিফর্ম পরে আসবে"],
+        [/\bcome\s+in\s+(?:the\s+)?school\s+uniform\b/gi, "স্কুল ইউনিফর্ম পরে আসবে"],
+        [/\bbring\s+(?:your\s+)?(?:books?|copies|notebooks?)\b/gi, "বই ও খাতা নিয়ে আসবে"],
+        [/\bsubmit\s+(?:the\s+)?fees?\b/gi, "ফি জমা দেবে"],
+        [/\bpay\s+(?:the\s+)?fees?\b/gi, "ফি জমা দেবে"],
+        [/\bholiday\s+on\b/gi, "ছুটি থাকবে"],
+        [/\bclass\s+test\b/gi, "ক্লাস টেস্ট"]
+      ];
+      const wordMap = {
+        notice: "নোটিস",
+        student: "ছাত্রছাত্রী",
+        students: "ছাত্রছাত্রী",
+        school: "স্কুল",
+        class: "ক্লাস",
+        classes: "ক্লাস",
+        teacher: "শিক্ষক",
+        teachers: "শিক্ষকরা",
+        parent: "অভিভাবক",
+        parents: "অভিভাবকরা",
+        guardian: "গার্ডিয়ান",
+        guardians: "গার্ডিয়ানরা",
+        uniform: "ইউনিফর্ম",
+        dress: "ড্রেস",
+        wear: "পরে আসবে",
+        come: "আসবে",
+        bring: "নিয়ে আসবে",
+        closed: "বন্ধ থাকবে",
+        open: "খোলা থাকবে",
+        holiday: "ছুটি",
+        meeting: "সভা",
+        exam: "পরীক্ষা",
+        test: "পরীক্ষা",
+        fee: "ফি",
+        fees: "ফি",
+        payment: "পেমেন্ট",
+        submit: "জমা দেবে",
+        pay: "জমা দেবে",
+        tomorrow: "আগামীকাল",
+        today: "আজ",
+        morning: "সকাল",
+        afternoon: "দুপুর",
+        monday: "সোমবার",
+        tuesday: "মঙ্গলবার",
+        wednesday: "বুধবার",
+        thursday: "বৃহস্পতিবার",
+        friday: "শুক্রবার",
+        saturday: "শনিবার",
+        sunday: "রবিবার",
+        important: "গুরুত্বপূর্ণ",
+        urgent: "জরুরি",
+        all: "সব",
+        must: "অবশ্যই",
+        requested: "অনুরোধ করা হচ্ছে",
+        informed: "জানানো যাচ্ছে",
+        notified: "জানানো যাচ্ছে",
+        and: "এবং",
+        or: "অথবা",
+        for: "জন্য",
+        with: "সঙ্গে",
+        in: "তে",
+        on: "তে",
+        at: "তে",
+        the: "",
+        a: "",
+        an: "",
+        is: "",
+        are: "",
+        am: "",
+        be: "",
+        been: "",
+        being: "",
+        by: "",
+        here: "",
+        hereby: "",
+        inform: "",
+        notify: "",
+        that: "",
+        this: "",
+        our: "",
+        your: "",
+        going: "",
+        to: "",
+        will: "",
+        shall: "",
+        remain: ""
+      };
+      let translated = original;
+      phraseMap.forEach(([pattern, replacement]) => {
+        translated = translated.replace(pattern, replacement);
+      });
+      translated = translated.replace(/\b[A-Za-z]+\b/g, word => wordMap[word.toLowerCase()] ?? word);
+      translated = translated
+        .replace(/\s+/g, " ")
+        .replace(/\s+([।,])/g, "$1")
+        .replace(/(স্কুল)\s+স্কুল/g, "$1")
+        .replace(/(ছাত্রছাত্রী)\s+ছাত্রছাত্রী/g, "$1")
+        .trim();
+      return translated || original;
+    }
+
     function studentHomeworkCard(item = {}, user = {}) {
       const className = item.className || user.className || "Class";
       const body = normalizeText(item.text);
@@ -1773,10 +1885,10 @@
     function studentNoticeCard(item = {}) {
       const title = localized(item, "title") || "Notice";
       const message = localized(item, "message") || "";
-      const translatedTitle = bengaliHomeworkText(title);
-      const translatedMessage = bengaliHomeworkText(message);
+      const translatedTitle = bengaliNoticeText(title);
+      const translatedMessage = bengaliNoticeText(message);
       const hasBangla = /[\u0980-\u09FF]/.test(`${title} ${message}`);
-      const translator = hasBangla ? "" : `<button class="bengali-translate-action" type="button" data-bengali-notice>বাংলায় নোটিস দেখুন</button><div class="bengali-notice-text"><strong>${translatedTitle}</strong><br>${translatedMessage || "বাংলা অনুবাদ পাওয়া যায়নি।"}</div>`;
+      const translator = hasBangla ? "" : `<button class="bengali-translate-action" type="button" data-bengali-notice>বাংলায় পড়ুন</button><div class="bengali-notice-text"><strong>${translatedTitle}</strong><br>${translatedMessage || "বাংলা অনুবাদ পাওয়া যায়নি।"}</div>`;
       return `<article class="card notice-card">
         <div class="card-head">
           <div><h3>${title}</h3><p>${item.audience || item.audienceType || "Notice"} | ${noticeDateLabel(item)}</p></div>
@@ -2289,7 +2401,7 @@
         button.addEventListener("click", () => {
           const target = button.nextElementSibling;
           target?.classList.toggle("show");
-          button.textContent = target?.classList.contains("show") ? "বাংলা নোটিস লুকান" : "বাংলায় নোটিস দেখুন";
+          button.textContent = target?.classList.contains("show") ? "বাংলা লুকান" : "বাংলায় পড়ুন";
         });
       });
       document.querySelectorAll("[data-complaint-satisfied]").forEach(button => {
