@@ -290,6 +290,7 @@ const titleMap = {
   teacherTimetable: "Teachers Time Table",
   syllabus: "Syllabus",
   marksheet: "Marksheet",
+  academicProfile: "Academic Profile",
   teacherComplaint: "Teacher Complaint",
   holidayReport: "Holiday Report",
   annualCalendar: "Annual Calendar",
@@ -328,7 +329,7 @@ const ACCESS_PERMISSION_GROUPS = [
   {name: "Communication", modules: ["noticeBoard", "teacherNoticeRequests", "sendSms"]},
   {name: "Homework", modules: ["addHomework", "dailyAssignment"]},
   {name: "Reports", modules: ["reportStudentInformation", "dailyCollectionReport", "entireSchoolFeesReport"]},
-  {name: "Academic", modules: ["classTimetable", "teacherTimetable", "syllabus", "marksheet", "teacherComplaint", "holidayReport", "annualCalendar"]},
+  {name: "Academic", modules: ["classTimetable", "teacherTimetable", "syllabus", "marksheet", "academicProfile", "teacherComplaint", "holidayReport", "annualCalendar"]},
   {name: "Certificate", modules: ["studentIdCard", "teacherIdCard"]},
   {name: "Settings", modules: ["masterAdmin", "schoolManagement", "userAccessSettings", "studentUserLogin", "mobileAppActivity"]},
   {name: "Security", modules: ["securityMaintenance", "securityDuplicateReceipts", "securityAlertSolver", "securityRoleHealth"]},
@@ -1580,6 +1581,7 @@ function renderActiveView(viewName = document.querySelector(".view.active")?.id 
   if (viewName === "teacherTimetable") renderTeacherTimetable();
   if (viewName === "syllabus") renderSyllabusModule();
   if (viewName === "marksheet") renderMarksheetModule();
+  if (viewName === "academicProfile") renderAcademicProfileModule();
   if (viewName === "holidayReport") renderHolidayReport();
   if (viewName === "annualCalendar") renderAnnualCalendar();
   if (viewName === "studentIdCard") renderStudentIdCardModule();
@@ -4180,6 +4182,156 @@ function saveMarksheetEntry(form) {
   if (form.elements.maxMarks) form.elements.maxMarks.value = "100";
   renderMarksheetModule();
   showToast("Marks saved for review.");
+}
+
+function getAcademicProfilePayments(student = {}) {
+  const admissionNo = normalizeAdmissionNo(student.admissionNo || "");
+  const sessionPayments = collectedPayments[activeSession] || {};
+  return Object.entries(sessionPayments).flatMap(([paymentAdmissionNo, payments]) =>
+    normalizeAdmissionNo(paymentAdmissionNo) === admissionNo ? (payments || []) : []
+  );
+}
+
+function getAcademicProfileFineTotal(payments = []) {
+  return payments.reduce((total, payment) => {
+    const allocationFine = (payment.allocations || []).reduce((sum, allocation) => {
+      const head = String(allocation.head || "").toLowerCase();
+      return sum + (head.includes("fine") ? Number(allocation.amount || 0) : 0);
+    }, 0);
+    return total + Number(payment.fineAmount || 0) + allocationFine;
+  }, 0);
+}
+
+function getAcademicProfileAttendance(student = {}) {
+  const admissionNo = normalizeAdmissionNo(student.admissionNo || "");
+  const rows = attendance.filter(item => {
+    if (Array.isArray(item)) return false;
+    return normalizeAdmissionNo(item.admissionNo || item.studentId || "") === admissionNo;
+  });
+  if (!rows.length) return {label: "Not entered", percent: 0, detail: "No student attendance data entered yet."};
+  const present = rows.filter(item => /present|late/i.test(String(item.status || ""))).length;
+  const percent = rows.length ? Math.round((present / rows.length) * 100) : 0;
+  return {label: `${percent}%`, percent, detail: `${present}/${rows.length} attendance records present/late.`};
+}
+
+function getAcademicProfileResults(student = {}) {
+  const admissionNo = normalizeAdmissionNo(student.admissionNo || "");
+  return marksheetEntries
+    .filter(entry => normalizeAdmissionNo(entry.studentAdmissionNo || entry.studentId || "") === admissionNo)
+    .sort((a, b) => Date.parse(b.publishedAt || b.createdAt || 0) - Date.parse(a.publishedAt || a.createdAt || 0));
+}
+
+function isComplaintForStudent(item = {}, student = {}) {
+  const admissionNo = normalizeAdmissionNo(student.admissionNo || "");
+  const studentName = String(student.name || "").trim().toLowerCase();
+  return Boolean(
+    (admissionNo && normalizeAdmissionNo(item.studentId || item.studentAdmissionNo || item.admissionNo || "") === admissionNo) ||
+    (studentName && String(getComplaintPersonName(item) || "").trim().toLowerCase() === studentName) ||
+    (studentName && String(item.studentName || "").trim().toLowerCase() === studentName)
+  );
+}
+
+function getAcademicProfileComplaints(student = {}, sourceType = "") {
+  return complaintRecords
+    .filter(item => isComplaintForStudent(item, student))
+    .filter(item => {
+      const source = getComplaintSource(item).toLowerCase();
+      if (sourceType === "teacher") return source.includes("teacher");
+      if (sourceType === "student") return source.includes("student");
+      return true;
+    })
+    .sort((a, b) => parseDateDDMMYYYY(b.date || new Date()) - parseDateDDMMYYYY(a.date || new Date()));
+}
+
+function getAcademicProfilePaymentHabit(payments = []) {
+  if (!payments.length) return {label: "No payment record", tone: "pending", detail: "No fees payment received yet."};
+  const totalPaid = payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+  const fineTotal = getAcademicProfileFineTotal(payments);
+  if (fineTotal > 0) return {label: "Late/Fine found", tone: "due", detail: `${payments.length} receipts | Paid ${formatRs(totalPaid)} | Fine ${formatRs(fineTotal)}`};
+  return {label: "Timely / No fine", tone: "stable", detail: `${payments.length} receipts | Paid ${formatRs(totalPaid)} | No fine recorded`};
+}
+
+function renderAcademicProfileModule() {
+  const select = document.getElementById("academicProfileStudentSelect");
+  const searchInput = document.getElementById("academicProfileSearch");
+  const host = document.getElementById("academicProfileHost");
+  if (!select || !host) return;
+  const search = String(searchInput?.value || "").trim().toLowerCase();
+  const previous = select.value;
+  const filteredStudents = getActiveStudents()
+    .filter(student => {
+      if (!search) return true;
+      return [student.admissionNo, student.name, student.villageTown, student.className, student.section]
+        .some(value => String(value || "").toLowerCase().includes(search));
+    })
+    .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), undefined, {numeric: true}));
+  select.innerHTML = `<option value="">Select Student</option>${filteredStudents.map(student =>
+    `<option value="${escapeHtml(student.admissionNo || "")}">${escapeHtml(student.admissionNo || "-")} - ${escapeHtml(student.name || "-")}</option>`
+  ).join("")}`;
+  const selectedAdmission = filteredStudents.some(student => student.admissionNo === previous)
+    ? previous
+    : (search && filteredStudents[0]?.admissionNo ? filteredStudents[0].admissionNo : previous);
+  if (selectedAdmission) select.value = selectedAdmission;
+  const student = getActiveStudents().find(item => normalizeAdmissionNo(item.admissionNo || "") === normalizeAdmissionNo(select.value || ""));
+  if (!student) {
+    host.innerHTML = `<div class="panel"><div class="empty-chart">${search ? "No student found for this search." : "Search or select a student to open academic profile."}</div></div>`;
+    return;
+  }
+  const payments = getAcademicProfilePayments(student);
+  const paymentHabit = getAcademicProfilePaymentHabit(payments);
+  const attendanceSummary = getAcademicProfileAttendance(student);
+  const results = getAcademicProfileResults(student);
+  const teacherComplaints = getAcademicProfileComplaints(student, "teacher");
+  const studentComplaints = getAcademicProfileComplaints(student, "student");
+  const initialsText = String(student.name || "ST").split(/\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase() || "ST";
+  const photo = student.photo ? `<img src="${student.photo}" alt="${escapeHtml(student.name || "Student")} photo" />` : initialsText;
+  const latestPublished = results.find(item => item.status === "Published");
+  host.innerHTML = `
+    <div class="panel student-report-panel">
+      <div class="academic-profile-card">
+        <div class="academic-profile-photo">${photo}</div>
+        <div>
+          <p class="eyebrow">Student snapshot</p>
+          <h2>${escapeHtml(student.name || "-")}</h2>
+          <p>${escapeHtml(student.admissionNo || "-")} | ${escapeHtml([student.className || student.class, student.section].filter(Boolean).join(" ") || "-")}</p>
+          <p>Village: <strong>${escapeHtml(student.villageTown || "-")}</strong></p>
+        </div>
+      </div>
+      <div class="module-status">
+        <article><strong>${escapeHtml(attendanceSummary.label)}</strong><small>Attendance</small></article>
+        <article><strong>${escapeHtml(latestPublished ? `${latestPublished.exam} ${latestPublished.grade || ""}` : "Not Published")}</strong><small>Latest Result</small></article>
+        <article><strong>${payments.length}</strong><small>Fee Receipts</small></article>
+        <article><strong>${teacherComplaints.length + studentComplaints.length}</strong><small>Complaints</small></article>
+      </div>
+    </div>
+    <div class="academic-profile-grid">
+      <div class="panel">
+        <div class="panel-head"><div><p class="eyebrow">Result</p><h2>Marksheet</h2></div></div>
+        <div class="task-list">
+          ${results.slice(0, 6).map(result => `<article><b>${escapeHtml(result.grade || "-")}</b><div><strong>${escapeHtml(result.exam || "-")} | ${escapeHtml(result.subject || "-")}</strong><p>${escapeHtml(result.marks ?? result.total ?? 0)}/${escapeHtml(result.maxMarks ?? result.maxTotal ?? 100)} | ${escapeHtml(result.percentage || "")}</p><small>${escapeHtml(result.status || "Review")}</small></div><em>${escapeHtml(result.status === "Published" ? "Visible" : "Review")}</em></article>`).join("") || `<article><b>0</b><div><strong>No result entered</strong><p>Marksheet publish hole ekhane show korbe.</p></div><em>Empty</em></article>`}
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><div><p class="eyebrow">Fees</p><h2>Payment Habit</h2></div><span class="status-pill ${paymentHabit.tone}">${escapeHtml(paymentHabit.label)}</span></div>
+        <div class="receipt">${escapeHtml(paymentHabit.detail)}</div>
+        <div class="task-list">
+          ${payments.slice(0, 5).map(payment => `<article><b>₹</b><div><strong>${escapeHtml(payment.receipt || "-")}</strong><p>${escapeHtml(payment.date || "-")} | ${formatRs(payment.amount || 0)}</p><small>${escapeHtml(payment.paymentType || payment.mode || "")}</small></div><em>Paid</em></article>`).join("") || `<article><b>₹</b><div><strong>No payment</strong><p>No receipt found in this session.</p></div><em>Empty</em></article>`}
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><div><p class="eyebrow">Teacher Complaint</p><h2>Teacher Observations</h2></div></div>
+        <div class="task-list">
+          ${teacherComplaints.slice(0, 5).map(item => `<article><b>!</b><div><strong>${escapeHtml(getComplaintCategory(item))}</strong><p>${escapeHtml(getComplaintDetails(item))}</p><small>${escapeHtml(item.date || "-")} | ${escapeHtml(item.status || "Open")}</small></div><em>${escapeHtml(item.priority || "Normal")}</em></article>`).join("") || `<article><b>✓</b><div><strong>No teacher complaint</strong><p>No teacher complaint found for this student.</p></div><em>Clear</em></article>`}
+        </div>
+      </div>
+      <div class="panel">
+        <div class="panel-head"><div><p class="eyebrow">Student Complaint</p><h2>Student / Guardian Concerns</h2></div></div>
+        <div class="task-list">
+          ${studentComplaints.slice(0, 5).map(item => `<article><b>?</b><div><strong>${escapeHtml(getComplaintCategory(item))}</strong><p>${escapeHtml(getComplaintDetails(item))}</p><small>${escapeHtml(item.date || "-")} | ${escapeHtml(item.status || "Open")}</small></div><em>${escapeHtml(getComplaintSatisfactionLabel(item) || item.priority || "Normal")}</em></article>`).join("") || `<article><b>✓</b><div><strong>No student complaint</strong><p>No student app complaint found.</p></div><em>Clear</em></article>`}
+        </div>
+      </div>
+    </div>
+  `;
 }
 
 function toDateInputValue(value = new Date()) {
@@ -12682,6 +12834,8 @@ document.getElementById("marksheetSectionSelect")?.addEventListener("change", ()
 
 document.getElementById("marksheetStatusFilter")?.addEventListener("change", renderMarksheetModule);
 document.getElementById("marksheetSearch")?.addEventListener("input", renderMarksheetModule);
+document.getElementById("academicProfileSearch")?.addEventListener("input", renderAcademicProfileModule);
+document.getElementById("academicProfileStudentSelect")?.addEventListener("change", renderAcademicProfileModule);
 
 document.getElementById("marksheetRows")?.addEventListener("click", event => {
   const checkButton = event.target.closest("[data-check-marksheet]");

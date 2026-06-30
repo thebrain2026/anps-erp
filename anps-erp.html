@@ -104,6 +104,7 @@
             <button data-view="teacherTimetable" type="button">Teachers Time Table</button>
             <button data-view="syllabus" type="button">Syllabus</button>
             <button data-view="marksheet" type="button">Marksheet</button>
+            <button data-view="academicProfile" type="button">Academic Profile</button>
             <button data-view="teacherComplaint" type="button">Teacher Complaint</button>
             <button data-view="holidayReport" type="button">Holiday Report</button>
             <button data-view="annualCalendar" type="button">Annual Calendar</button>
@@ -1843,6 +1844,27 @@
               </tbody>
             </table>
           </div>
+        </div>
+      </section>
+
+      <section class="view" id="academicProfile">
+        <div class="panel student-report-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Academic</p>
+              <h2>Academic Profile</h2>
+              <small>Principal/office meeting-er somoy student-er academic, fees, complaint and attendance snapshot ekhane dekhun.</small>
+            </div>
+          </div>
+          <div class="report-filter-row">
+            <input id="academicProfileSearch" type="search" placeholder="Search admission no, student name, village" />
+            <select id="academicProfileStudentSelect">
+              <option value="">Select Student</option>
+            </select>
+          </div>
+        </div>
+        <div id="academicProfileHost" class="student-report-panel">
+          <div class="panel"><div class="empty-chart">Search or select a student to open academic profile.</div></div>
         </div>
       </section>
 

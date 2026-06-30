@@ -8115,6 +8115,57 @@ body.modal-open {
   border-color: #cfdbe7;
 }
 
+.academic-profile-card {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 18px;
+  align-items: center;
+  padding: 18px;
+  border: 1px solid rgba(37, 99, 235, .18);
+  border-radius: 18px;
+  background: linear-gradient(135deg, #f8fbff 0%, #eef6ff 52%, #fff7ed 100%);
+  box-shadow: 0 18px 45px rgba(15, 23, 42, .08);
+}
+
+.academic-profile-photo {
+  width: 132px;
+  height: 152px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 2rem;
+  font-weight: 900;
+}
+
+.academic-profile-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.academic-profile-card h2 {
+  margin: 4px 0 6px;
+  color: #0f172a;
+}
+
+.academic-profile-card p {
+  margin: 4px 0;
+  color: #475569;
+}
+
+.academic-profile-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.academic-profile-grid .task-list article {
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+}
+
 @media (max-width: 1080px) {
   .shell { grid-template-columns: 1fr; }
   .rail {
@@ -8239,6 +8290,9 @@ body.modal-open {
   .class-fee-panel .fee-master-form label { grid-template-columns: 1fr; }
   .class-fee-panel .fee-master-form button { margin-left: 0; }
   .student-fee-card, .ledger-summary, .ledger-profile-card, .ledger-info-grid { grid-template-columns: 1fr; }
+  .academic-profile-card,
+  .academic-profile-grid { grid-template-columns: 1fr; }
+  .academic-profile-photo { width: 104px; height: 122px; }
   .ledger-info-grid div:nth-child(5),
   .ledger-info-grid div:nth-child(6) { grid-column: auto; }
   .modal-backdrop { padding: 10px; }
