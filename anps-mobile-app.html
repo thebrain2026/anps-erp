@@ -402,6 +402,105 @@
     .metric b { display: block; font-size: 1.2rem; }
     .metric span { color: rgba(255,255,255,.78); font-size: .66rem; font-weight: 950; text-transform: uppercase; }
 
+    .latest-notice-card {
+      position: relative;
+      margin: -2px 12px 12px;
+      padding: 14px 14px 14px 18px;
+      border: 1px solid rgba(255, 255, 255, .88);
+      border-radius: 22px;
+      background:
+        radial-gradient(circle at 9% 16%, rgba(255,255,255,.72), transparent 27%),
+        linear-gradient(135deg, #ffb347 0%, #ff6f91 42%, #6c63ff 100%);
+      box-shadow: 0 17px 34px rgba(108, 99, 255, .18);
+      overflow: hidden;
+    }
+
+    .latest-notice-card::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 6px;
+      background: rgba(255,255,255,.9);
+    }
+
+    .latest-notice-card::after {
+      content: "!";
+      position: absolute;
+      right: 13px;
+      top: 12px;
+      display: grid;
+      place-items: center;
+      width: 30px;
+      height: 30px;
+      border-radius: 11px;
+      background: rgba(255,255,255,.22);
+      color: #fff;
+      font-weight: 950;
+    }
+
+    .latest-notice-card[hidden] {
+      display: none;
+    }
+
+    .latest-notice-card span,
+    .latest-notice-card strong,
+    .latest-notice-card p {
+      display: block;
+    }
+
+    .latest-notice-card span {
+      color: rgba(255,255,255,.88);
+      font-size: .68rem;
+      font-weight: 950;
+      text-transform: uppercase;
+    }
+
+    .latest-notice-card strong {
+      margin-top: 3px;
+      padding-right: 36px;
+      color: #fff;
+      font-size: .95rem;
+      line-height: 1.22;
+      text-shadow: 0 2px 12px rgba(16,26,74,.16);
+    }
+
+    .latest-notice-card p {
+      margin: 5px 0 0;
+      color: rgba(255,255,255,.86);
+      font-size: .8rem;
+      font-weight: 750;
+      line-height: 1.35;
+    }
+
+    .notice-card {
+      border-color: rgba(255, 111, 145, .25);
+      background:
+        linear-gradient(135deg, rgba(255,255,255,.9), rgba(255,248,231,.82)),
+        linear-gradient(135deg, rgba(255,179,71,.18), rgba(108,99,255,.12));
+    }
+
+    .notice-card .status {
+      color: #fff;
+      background: linear-gradient(135deg, #ff6f91, #6c63ff);
+    }
+
+    .homework-card {
+      border-color: rgba(20, 184, 166, .28);
+      background:
+        radial-gradient(circle at top right, rgba(255, 206, 86, .28), transparent 32%),
+        linear-gradient(135deg, rgba(236,253,245,.96), rgba(239,246,255,.9));
+      box-shadow: 0 16px 34px rgba(15, 118, 110, .14);
+    }
+
+    .homework-card .card-head h3 {
+      color: #0f766e;
+    }
+
+    .homework-card .status {
+      color: #fff;
+      background: linear-gradient(135deg, #14b8a6, #f59e0b);
+    }
+
     .section-title {
       display: flex;
       justify-content: space-between;
@@ -865,6 +964,7 @@
             </div>
             <div class="metrics" id="metricGrid"></div>
           </article>
+          <div class="latest-notice-card" id="dashboardLatestNotice" hidden></div>
           <div class="section-title">
             <h2 id="moduleTitle">Dashboard</h2>
             <span id="moduleScope">Role filtered</span>
@@ -1159,6 +1259,7 @@
         syllabus: "syllabusEntries",
         notices: "notices",
         complaints: "complaintRecords",
+        teacherNoticeRequests: "teacherNoticeRequests",
         homework: "homework",
         classwork: "classworkEntries",
         results: "resultEntries",
@@ -1307,9 +1408,24 @@
     }
 
     function visibleNotices(erpState = {}, className = "") {
+      const cleanClassName = normalizeText(className).toLowerCase();
       return (erpState.notices || []).filter(item => {
-        const audience = normalizeText(item.audience || item.target || "All");
-        return !className || ["All", "Students", "Student"].includes(audience) || audience === className || className.includes(audience);
+        const audience = normalizeText(item.audience || item.audienceType || item.target || "All Students");
+        const cleanAudience = audience.toLowerCase();
+        if (!cleanClassName) return true;
+        if (cleanAudience.includes("all") || cleanAudience === "students" || cleanAudience === "student") return true;
+        const classes = Array.isArray(item.classes) ? item.classes : normalizeText(item.noticeClass).split(",");
+        const sections = Array.isArray(item.sections) ? item.sections : [];
+        const classMatch = classes
+          .map(value => normalizeText(value).toLowerCase())
+          .filter(Boolean)
+          .some(value => cleanClassName === value || cleanClassName.includes(value));
+        if (!classMatch) {
+          const directTarget = normalizeText(item.className || item.classSection || item.audience).toLowerCase();
+          if (!directTarget || !(cleanClassName === directTarget || cleanClassName.includes(directTarget))) return false;
+        }
+        const cleanSections = sections.map(value => normalizeText(value).toLowerCase()).filter(Boolean);
+        return !cleanSections.length || cleanSections.some(section => cleanClassName.includes(section));
       });
     }
 
@@ -1362,6 +1478,29 @@
 
     function teacherSubjects(erpState = {}, staff = {}) {
       const subjectNames = normalizeText(staff.teachingSubject).split(",").map(item => item.trim()).filter(Boolean);
+      const staffName = normalizeText(staff.name || staff.staffName);
+      const staffId = normalizeText(staff.staffId || staff.id);
+      const timetableAssignments = (erpState.classTimetableEntries || [])
+        .filter(item => {
+          const teacher = normalizeText(item.teacher || item.teacherName).toLowerCase();
+          const cleanName = staffName.toLowerCase();
+          const cleanId = staffId.toLowerCase();
+          return (cleanName && teacher.includes(cleanName)) || (cleanId && teacher.includes(cleanId));
+        })
+        .map(item => ({
+          className: [item.className || item.class, item.section].filter(Boolean).join(" ").trim(),
+          subject: normalizeText(item.subject)
+        }))
+        .filter(item => item.className && item.subject);
+      if (timetableAssignments.length) {
+        const seen = new Set();
+        return timetableAssignments.filter(item => {
+          const key = `${item.className.toLowerCase()}|${item.subject.toLowerCase()}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      }
       const classAssignments = erpState.classSubjectAssignments || {};
       const classes = Object.keys(classAssignments);
       const fromAssignments = classes.flatMap(className => (classAssignments[className] || [])
@@ -1406,6 +1545,10 @@
         homework: erpState.homework || [],
         classwork: erpState.classworkEntries || [],
         notices: erpState.notices || [],
+        teacherNoticeRequests: (erpState.teacherNoticeRequests || []).filter(item =>
+          normalizeText(item.teacherId) === normalizeText(state.user.id)
+          || normalizeText(item.teacherName).toLowerCase() === normalizeText(state.user.name).toLowerCase()
+        ),
         complaints: erpState.complaintRecords || [],
         teacherComplaints: [],
         ratings: (erpState.teacherRatings || []).filter(item => normalizeText(item.teacherId) === normalizeText(state.user.id)),
@@ -1450,8 +1593,8 @@
       window.setTimeout(() => el.classList.remove("show"), 1700);
     }
 
-    function card({ title, meta, body, badge, status = "ok" }) {
-      return `<article class="card"><div class="card-head"><div><h3>${title}</h3><p>${meta}</p></div>${badge ? `<span class="status ${status}">${badge}</span>` : ""}</div>${body ? `<p>${body}</p>` : ""}</article>`;
+    function card({ title, meta, body, badge, status = "ok", className = "" }) {
+      return `<article class="card ${className}"><div class="card-head"><div><h3>${title}</h3><p>${meta}</p></div>${badge ? `<span class="status ${status}">${badge}</span>` : ""}</div>${body ? `<p>${body}</p>` : ""}</article>`;
     }
 
     function photoMarkup(user) {
@@ -1462,6 +1605,27 @@
     function localized(item, key) {
       if (state.language === "bn" && item[`${key}Bn`]) return item[`${key}Bn`];
       return item[key];
+    }
+
+    function noticeDateLabel(item = {}) {
+      return item.publishDate || item.date || item.createdAt?.slice?.(0, 10) || "-";
+    }
+
+    function renderDashboardLatestNotice(notices = []) {
+      const host = $("#dashboardLatestNotice");
+      if (!host) return;
+      const latest = notices[0];
+      if (!latest) {
+        host.hidden = true;
+        host.innerHTML = "";
+        return;
+      }
+      host.hidden = false;
+      host.innerHTML = `
+        <span>Latest Notice | ${noticeDateLabel(latest)}</span>
+        <strong>${localized(latest, "title") || "Notice"}</strong>
+        <p>${localized(latest, "message") || ""}</p>
+      `;
     }
 
     function stars(value) {
@@ -1644,6 +1808,7 @@
         `<article class="card quick-row"><span class="quick-icon">${photoMarkup(user)}</span><div><b>${user.name}</b><span>${user.id} | ${user.className}</span></div><span class="badge">Photo</span></article>`,
         card({ title: "Student Profile", meta: `${user.name} | ${user.className}`, body: `Roll ${user.roll}, Guardian: ${user.guardian}`, badge: "Active" })
       ].join("");
+      renderDashboardLatestNotice(ws.notices);
       $("#feesTotal").textContent = user.feesDue ? `₹${user.feesDue} due` : "Clear";
       $("#feesList").innerHTML = card({ title: "Current Fees Status", meta: user.feesDue ? "Payment pending" : "No due amount", body: `Outstanding amount: ₹${user.feesDue}`, badge: user.feesDue ? "Due" : "Paid", status: user.feesDue ? "warn" : "ok" });
       $("#receiptList").innerHTML = ws.receipts.map(item => card({ title: item.receiptNo, meta: `${item.date} | ${item.mode}`, body: `Amount paid: ₹${item.amount}`, badge: "Paid" })).join("");
@@ -1660,14 +1825,14 @@
       $("#homeworkTitle").textContent = "Homework";
       $("#homeworkFormHost").innerHTML = "";
       $("#homeworkTotal").textContent = `${ws.homework.length} assigned`;
-      $("#homeworkList").innerHTML = ws.homework.map(item => card({ title: item.subject, meta: `Due ${item.due}`, body: item.text, badge: "Active" })).join("");
+      $("#homeworkList").innerHTML = ws.homework.map(item => card({ title: item.subject || "Homework", meta: `${item.className || user.className || "Class"} | Due ${item.due || "-"}`, body: item.text, badge: "Homework", status: "warn", className: "homework-card" })).join("");
       $("#classworkTitle").textContent = "Classwork";
       $("#classworkFormHost").innerHTML = "";
       $("#classworkTotal").textContent = `${ws.classwork.length} entries`;
       $("#classworkList").innerHTML = ws.classwork.map(item => card({ title: item.subject, meta: item.date, body: item.text, badge: "Classwork" })).join("");
       $("#noticeFormHost").innerHTML = languageControl();
       $("#noticeTotal").textContent = `${ws.notices.length} notices`;
-      $("#noticeList").innerHTML = ws.notices.map(item => card({ title: localized(item, "title"), meta: `${item.audience} | ${item.date}`, body: localized(item, "message"), badge: state.language === "bn" ? "নোটিশ" : "Notice" })).join("");
+      $("#noticeList").innerHTML = ws.notices.map(item => card({ title: localized(item, "title"), meta: `${item.audience || item.audienceType || "Notice"} | ${noticeDateLabel(item)}`, body: localized(item, "message"), badge: state.language === "bn" ? "নোটিশ" : "Notice", className: "notice-card" })).join("");
       $("#attendanceScope").textContent = user.attendance;
       $("#attendanceHost").innerHTML = card({ title: "Attendance Summary", meta: `${user.attendance} attendance`, body: "Month-wise attendance API can be connected here.", badge: "Student" });
       $("#ratingTitle").textContent = "Teacher Rating";
@@ -1696,6 +1861,38 @@
       return state.user.subjects.map(item => `<option value="${item.className}|${item.subject}">${item.className} - ${item.subject}</option>`).join("");
     }
 
+    function teacherClassOptions(selected = "") {
+      const classes = [...new Set((state.user.subjects || []).map(item => item.className).filter(Boolean))];
+      return classes.map(className => `<option value="${className}" ${className === selected ? "selected" : ""}>${className}</option>`).join("");
+    }
+
+    function teacherSubjectOptionsForClass(className = "", selected = "") {
+      const subjects = (state.user.subjects || [])
+        .filter(item => !className || item.className === className)
+        .map(item => item.subject)
+        .filter(Boolean);
+      return [...new Set(subjects)].map(subject => `<option value="${subject}" ${subject === selected ? "selected" : ""}>${subject}</option>`).join("");
+    }
+
+    function firstTeacherClass() {
+      return [...new Set((state.user.subjects || []).map(item => item.className).filter(Boolean))][0] || "";
+    }
+
+    function teacherAssignmentAllowed(className = "", subject = "") {
+      return (state.user.subjects || []).some(item => item.className === className && item.subject === subject);
+    }
+
+    function bindTeacherSubjectDropdowns(classSelector, subjectSelector) {
+      const classEl = $(classSelector);
+      const subjectEl = $(subjectSelector);
+      if (!classEl || !subjectEl) return;
+      const syncSubjects = () => {
+        subjectEl.innerHTML = teacherSubjectOptionsForClass(classEl.value);
+      };
+      syncSubjects();
+      classEl.addEventListener("change", syncSubjects);
+    }
+
     function renderTeacherViews() {
       const user = state.user;
       const ws = state.workspace;
@@ -1708,6 +1905,7 @@
       ].join("");
       $("#timetableList").innerHTML = ws.timetable.map(item => card({ title: `${item.day}, ${item.time}`, meta: `${item.className} - ${item.subject}`, badge: item.room })).join("");
       $("#subjectsList").innerHTML = ws.subjects.map(item => card({ title: item.className, meta: item.subject, badge: "Assigned" })).join("");
+      renderDashboardLatestNotice(ws.notices);
       $("#resultTotal").textContent = `${ws.results.length} records`;
       $("#resultSummary").innerHTML = `<article class="card"><form class="form-grid" id="resultForm"><label>Student<select id="resultStudent">${ws.students.map(item => `<option value="${item.admissionId}|${item.name}|${item.className}">${item.name} - ${item.className}</option>`).join("")}</select></label><label>Exam Name<input id="resultExam" placeholder="Exam name" required /></label><label>Marks Summary<input id="resultSummaryInput" placeholder="Example: 86/100" required /></label><label>Grade<select id="resultGrade"><option>A+</option><option>A</option><option>B+</option><option>B</option><option>C</option></select></label><button class="primary" type="submit">Publish Result</button></form></article>`;
       $("#resultList").innerHTML = ws.results.map(result => card({ title: `${result.exam} | ${result.studentId}`, meta: `${result.className} | ${result.total}/${result.maxTotal} | ${result.percentage}`, body: `Grade: ${result.grade} | Status: ${result.status}`, badge: "Published" })).join("");
@@ -1716,16 +1914,31 @@
       $("#syllabusTotal").textContent = `${ws.syllabus.length} entries`;
       $("#syllabusList").innerHTML = ws.syllabus.map(item => card({ title: `${item.className} - ${item.subject}`, meta: item.topic, badge: item.progress, status: item.progress === "Completed" ? "ok" : "warn" })).join("");
       $("#homeworkTitle").textContent = "Homework Entry";
-      $("#homeworkFormHost").innerHTML = `<article class="card"><form class="form-grid" id="homeworkForm"><label>Class and Subject<select id="homeworkSubject">${subjectOptions()}</select></label><label>Homework<textarea id="homeworkText" placeholder="Homework details" required></textarea></label><label>Due Date<input id="homeworkDue" type="date" value="${todayIso}" required /></label><button class="primary" type="submit">Assign Homework</button></form></article>`;
+      const initialHomeworkClass = firstTeacherClass();
+      $("#homeworkFormHost").innerHTML = `<article class="card homework-card"><form class="form-grid" id="homeworkForm"><label>Class<select id="homeworkClass" required>${teacherClassOptions(initialHomeworkClass)}</select></label><label>Subject<select id="homeworkSubject" required>${teacherSubjectOptionsForClass(initialHomeworkClass)}</select></label><label>Homework<textarea id="homeworkText" placeholder="Homework details" required></textarea></label><label>Due Date<input id="homeworkDue" type="date" value="${todayIso}" required /></label><button class="primary" type="submit">Assign Homework</button></form></article>`;
       $("#homeworkTotal").textContent = `${ws.homework.length} assigned`;
-      $("#homeworkList").innerHTML = ws.homework.map(item => card({ title: `${item.className} - ${item.subject}`, meta: `Due ${item.due}`, body: item.text, badge: "Active" })).join("");
+      $("#homeworkList").innerHTML = ws.homework.map(item => card({ title: `${item.className || "Class"} - ${item.subject || "Homework"}`, meta: `Due ${item.due || "-"}`, body: item.text, badge: "Active", status: "warn", className: "homework-card" })).join("");
       $("#classworkTitle").textContent = "Classwork Entry";
-      $("#classworkFormHost").innerHTML = `<article class="card"><form class="form-grid" id="classworkForm"><label>Class and Subject<select id="classworkSubject">${subjectOptions()}</select></label><label>Classwork<textarea id="classworkText" placeholder="What was taught in class today" required></textarea></label><label>Date<input id="classworkDate" type="date" value="${todayIso}" required /></label><button class="primary" type="submit">Save Classwork</button></form></article>`;
+      const initialClassworkClass = firstTeacherClass();
+      $("#classworkFormHost").innerHTML = `<article class="card homework-card"><form class="form-grid" id="classworkForm"><label>Class<select id="classworkClass" required>${teacherClassOptions(initialClassworkClass)}</select></label><label>Subject<select id="classworkSubject" required>${teacherSubjectOptionsForClass(initialClassworkClass)}</select></label><label>Classwork<textarea id="classworkText" placeholder="What was taught in class today" required></textarea></label><label>Date<input id="classworkDate" type="date" value="${todayIso}" required /></label><button class="primary" type="submit">Save Classwork</button></form></article>`;
       $("#classworkTotal").textContent = `${ws.classwork.length} entries`;
       $("#classworkList").innerHTML = ws.classwork.map(item => card({ title: `${item.className} - ${item.subject}`, meta: item.date, body: item.text, badge: "Classwork" })).join("");
-      $("#noticeFormHost").innerHTML = `<article class="card"><form class="form-grid" id="noticeForm"><label>Audience<select id="noticeAudience">${classes.map(name => `<option>${name}</option>`).join("")}</select></label><label>Title<input id="noticeTitle" placeholder="Notice title" required /></label><label>Message<textarea id="noticeMessage" placeholder="Notice message" required></textarea></label><button class="primary" type="submit">Publish Notice</button></form></article>`;
-      $("#noticeTotal").textContent = `${ws.notices.length} published`;
-      $("#noticeList").innerHTML = ws.notices.map(item => card({ title: item.title, meta: `${item.audience} | ${item.date}`, body: item.message, badge: "Published" })).join("");
+      $("#noticeFormHost").innerHTML = `<article class="card notice-card"><div class="card-head"><div><h3>ERP Notices</h3><p>School notice board theke asa notice sudhu dekhar jonno.</p></div><span class="status ok">Read Only</span></div></article><article class="card homework-card"><form class="form-grid" id="teacherNoticeRequestForm"><label>Class<select id="teacherNoticeClass" required>${teacherClassOptions(firstTeacherClass())}</select></label><label>Title<input id="teacherNoticeTitle" placeholder="Notice title" required /></label><label>Message<textarea id="teacherNoticeMessage" placeholder="Students der jonno notice likhun" required></textarea></label><label>Priority<select id="teacherNoticePriority"><option>Normal</option><option>Important</option><option>Urgent</option></select></label><button class="primary" type="submit">Send for ERP Approval</button></form></article>`;
+      $("#noticeTotal").textContent = `${ws.notices.length} ERP notices`;
+      const requestCards = (ws.teacherNoticeRequests || []).map(item => card({
+        title: item.title || "Notice Request",
+        meta: `${item.className || "-"} | ${item.status || "Pending"}`,
+        body: item.message,
+        badge: item.status || "Pending",
+        status: item.status === "Approved" ? "ok" : item.status === "Rejected" ? "bad" : "warn",
+        className: "notice-card"
+      })).join("");
+      $("#noticeList").innerHTML = [
+        `<div class="section-title"><h2>Published ERP Notices</h2><span>${ws.notices.length}</span></div>`,
+        ws.notices.map(item => card({ title: item.title, meta: `${item.audience || item.audienceType || "Notice"} | ${noticeDateLabel(item)}`, body: item.message, badge: "Published", className: "notice-card" })).join("") || card({ title: "No ERP Notice", meta: "Notice board empty", body: "ERP theke notice publish hole ekhane dekhabe.", badge: "Empty", status: "warn" }),
+        `<div class="section-title"><h2>My Notice Requests</h2><span>${(ws.teacherNoticeRequests || []).length}</span></div>`,
+        requestCards || card({ title: "No Request Sent", meta: "Class notice request ekhane dekhabe.", body: "Request ERP approval er age student app-e publish hobe na.", badge: "Draft", status: "warn" })
+      ].join("");
       $("#attendanceScope").textContent = "Teacher tools";
       const attendanceStudents = ws.students.filter(item => item.className === state.attendanceClass);
       $("#attendanceHost").innerHTML = `<article class="card"><div class="segmented">${classes.map(name => `<button class="seg-btn ${name === state.attendanceClass ? "active" : ""}" data-class-tab="${name}">${name}</button>`).join("")}</div>${attendanceStudents.map(item => `<div class="student-row"><div><b>${item.name}</b><span>${item.className} - Roll ${item.roll}</span></div><div class="toggle" data-student="${item.id}"><button class="active" data-mark="present">P</button><button data-mark="absent">A</button><button data-mark="late">L</button></div></div>`).join("")}<button class="primary" id="saveAttendanceBtn" type="button">Save Attendance</button></article>`;
@@ -1758,6 +1971,8 @@
         btn.classList.add("active");
       }));
       $("#saveAttendanceBtn")?.addEventListener("click", () => toast(`${state.attendanceClass} attendance saved`));
+      bindTeacherSubjectDropdowns("#homeworkClass", "#homeworkSubject");
+      bindTeacherSubjectDropdowns("#classworkClass", "#classworkSubject");
       $("#syllabusForm")?.addEventListener("submit", async event => {
         event.preventDefault();
         const [className, subject] = $("#syllabusSubject").value.split("|");
@@ -1791,7 +2006,12 @@
       });
       $("#homeworkForm")?.addEventListener("submit", async event => {
         event.preventDefault();
-        const [className, subject] = $("#homeworkSubject").value.split("|");
+        const className = $("#homeworkClass").value;
+        const subject = $("#homeworkSubject").value;
+        if (!teacherAssignmentAllowed(className, subject)) {
+          toast("This class and subject is not assigned to this teacher.");
+          return;
+        }
         await AppApi.create("homework", { teacherId: state.user.id, className, subject, text: $("#homeworkText").value, due: $("#homeworkDue").value });
         state.workspace = await AppApi.workspace("teacher", state.user.id);
         renderTeacherViews();
@@ -1799,18 +2019,37 @@
       });
       $("#classworkForm")?.addEventListener("submit", async event => {
         event.preventDefault();
-        const [className, subject] = $("#classworkSubject").value.split("|");
+        const className = $("#classworkClass").value;
+        const subject = $("#classworkSubject").value;
+        if (!teacherAssignmentAllowed(className, subject)) {
+          toast("This class and subject is not assigned to this teacher.");
+          return;
+        }
         await AppApi.create("classwork", { teacherId: state.user.id, className, subject, text: $("#classworkText").value, date: $("#classworkDate").value });
         state.workspace = await AppApi.workspace("teacher", state.user.id);
         renderTeacherViews();
         toast("Classwork saved");
       });
-      $("#noticeForm")?.addEventListener("submit", async event => {
+      $("#teacherNoticeRequestForm")?.addEventListener("submit", async event => {
         event.preventDefault();
-        await AppApi.create("notices", { teacherId: state.user.id, audience: $("#noticeAudience").value, title: $("#noticeTitle").value, message: $("#noticeMessage").value, date: todayIso });
+        const className = $("#teacherNoticeClass").value;
+        if (!className) {
+          toast("Select class first.");
+          return;
+        }
+        await AppApi.create("teacherNoticeRequests", {
+          teacherId: state.user.id,
+          teacherName: state.user.name,
+          className,
+          title: $("#teacherNoticeTitle").value,
+          message: $("#teacherNoticeMessage").value,
+          priority: $("#teacherNoticePriority").value,
+          status: "Pending",
+          createdDate: todayIso
+        });
         state.workspace = await AppApi.workspace("teacher", state.user.id);
         renderTeacherViews();
-        toast("Notice published");
+        toast("Notice request sent for ERP approval");
       });
       $("#complaintForm")?.addEventListener("submit", async event => {
         event.preventDefault();

@@ -11,6 +11,8 @@ const modules = [];
 const dues = [];
 
 const notices = [];
+const teacherNoticeRequests = [];
+const homework = [];
 const admissionEnquiries = [];
 const complaintRecords = [];
 
@@ -273,6 +275,7 @@ const titleMap = {
   designation: "Designation",
   disabledStaff: "Disabled Staff",
   noticeBoard: "Notice Board",
+  teacherNoticeRequests: "Teacher Notice Requests",
   sendSms: "WhatsApp Message",
   addHomework: "Add Homework",
   dailyAssignment: "Daily Assignment",
@@ -317,7 +320,7 @@ const ACCESS_PERMISSION_GROUPS = [
   {name: "Student Information", modules: ["students", "studentAdmission", "disableStudent", "bulkDeleteStudent"]},
   {name: "Fees Collection", modules: ["finance", "feeBook", "dueFeesSearch", "feeMaster", "feeGroup", "addClassSection", "tuitionFineSetup", "feeReminder"]},
   {name: "Human Resources", modules: ["staffDetails", "staffAttendance", "applyLeave", "leaveType", "approveLeave", "teachersRating", "department", "designation", "disabledStaff"]},
-  {name: "Communication", modules: ["noticeBoard", "sendSms"]},
+  {name: "Communication", modules: ["noticeBoard", "teacherNoticeRequests", "sendSms"]},
   {name: "Homework", modules: ["addHomework", "dailyAssignment"]},
   {name: "Reports", modules: ["reportStudentInformation", "dailyCollectionReport", "entireSchoolFeesReport"]},
   {name: "Academic", modules: ["classTimetable", "teacherTimetable", "syllabus", "teacherComplaint", "holidayReport", "annualCalendar"]},
@@ -356,6 +359,7 @@ const admissionEnquiryForm = document.getElementById("admissionEnquiryForm");
 const complaintRegisterForm = document.getElementById("complaintRegisterForm");
 const teacherComplaintForm = document.getElementById("teacherComplaintForm");
 const noticeForm = document.getElementById("noticeForm");
+const homeworkEntryForm = document.getElementById("homeworkEntryForm");
 const staffDetailsForm = document.getElementById("staffDetailsForm");
 const departmentForm = document.getElementById("departmentForm");
 const roleForm = document.getElementById("roleForm");
@@ -411,6 +415,8 @@ function getAppStateSnapshot() {
     collectedPayments,
     receiptSerial,
     notices,
+    teacherNoticeRequests,
+    homework,
     admissionEnquiries,
     complaintRecords,
     staffMembers,
@@ -698,7 +704,8 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
     transportVehicles: ["id", "vehicleNo"],
     transportVehicleAssignments: ["routeName", "vehicleNo", "shift"],
     transportRoutePickupPoints: ["routeName", "villageName", "shift"],
-    notices: ["id", "title"]
+    notices: ["id", "title"],
+    teacherNoticeRequests: ["id", "title", "teacherId"]
   };
   merged.students = mergeStudentList(remoteState.students || [], localState.students || []);
   Object.entries(objectRules).forEach(([key, fields]) => {
@@ -900,6 +907,12 @@ function applySavedState(saved = {}) {
     if (Array.isArray(saved.notices)) {
       notices.splice(0, notices.length, ...saved.notices);
     }
+    if (Array.isArray(saved.teacherNoticeRequests)) {
+      teacherNoticeRequests.splice(0, teacherNoticeRequests.length, ...saved.teacherNoticeRequests);
+    }
+    if (Array.isArray(saved.homework)) {
+      homework.splice(0, homework.length, ...saved.homework);
+    }
     if (Array.isArray(saved.admissionEnquiries)) {
       admissionEnquiries.splice(0, admissionEnquiries.length, ...saved.admissionEnquiries);
     }
@@ -1092,6 +1105,8 @@ function applyProductionCleanSeedOnce() {
   modules.splice(0, modules.length);
   dues.splice(0, dues.length);
   notices.splice(0, notices.length);
+  teacherNoticeRequests.splice(0, teacherNoticeRequests.length);
+  homework.splice(0, homework.length);
   admissionEnquiries.splice(0, admissionEnquiries.length);
   complaintRecords.splice(0, complaintRecords.length);
   mobileAppActivity.splice(0, mobileAppActivity.length);
@@ -1494,6 +1509,8 @@ function renderActiveView(viewName = document.querySelector(".view.active")?.id 
   if (viewName === "staffAttendance") renderStaffAttendance();
   if (viewName === "disableStudent") renderDisabledStudents();
   if (viewName === "noticeBoard") renderNoticeBoard();
+  if (viewName === "teacherNoticeRequests") renderTeacherNoticeRequests();
+  if (viewName === "addHomework" || viewName === "dailyAssignment") renderHomeworkModule();
   if (viewName === "complaintsDesk") renderComplaintsDesk();
   if (viewName === "admissionEnquiry") renderAdmissionEnquiryModule();
   if (viewName === "classTimetable") renderClassTimetable();
@@ -4151,6 +4168,152 @@ function renderNoticeBoard() {
       <p>Published notices will be available for student IDs and teacher accounts when the mobile app is connected.</p>
     `;
   }
+}
+
+function getTeacherNoticeStatusTone(status = "") {
+  const clean = String(status || "").toLowerCase();
+  if (clean === "approved" || clean === "published") return "stable";
+  if (clean === "rejected" || clean === "cancelled") return "due";
+  return "pending";
+}
+
+function renderTeacherNoticeRequests() {
+  const rows = document.getElementById("teacherNoticeRequestRows");
+  const count = document.getElementById("teacherNoticeRequestCount");
+  if (!rows) return;
+  const pending = teacherNoticeRequests.filter(item => !["Approved", "Rejected"].includes(item.status));
+  if (count) count.textContent = `${pending.length} pending`;
+  rows.innerHTML = teacherNoticeRequests.map(item => `
+    <article class="teacher-notice-request-card">
+      <div>
+        <span class="teacher-notice-meta">${escapeHtml(item.teacherName || "Teacher")} | ${escapeHtml(item.className || "-")} | ${escapeHtml(item.createdDate || item.date || "-")}</span>
+        <h3>${escapeHtml(item.title || "-")}</h3>
+        <p>${escapeHtml(item.message || "-")}</p>
+        <small>Priority: ${escapeHtml(item.priority || "Normal")}</small>
+      </div>
+      <div class="teacher-notice-actions">
+        <span class="status-pill ${getTeacherNoticeStatusTone(item.status || "Pending")}">${escapeHtml(item.status || "Pending")}</span>
+        ${item.status === "Approved" ? `<small>Published: ${escapeHtml(item.publishedNoticeId || "-")}</small>` : ""}
+        ${item.status === "Rejected" ? `<small>Reason: ${escapeHtml(item.rejectReason || "-")}</small>` : ""}
+        ${!["Approved", "Rejected"].includes(item.status) ? `
+          <button class="primary-action mini" type="button" data-approve-teacher-notice="${escapeHtml(item.id)}">Approve</button>
+          <button class="ghost-action mini" type="button" data-reject-teacher-notice="${escapeHtml(item.id)}">Reject</button>
+        ` : ""}
+      </div>
+    </article>
+  `).join("") || `<article class="teacher-notice-empty">No teacher notice request yet.</article>`;
+}
+
+function approveTeacherNoticeRequest(requestId) {
+  const request = teacherNoticeRequests.find(item => item.id === requestId);
+  if (!request) return;
+  const noticeId = `NOTICE-${Date.now()}`;
+  notices.unshift({
+    id: noticeId,
+    title: request.title || "Class Notice",
+    audience: "Selected Class",
+    audienceType: "Selected Class",
+    noticeClass: request.className || "",
+    classes: request.className ? [request.className] : [],
+    sections: [],
+    publishDate: formatDateDDMMYYYY(new Date()),
+    message: request.message || "",
+    priority: request.priority || "Normal",
+    delivery: "Notice Board + Mobile App",
+    status: "Published",
+    source: "Teacher App",
+    teacherId: request.teacherId || "",
+    teacherName: request.teacherName || "",
+    createdAt: new Date().toISOString()
+  });
+  request.status = "Approved";
+  request.approvedAt = new Date().toISOString();
+  request.publishedNoticeId = noticeId;
+  saveAppState();
+  renderTeacherNoticeRequests();
+  renderNoticeBoard();
+  showToast("Teacher notice approved and published.");
+}
+
+function rejectTeacherNoticeRequest(requestId) {
+  const request = teacherNoticeRequests.find(item => item.id === requestId);
+  if (!request) return;
+  const reason = prompt("Reject reason likhun", request.rejectReason || "");
+  if (reason === null) return;
+  request.status = "Rejected";
+  request.rejectReason = String(reason || "").trim() || "Rejected by ERP";
+  request.rejectedAt = new Date().toISOString();
+  saveAppState();
+  renderTeacherNoticeRequests();
+  showToast("Teacher notice request rejected.");
+}
+
+function renderHomeworkSubjectOptions({ preserveSubject = true } = {}) {
+  const classSelect = document.getElementById("homeworkClassSelect");
+  const subjectSelect = document.getElementById("homeworkSubjectSelect");
+  if (!classSelect || !subjectSelect) return;
+  const selectedClass = classSelect.value;
+  const selectedSubject = preserveSubject ? subjectSelect.value : "";
+  const classOptions = getAdmissionClassOptions();
+  classSelect.innerHTML = `<option value="">Select Class</option>${classOptions.map(className =>
+    `<option value="${escapeHtml(className)}">${escapeHtml(className)}</option>`
+  ).join("")}`;
+  if (selectedClass) setSelectValue(classSelect, selectedClass);
+  const subjects = getTimetableSubjectsForClass(classSelect.value);
+  subjectSelect.innerHTML = `<option value="">Select Subject</option>${subjects.map(subject =>
+    `<option value="${escapeHtml(subject)}">${escapeHtml(subject)}</option>`
+  ).join("")}`;
+  if (selectedSubject) setSelectValue(subjectSelect, selectedSubject);
+}
+
+function renderHomeworkModule() {
+  renderHomeworkSubjectOptions();
+  const rows = document.getElementById("homeworkRows");
+  const preview = document.getElementById("homeworkPreviewBox");
+  if (preview) {
+    const latest = homework[0];
+    preview.innerHTML = latest ? `
+      <strong>${escapeHtml(latest.className || "-")} | ${escapeHtml(latest.subject || "-")}</strong>
+      <span>Due: ${escapeHtml(latest.due || "-")}</span>
+      <p>${escapeHtml(latest.text || "-")}</p>
+    ` : "Class and subject select korle homework student app-e class-wise show korbe.";
+  }
+  if (!rows) return;
+  rows.innerHTML = homework.map((item, index) => `
+    <tr>
+      <td><strong>${escapeHtml(item.className || "-")}</strong></td>
+      <td>${escapeHtml(item.subject || "-")}</td>
+      <td>${escapeHtml(item.text || "-")}</td>
+      <td>${escapeHtml(item.due || "-")}</td>
+      <td><span class="status-pill stable">${escapeHtml(item.status || "Published")}</span></td>
+      <td><button class="icon-action delete" type="button" data-delete-homework="${index}" title="Delete homework" aria-label="Delete homework">×</button></td>
+    </tr>
+  `).join("") || `<tr><td colspan="6">No assignments entered yet.</td></tr>`;
+}
+
+function publishHomeworkEntry(form) {
+  const data = new FormData(form);
+  const entry = {
+    id: `HW-${Date.now()}`,
+    className: String(data.get("className") || "").trim(),
+    subject: String(data.get("subject") || "").trim(),
+    text: String(data.get("text") || "").trim(),
+    due: String(data.get("due") || "").trim(),
+    date: toDateInputValue(new Date()),
+    status: "Published",
+    source: "Main ERP",
+    createdAt: new Date().toISOString()
+  };
+  if (!entry.className || !entry.subject || !entry.text || !entry.due) {
+    showToast("Class, subject, homework and due date required.");
+    return;
+  }
+  homework.unshift(entry);
+  saveAppState();
+  form.reset();
+  if (form.elements.due) form.elements.due.value = toDateInputValue(new Date());
+  renderHomeworkModule();
+  showToast("Homework published to student app.");
 }
 
 function renderStaffDetailsFormOptions() {
@@ -10378,6 +10541,7 @@ classSetupForm.addEventListener("submit", event => {
   renderAdmissionClassOptions();
   renderFeeMasterClassOptions();
   renderClassTimetableOptions();
+  renderHomeworkModule();
   classSetupForm.reset();
   resetClassSetupEditing();
   renderStudents();
@@ -10433,6 +10597,7 @@ subjectSetupForm.addEventListener("submit", event => {
   saveAppState();
   renderClassSectionSetup();
   renderClassTimetableOptions();
+  renderHomeworkModule();
   subjectSetupForm.reset();
   resetSubjectSetupEditing();
   renderClassTimetable();
@@ -10451,6 +10616,7 @@ subjectAssignForm.addEventListener("submit", event => {
   saveAppState();
   renderSubjectAssignmentSetup(className);
   renderClassTimetableOptions();
+  renderHomeworkModule();
   showToast(`${className} subject assignment saved.`);
 });
 
@@ -10902,6 +11068,18 @@ noticeForm.addEventListener("submit", event => {
   noticeForm.elements.publishDate.value = formatDateDDMMYYYY(new Date());
   updateNoticeAudienceFields();
   showToast("Notice published for selected audience.");
+});
+
+document.getElementById("teacherNoticeRequestRows")?.addEventListener("click", event => {
+  const approveButton = event.target.closest("[data-approve-teacher-notice]");
+  if (approveButton) {
+    approveTeacherNoticeRequest(approveButton.dataset.approveTeacherNotice);
+    return;
+  }
+  const rejectButton = event.target.closest("[data-reject-teacher-notice]");
+  if (rejectButton) {
+    rejectTeacherNoticeRequest(rejectButton.dataset.rejectTeacherNotice);
+  }
 });
 
 staffDetailsForm.addEventListener("submit", event => {
@@ -12169,9 +12347,31 @@ document.getElementById("sendSmsButton").addEventListener("click", async () => {
   }
 });
 
-document.getElementById("saveHomeworkButton").addEventListener("click", () => {
-  showToast("Homework saved as draft.");
+homeworkEntryForm?.addEventListener("submit", event => {
+  event.preventDefault();
+  publishHomeworkEntry(event.currentTarget);
 });
+
+document.getElementById("homeworkClassSelect")?.addEventListener("change", () => {
+  renderHomeworkSubjectOptions({ preserveSubject: false });
+});
+
+document.getElementById("homeworkRows")?.addEventListener("click", event => {
+  const button = event.target.closest("[data-delete-homework]");
+  if (!button) return;
+  const index = Number(button.dataset.deleteHomework);
+  const item = homework[index];
+  if (!item) return;
+  if (!confirm(`Delete homework ${item.className || ""} - ${item.subject || ""}?`)) return;
+  homework.splice(index, 1);
+  saveAppState();
+  renderHomeworkModule();
+  showToast("Homework deleted.");
+});
+
+if (homeworkEntryForm?.elements.due) {
+  homeworkEntryForm.elements.due.value = toDateInputValue(new Date());
+}
 
 document.getElementById("printLedger").addEventListener("click", () => {
   printYearlyFeeStatement();

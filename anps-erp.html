@@ -78,6 +78,7 @@
           <button class="nav-group-title" id="communicationToggle" type="button" aria-expanded="false">Communication</button>
           <div class="nav-sub">
             <button data-view="noticeBoard" type="button">Notice Board</button>
+            <button data-view="teacherNoticeRequests" type="button">Teacher Notice Requests</button>
             <button data-view="sendSms" type="button">WhatsApp Message</button>
           </div>
         </div>
@@ -1366,6 +1367,22 @@
         </div>
       </section>
 
+      <section class="view" id="teacherNoticeRequests">
+        <div class="panel teacher-notice-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Communication Approval</p>
+              <h2>Teacher Notice Requests</h2>
+              <small>Teacher app theke class notice request ekhane approve korle student app-e publish hobe.</small>
+            </div>
+            <span class="status-pill live" id="teacherNoticeRequestCount">0 pending</span>
+          </div>
+          <div class="teacher-notice-request-grid" id="teacherNoticeRequestRows">
+            <article class="teacher-notice-empty">No teacher notice request yet.</article>
+          </div>
+        </div>
+      </section>
+
       <section class="view" id="sendSms">
         <div class="finance-grid">
           <section class="panel">
@@ -1397,25 +1414,35 @@
       </section>
 
       <section class="view" id="addHomework">
-        <div class="panel">
-          <div class="panel-head"><div><p class="eyebrow">Homework</p><h2>Add Homework</h2></div><button class="primary-action" id="saveHomeworkButton" type="button">Save Homework</button></div>
-          <div class="fee-form reminder-form">
-            <label>Class<select><option>I Amber</option><option>V B</option><option>VII A</option><option>XII IB</option></select></label>
-            <label>Subject<select><option>Mathematics</option><option>Science</option><option>English</option><option>Bengali</option></select></label>
-            <label>Due Date<input type="text" placeholder="DD-MM-YYYY" /></label>
-          </div>
-          <div class="receipt">Homework draft: Complete worksheet 4 and submit in next class.</div>
+        <div class="panel homework-panel">
+          <div class="panel-head"><div><p class="eyebrow">Homework</p><h2>Add Homework</h2><small>Class-wise, subject-wise homework publish korun. Student app-e automatic dekhabe.</small></div></div>
+          <form class="homework-form" id="homeworkEntryForm">
+            <label>Class
+              <select name="className" id="homeworkClassSelect" required></select>
+            </label>
+            <label>Subject
+              <select name="subject" id="homeworkSubjectSelect" required></select>
+            </label>
+            <label>Due Date
+              <input name="due" type="date" required />
+            </label>
+            <label class="wide">Homework
+              <textarea name="text" rows="4" placeholder="Homework details likhun..." required></textarea>
+            </label>
+            <button class="primary-action" id="saveHomeworkButton" type="submit">Publish Homework</button>
+          </form>
+          <div class="homework-preview" id="homeworkPreviewBox">Class and subject select korle homework student app-e class-wise show korbe.</div>
         </div>
       </section>
 
       <section class="view" id="dailyAssignment">
-        <div class="panel">
+        <div class="panel homework-panel">
           <div class="panel-head"><div><p class="eyebrow">Homework</p><h2>Daily Assignment</h2></div><button class="ghost-action" type="button">Export</button></div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Class</th><th>Subject</th><th>Assignment</th><th>Due Date</th><th>Status</th></tr></thead>
-              <tbody>
-                <tr><td colspan="5">No assignments entered yet.</td></tr>
+              <thead><tr><th>Class</th><th>Subject</th><th>Assignment</th><th>Due Date</th><th>Status</th><th>Action</th></tr></thead>
+              <tbody id="homeworkRows">
+                <tr><td colspan="6">No assignments entered yet.</td></tr>
               </tbody>
             </table>
           </div>
