@@ -1292,8 +1292,11 @@
               <span class="status-pill live">App ready</span>
             </div>
             <form class="notice-form" id="noticeForm">
-              <label>Notice Title
-                <input name="title" placeholder="School closed tomorrow" required />
+              <label>Notice Date
+                <input name="noticeDate" type="text" placeholder="DD-MM-YYYY" />
+              </label>
+              <label>Subject
+                <input name="title" placeholder="Notice subject" required />
               </label>
               <label>Audience
                 <select name="audience" id="noticeAudienceSelect" required>
@@ -1317,6 +1320,12 @@
               </label>
               <label class="wide">Notice Message
                 <textarea name="message" rows="5" placeholder="Write notice details here..." required></textarea>
+              </label>
+              <label>Admin / Sender Name
+                <input name="senderName" placeholder="Name" />
+              </label>
+              <label>Designation / Role
+                <input name="senderDesignation" placeholder="Designation" />
               </label>
               <label>Priority
                 <select name="priority">
@@ -1356,7 +1365,7 @@
             </div>
             <div class="table-wrap">
               <table>
-                <thead><tr><th>Notice</th><th>Audience</th><th>Target</th><th>Date</th><th>Priority</th><th>Status</th></tr></thead>
+                <thead><tr><th>Notice</th><th>Audience</th><th>Target</th><th>Publish Date</th><th>Priority</th><th>Status</th></tr></thead>
                 <tbody id="noticeRows">
                   <tr><td colspan="6">No notices entered yet.</td></tr>
                 </tbody>
@@ -1431,6 +1440,10 @@
             <label class="wide">Homework
               <textarea name="text" rows="4" placeholder="Homework details likhun..." required></textarea>
             </label>
+            <label class="wide">Attachment
+              <input name="attachment" type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
+              <small>PDF, DOC, DOCX attach kora jabe. Student app-e open/download hobe.</small>
+            </label>
             <button class="primary-action" id="saveHomeworkButton" type="submit">Publish Homework</button>
           </form>
           <div class="homework-preview" id="homeworkPreviewBox">Class and subject select korle homework student app-e class-wise show korbe.</div>
@@ -1442,9 +1455,9 @@
           <div class="panel-head"><div><p class="eyebrow">Homework</p><h2>Daily Assignment</h2></div><button class="ghost-action" type="button">Export</button></div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Class</th><th>Subject</th><th>Assignment</th><th>Due Date</th><th>Status</th><th>Action</th></tr></thead>
+              <thead><tr><th>Class</th><th>Subject</th><th>Assignment</th><th>Due Date</th><th>Attachment</th><th>Status</th><th>Action</th></tr></thead>
               <tbody id="homeworkRows">
-                <tr><td colspan="6">No assignments entered yet.</td></tr>
+                <tr><td colspan="7">No assignments entered yet.</td></tr>
               </tbody>
             </table>
           </div>

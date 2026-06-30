@@ -484,6 +484,24 @@
       background: linear-gradient(135deg, #ff6f91, #6c63ff);
     }
 
+    .notice-date-line {
+      display: block;
+      color: #8b1e3f;
+      font-size: .72rem;
+      font-weight: 950;
+      text-transform: uppercase;
+      letter-spacing: .02em;
+    }
+
+    .notice-subject-line {
+      display: block;
+      margin-top: 8px;
+      color: #111827;
+      font-size: 1rem;
+      font-weight: 950;
+      line-height: 1.25;
+    }
+
     .homework-card {
       border-color: rgba(20, 184, 166, .28);
       background:
@@ -499,6 +517,22 @@
     .homework-card .status {
       color: #fff;
       background: linear-gradient(135deg, #14b8a6, #f59e0b);
+    }
+
+    .homework-attachment-link {
+      display: inline-flex;
+      align-items: center;
+      width: max-content;
+      min-height: 30px;
+      margin-top: 8px;
+      padding: 0 10px;
+      border: 1px solid rgba(37, 99, 235, .24);
+      border-radius: 8px;
+      background: rgba(239, 246, 255, .92);
+      color: #1d4ed8;
+      font-size: .78rem;
+      font-weight: 900;
+      text-decoration: none;
     }
 
     .bengali-translate-action {
@@ -1271,6 +1305,71 @@
       return String(value || "").trim();
     }
 
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, char => ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        "\"": "&quot;",
+        "'": "&#39;"
+      }[char]));
+    }
+
+    const homeworkAttachmentMaxBytes = 10 * 1024 * 1024;
+    const homeworkAttachmentExtensions = [".pdf", ".doc", ".docx"];
+    const homeworkAttachmentValidDays = 30;
+
+    function homeworkAttachmentExpiry(baseDate = new Date()) {
+      const date = baseDate instanceof Date ? new Date(baseDate) : new Date(baseDate);
+      if (Number.isNaN(date.getTime())) date.setTime(Date.now());
+      date.setDate(date.getDate() + homeworkAttachmentValidDays);
+      return date.toISOString();
+    }
+
+    function homeworkAttachmentExpired(attachment = {}) {
+      if (!attachment?.expiresAt) return false;
+      const expiry = Date.parse(attachment.expiresAt);
+      return Number.isFinite(expiry) && expiry <= Date.now();
+    }
+
+    function readHomeworkAttachmentInput(input) {
+      const file = input?.files?.[0];
+      return new Promise((resolve, reject) => {
+        if (!file) {
+          resolve(null);
+          return;
+        }
+        const lowerName = normalizeText(file.name).toLowerCase();
+        const allowed = homeworkAttachmentExtensions.some(ext => lowerName.endsWith(ext));
+        if (!allowed) {
+          reject(new Error("Only PDF, DOC or DOCX attachment allowed."));
+          return;
+        }
+        if (file.size > homeworkAttachmentMaxBytes) {
+          reject(new Error("Attachment 10 MB er moddhe rakhun."));
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => resolve({
+          name: file.name,
+          type: file.type || "application/octet-stream",
+          size: file.size,
+          url: String(reader.result || ""),
+          createdAt: new Date().toISOString(),
+          expiresAt: homeworkAttachmentExpiry(new Date()),
+          source: "teacher-app"
+        });
+        reader.onerror = () => reject(new Error("Attachment read kora gelo na."));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function homeworkAttachmentLink(attachment = {}) {
+      if (!attachment || !attachment.url || homeworkAttachmentExpired(attachment)) return "";
+      const label = attachment.name || "Open Attachment";
+      return `<a class="homework-attachment-link" href="${escapeHtml(attachment.url)}" target="_blank" rel="noopener" download="${escapeHtml(label)}">Open Attachment: ${escapeHtml(label)}</a>`;
+    }
+
     function normalizeAdmission(value) {
       return normalizeText(value).toLowerCase().replace(/[^a-z0-9]/g, "");
     }
@@ -1883,12 +1982,14 @@
       const showTranslator = isJuniorClass(user.className) || isJuniorClass(className);
       const translated = bengaliHomeworkText(body);
       const translator = showTranslator ? `<button class="bengali-translate-action" type="button" data-bengali-homework>বাংলায় দেখুন</button><div class="bengali-homework-text">${translated || "বাংলা অনুবাদ পাওয়া যায়নি।"}</div>` : "";
+      const attachment = homeworkAttachmentLink(item.attachment);
       return `<article class="card homework-card">
         <div class="card-head">
           <div><h3>${item.subject || "Homework"}</h3><p>${className} | Due ${item.due || "-"}</p></div>
           <span class="status warn">Homework</span>
         </div>
         ${body ? `<p>${body}</p>` : ""}
+        ${attachment}
         ${translator}
       </article>`;
     }
@@ -1896,13 +1997,17 @@
     function studentNoticeCard(item = {}) {
       const title = localized(item, "title") || "Notice";
       const message = localized(item, "message") || "";
+      const noticeDate = noticeDateLabel(item);
       const translatedTitle = bengaliNoticeText(title);
       const translatedMessage = bengaliNoticeText(message);
       const hasBangla = /[\u0980-\u09FF]/.test(`${title} ${message}`);
       const translator = hasBangla ? "" : `<button class="bengali-translate-action" type="button" data-bengali-notice>বাংলায় পড়ুন</button><div class="bengali-notice-text"><strong>${translatedTitle}</strong><br>${translatedMessage || "বাংলা অনুবাদ পাওয়া যায়নি।"}</div>`;
       return `<article class="card notice-card">
         <div class="card-head">
-          <div><h3>${title}</h3><p>${item.audience || item.audienceType || "Notice"} | ${noticeDateLabel(item)}</p></div>
+          <div>
+            <span class="notice-date-line">Notice Date: ${noticeDate}</span>
+            <strong class="notice-subject-line">Subject: ${title}</strong>
+          </div>
           <span class="status ok">${state.language === "bn" ? "নোটিশ" : "Notice"}</span>
         </div>
         ${message ? `<p>${message}</p>` : ""}
@@ -1921,7 +2026,7 @@
     }
 
     function noticeDateLabel(item = {}) {
-      return item.publishDate || item.date || item.createdAt?.slice?.(0, 10) || "-";
+      return item.noticeDate || item.publishDate || item.date || item.createdAt?.slice?.(0, 10) || "-";
     }
 
     function renderDashboardLatestNotice(notices = []) {
@@ -1935,8 +2040,8 @@
       }
       host.hidden = false;
       host.innerHTML = `
-        <span>Latest Notice | ${noticeDateLabel(latest)}</span>
-        <strong>${localized(latest, "title") || "Notice"}</strong>
+        <span>Notice Date: ${noticeDateLabel(latest)}</span>
+        <strong>Subject: ${localized(latest, "title") || "Notice"}</strong>
         <p>${localized(latest, "message") || ""}</p>
       `;
     }
@@ -2244,9 +2349,9 @@
       $("#syllabusList").innerHTML = ws.syllabus.map(item => card({ title: `${item.className} - ${item.subject}`, meta: item.topic, badge: item.progress, status: item.progress === "Completed" ? "ok" : "warn" })).join("");
       $("#homeworkTitle").textContent = "Homework Entry";
       const initialHomeworkClass = firstTeacherClass();
-      $("#homeworkFormHost").innerHTML = `<article class="card homework-card"><form class="form-grid" id="homeworkForm"><label>Class<select id="homeworkClass" required>${teacherClassOptions(initialHomeworkClass)}</select></label><label>Subject<select id="homeworkSubject" required>${teacherSubjectOptionsForClass(initialHomeworkClass)}</select></label><label>Homework<textarea id="homeworkText" placeholder="Homework details" required></textarea></label><label>Due Date<input id="homeworkDue" type="date" value="${todayIso}" required /></label><button class="primary" type="submit">Assign Homework</button></form></article>`;
+      $("#homeworkFormHost").innerHTML = `<article class="card homework-card"><form class="form-grid" id="homeworkForm"><label>Class<select id="homeworkClass" required>${teacherClassOptions(initialHomeworkClass)}</select></label><label>Subject<select id="homeworkSubject" required>${teacherSubjectOptionsForClass(initialHomeworkClass)}</select></label><label>Homework<textarea id="homeworkText" placeholder="Homework details" required></textarea></label><label>Due Date<input id="homeworkDue" type="date" value="${todayIso}" required /></label><label>Attachment<input id="homeworkAttachment" type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" /><small>PDF, DOC, DOCX attach korte parben.</small></label><button class="primary" type="submit">Assign Homework</button></form></article>`;
       $("#homeworkTotal").textContent = `${ws.homework.length} assigned`;
-      $("#homeworkList").innerHTML = ws.homework.map(item => card({ title: `${item.className || "Class"} - ${item.subject || "Homework"}`, meta: `Due ${item.due || "-"}`, body: item.text, badge: "Active", status: "warn", className: "homework-card" })).join("");
+      $("#homeworkList").innerHTML = ws.homework.map(item => card({ title: `${item.className || "Class"} - ${item.subject || "Homework"}`, meta: `Due ${item.due || "-"}`, body: `${item.text || ""}${homeworkAttachmentLink(item.attachment)}`, badge: "Active", status: "warn", className: "homework-card" })).join("");
       $("#classworkTitle").textContent = "Classwork Entry";
       const initialClassworkClass = firstTeacherClass();
       $("#classworkFormHost").innerHTML = `<article class="card homework-card"><form class="form-grid" id="classworkForm"><label>Class<select id="classworkClass" required>${teacherClassOptions(initialClassworkClass)}</select></label><label>Subject<select id="classworkSubject" required>${teacherSubjectOptionsForClass(initialClassworkClass)}</select></label><label>Classwork<textarea id="classworkText" placeholder="What was taught in class today" required></textarea></label><label>Date<input id="classworkDate" type="date" value="${todayIso}" required /></label><button class="primary" type="submit">Save Classwork</button></form></article>`;
@@ -2364,7 +2469,14 @@
           toast("This class and subject is not assigned to this teacher.");
           return;
         }
-        await AppApi.create("homework", { teacherId: state.user.id, className, subject, text: $("#homeworkText").value, due: $("#homeworkDue").value });
+        let attachment = null;
+        try {
+          attachment = await readHomeworkAttachmentInput($("#homeworkAttachment"));
+        } catch (error) {
+          toast(error.message || "Attachment save kora gelo na.");
+          return;
+        }
+        await AppApi.create("homework", { teacherId: state.user.id, teacherName: state.user.name, className, subject, text: $("#homeworkText").value, due: $("#homeworkDue").value, attachment });
         state.workspace = await AppApi.workspace("teacher", state.user.id);
         renderTeacherViews();
         toast("Homework assigned");

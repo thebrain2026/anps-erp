@@ -1477,6 +1477,20 @@ h2 { font-size: 1.15rem; }
   font-size: 1.1rem;
 }
 
+.homework-attachment-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 9px;
+  border: 1px solid #bfd7ff;
+  border-radius: 6px;
+  background: #eef6ff;
+  color: #174ea6;
+  font-size: .78rem;
+  font-weight: 900;
+  text-decoration: none;
+}
+
 .status-pill {
   flex: 0 0 auto;
   display: inline-flex;

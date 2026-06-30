@@ -927,6 +927,7 @@ function saveAppState() {
     setTopbarSaveStatus("saving");
     normalizeStudentUserLoginIds();
     normalizeStudentContactFields();
+    pruneExpiredHomeworkAttachments();
     const snapshot = getAppStateSnapshot();
     const rollbackRawState = localStorage.getItem(STORAGE_KEY) || "";
     localStorage.setItem(STORAGE_KEY, JSON.stringify(snapshot));
@@ -962,6 +963,7 @@ function applySavedState(saved = {}) {
     }
     if (Array.isArray(saved.homework)) {
       homework.splice(0, homework.length, ...saved.homework);
+      pruneExpiredHomeworkAttachments();
     }
     if (Array.isArray(saved.admissionEnquiries)) {
       admissionEnquiries.splice(0, admissionEnquiries.length, ...saved.admissionEnquiries);
@@ -4470,6 +4472,35 @@ function getNoticeTargetLabel(notice = {}) {
   return notice.noticeClass || "All Classes";
 }
 
+function getNoticeSenderDefaults() {
+  const user = getLoggedInBackendUser();
+  const userName = String(user?.name || user?.fullName || user?.username || "").trim();
+  const userRole = String(user?.designation || user?.role || "").trim();
+  const staff = staffMembers.find(member => {
+    const memberName = String(member.name || "").trim().toLowerCase();
+    const staffId = String(member.staffId || member.id || "").trim().toLowerCase();
+    return (userName && memberName === userName.toLowerCase())
+      || (user?.staffId && staffId === String(user.staffId).trim().toLowerCase());
+  });
+  return {
+    name: staff?.name || userName || "Admin",
+    designation: staff?.designation || userRole || "Admin"
+  };
+}
+
+function fillNoticeSenderDefaults(force = false) {
+  if (!noticeForm) return;
+  const defaults = getNoticeSenderDefaults();
+  const senderName = noticeForm.elements.senderName;
+  const senderDesignation = noticeForm.elements.senderDesignation;
+  if (senderName && (force || !senderName.value)) senderName.value = defaults.name;
+  if (senderDesignation && (force || !senderDesignation.value)) senderDesignation.value = defaults.designation;
+}
+
+function getNoticeDateLabel(notice = {}) {
+  return notice.noticeDate || notice.date || notice.publishDate || formatDateDDMMYYYY(new Date());
+}
+
 function renderNoticeAudienceOptions() {
   const classSelect = document.getElementById("noticeClassSelect");
   const sectionSelect = document.getElementById("noticeSectionSelect");
@@ -4509,12 +4540,18 @@ function renderNoticeBoard() {
   const preview = document.getElementById("noticeAppPreview");
   if (!rows) return;
   renderNoticeAudienceOptions();
+  fillNoticeSenderDefaults();
   rows.innerHTML = notices.map(notice => `
     <tr>
-      <td><strong>${escapeHtml(notice.title)}</strong><br><small>${escapeHtml(notice.message)}</small></td>
+      <td>
+        <small>Notice Date: ${escapeHtml(getNoticeDateLabel(notice))}</small><br>
+        <strong>Subject: ${escapeHtml(notice.title)}</strong><br>
+        <small>${escapeHtml(notice.message)}</small><br>
+        <small>From: ${escapeHtml(notice.senderName || "Admin")}${notice.senderDesignation ? `, ${escapeHtml(notice.senderDesignation)}` : ""}</small>
+      </td>
       <td>${escapeHtml(notice.audience)}</td>
       <td>${escapeHtml(getNoticeTargetLabel(notice))}</td>
-      <td>${escapeHtml(notice.publishDate)}</td>
+      <td>${escapeHtml(notice.publishDate || "-")}</td>
       <td><span class="badge ${notice.priority === "Urgent" ? "red" : notice.priority === "Important" ? "amber" : "blue"}">${escapeHtml(notice.priority)}</span></td>
       <td><span class="status-pill stable">Published</span></td>
     </tr>
@@ -4522,10 +4559,11 @@ function renderNoticeBoard() {
   if (preview) {
     const latest = notices[0];
     preview.innerHTML = latest ? `
-      <span>${escapeHtml(latest.audience)} | ${escapeHtml(getNoticeTargetLabel(latest))}</span>
-      <strong>${escapeHtml(latest.title)}</strong>
+      <span>Notice Date: ${escapeHtml(getNoticeDateLabel(latest))}</span>
+      <strong>Subject: ${escapeHtml(latest.title)}</strong>
       <p>${escapeHtml(latest.message)}</p>
-      <small>${escapeHtml(latest.publishDate)} | ${escapeHtml(latest.delivery)}</small>
+      <small>From: ${escapeHtml(latest.senderName || "Admin")}${latest.senderDesignation ? `, ${escapeHtml(latest.senderDesignation)}` : ""}</small>
+      <small>Publish Date: ${escapeHtml(latest.publishDate || "-")} | ${escapeHtml(latest.delivery)}</small>
     ` : `
       <strong>No notice published yet.</strong>
       <p>Published notices will be available for student IDs and teacher accounts when the mobile app is connected.</p>
@@ -4629,8 +4667,83 @@ function renderHomeworkSubjectOptions({ preserveSubject = true } = {}) {
   if (selectedSubject) setSelectValue(subjectSelect, selectedSubject);
 }
 
+const HOMEWORK_ATTACHMENT_MAX_BYTES = 10 * 1024 * 1024;
+const HOMEWORK_ATTACHMENT_EXTENSIONS = [".pdf", ".doc", ".docx"];
+const HOMEWORK_ATTACHMENT_VALID_DAYS = 30;
+
+function getHomeworkAttachmentExpiry(baseDate = new Date()) {
+  const date = baseDate instanceof Date ? new Date(baseDate) : new Date(baseDate);
+  if (Number.isNaN(date.getTime())) date.setTime(Date.now());
+  date.setDate(date.getDate() + HOMEWORK_ATTACHMENT_VALID_DAYS);
+  return date.toISOString();
+}
+
+function isHomeworkAttachmentExpired(attachment = {}) {
+  if (!attachment?.expiresAt) return false;
+  const expiry = Date.parse(attachment.expiresAt);
+  return Number.isFinite(expiry) && expiry <= Date.now();
+}
+
+function pruneExpiredHomeworkAttachments() {
+  let changed = false;
+  homework.forEach(item => {
+    if (!item?.attachment?.url) return;
+    if (!item.attachment.createdAt) {
+      item.attachment.createdAt = item.createdAt || new Date().toISOString();
+      changed = true;
+    }
+    if (!item.attachment.expiresAt) {
+      item.attachment.expiresAt = getHomeworkAttachmentExpiry(item.attachment.createdAt);
+      changed = true;
+    }
+    if (isHomeworkAttachmentExpired(item.attachment)) {
+      delete item.attachment;
+      changed = true;
+    }
+  });
+  return changed;
+}
+
+function getHomeworkAttachmentLink(attachment = {}) {
+  if (!attachment || !attachment.url || isHomeworkAttachmentExpired(attachment)) return "-";
+  const label = attachment.name || "Open Attachment";
+  return `<a class="homework-attachment-link" href="${escapeHtml(attachment.url)}" target="_blank" rel="noopener" download="${escapeHtml(label)}">${escapeHtml(label)}</a>`;
+}
+
+function readHomeworkAttachment(file) {
+  return new Promise((resolve, reject) => {
+    if (!file) {
+      resolve(null);
+      return;
+    }
+    const lowerName = String(file.name || "").toLowerCase();
+    const allowed = HOMEWORK_ATTACHMENT_EXTENSIONS.some(ext => lowerName.endsWith(ext));
+    if (!allowed) {
+      reject(new Error("Only PDF, DOC or DOCX attachment allowed."));
+      return;
+    }
+    if (file.size > HOMEWORK_ATTACHMENT_MAX_BYTES) {
+      reject(new Error("Attachment 10 MB er moddhe rakhun."));
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => resolve({
+      name: file.name,
+      type: file.type || "application/octet-stream",
+      size: file.size,
+      url: String(reader.result || ""),
+      createdAt: new Date().toISOString(),
+      expiresAt: getHomeworkAttachmentExpiry(new Date()),
+      source: "inline-data"
+    });
+    reader.onerror = () => reject(new Error("Attachment read kora gelo na."));
+    reader.readAsDataURL(file);
+  });
+}
+
 function renderHomeworkModule() {
   renderHomeworkSubjectOptions();
+  pruneExpiredHomeworkAttachments();
   const rows = document.getElementById("homeworkRows");
   const preview = document.getElementById("homeworkPreviewBox");
   if (preview) {
@@ -4639,6 +4752,7 @@ function renderHomeworkModule() {
       <strong>${escapeHtml(latest.className || "-")} | ${escapeHtml(latest.subject || "-")}</strong>
       <span>Due: ${escapeHtml(latest.due || "-")}</span>
       <p>${escapeHtml(latest.text || "-")}</p>
+      <div>${getHomeworkAttachmentLink(latest.attachment)}</div>
     ` : "Class and subject select korle homework student app-e class-wise show korbe.";
   }
   if (!rows) return;
@@ -4648,20 +4762,29 @@ function renderHomeworkModule() {
       <td>${escapeHtml(item.subject || "-")}</td>
       <td>${escapeHtml(item.text || "-")}</td>
       <td>${escapeHtml(item.due || "-")}</td>
+      <td>${getHomeworkAttachmentLink(item.attachment)}</td>
       <td><span class="status-pill stable">${escapeHtml(item.status || "Published")}</span></td>
       <td><button class="icon-action delete" type="button" data-delete-homework="${index}" title="Delete homework" aria-label="Delete homework">×</button></td>
     </tr>
-  `).join("") || `<tr><td colspan="6">No assignments entered yet.</td></tr>`;
+  `).join("") || `<tr><td colspan="7">No assignments entered yet.</td></tr>`;
 }
 
-function publishHomeworkEntry(form) {
+async function publishHomeworkEntry(form) {
   const data = new FormData(form);
+  let attachment = null;
+  try {
+    attachment = await readHomeworkAttachment(form.elements.attachment?.files?.[0]);
+  } catch (error) {
+    showToast(error.message || "Attachment save kora gelo na.");
+    return;
+  }
   const entry = {
     id: `HW-${Date.now()}`,
     className: String(data.get("className") || "").trim(),
     subject: String(data.get("subject") || "").trim(),
     text: String(data.get("text") || "").trim(),
     due: String(data.get("due") || "").trim(),
+    attachment,
     date: toDateInputValue(new Date()),
     status: "Published",
     source: "Main ERP",
@@ -11505,8 +11628,11 @@ noticeForm.addEventListener("submit", event => {
     noticeClass: classes.join(", "),
     classes,
     sections,
+    noticeDate: String(data.get("noticeDate") || "").trim() || formatDateDDMMYYYY(new Date()),
     publishDate: String(data.get("publishDate") || "").trim() || formatDateDDMMYYYY(new Date()),
     message: String(data.get("message") || "").trim(),
+    senderName: String(data.get("senderName") || "").trim() || getNoticeSenderDefaults().name,
+    senderDesignation: String(data.get("senderDesignation") || "").trim() || getNoticeSenderDefaults().designation,
     priority: String(data.get("priority") || "Normal"),
     delivery: String(data.get("delivery") || "Notice Board"),
     status: "Published",
@@ -11515,7 +11641,9 @@ noticeForm.addEventListener("submit", event => {
   saveAppState();
   renderNoticeBoard();
   noticeForm.reset();
+  noticeForm.elements.noticeDate.value = formatDateDDMMYYYY(new Date());
   noticeForm.elements.publishDate.value = formatDateDDMMYYYY(new Date());
+  fillNoticeSenderDefaults(true);
   updateNoticeAudienceFields();
   showToast("Notice published for selected audience.");
 });
@@ -12717,7 +12845,9 @@ document.querySelector("#feeForm [name='id']").addEventListener("change", event 
 document.querySelector("#feeForm [name='date']").addEventListener("input", updateFeeFineAmountFromPaymentDate);
 document.querySelector("#feeForm [name='date']").addEventListener("change", updateFeeFineAmountFromPaymentDate);
 document.querySelector("#feeForm [name='date']").value = formatDateDDMMYYYY(new Date());
+noticeForm.elements.noticeDate.value = formatDateDDMMYYYY(new Date());
 noticeForm.elements.publishDate.value = formatDateDDMMYYYY(new Date());
+fillNoticeSenderDefaults(true);
 
 document.getElementById("quickAction").addEventListener("click", () => {
   openAdmissionForm();
@@ -12797,9 +12927,9 @@ document.getElementById("sendSmsButton").addEventListener("click", async () => {
   }
 });
 
-homeworkEntryForm?.addEventListener("submit", event => {
+homeworkEntryForm?.addEventListener("submit", async event => {
   event.preventDefault();
-  publishHomeworkEntry(event.currentTarget);
+  await publishHomeworkEntry(event.currentTarget);
 });
 
 document.getElementById("homeworkClassSelect")?.addEventListener("change", () => {
