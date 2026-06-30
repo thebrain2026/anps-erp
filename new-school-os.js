@@ -7347,11 +7347,93 @@ function showTransportRouteStudentDetails(routeName = "") {
   `;
 }
 
+function getRoutePickupVehicleLabel(point = {}) {
+  const assignment = getTransportAssignment(point.routeName, point.shift) || {};
+  const vehicle = getTransportVehicleByNo(assignment.vehicleNo) || {};
+  if (!assignment.vehicleNo) return "No vehicle assigned";
+  return vehicle.vehicleName || assignment.vehicleName || assignment.vehicleNo || "Vehicle";
+}
+
+function renderRoutePickupStudentReport() {
+  const filter = document.getElementById("routePickupStudentRouteFilter");
+  const summaryBox = document.getElementById("routePickupStudentReportSummary");
+  const rows = document.getElementById("routePickupStudentReportRows");
+  if (!filter || !summaryBox || !rows) return;
+  const selected = filter.value;
+  const routeNames = [...new Set(transportRoutePickupPoints
+    .map(point => String(point.routeName || "").trim())
+    .filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, undefined, {numeric: true}));
+  filter.innerHTML = `<option value="">All routes</option>${routeNames.map(routeName =>
+    `<option value="${escapeHtml(routeName)}">${escapeHtml(routeName)}</option>`
+  ).join("")}`;
+  filter.value = routeNames.includes(selected) ? selected : "";
+
+  const mappedPoints = transportRoutePickupPoints
+    .filter(point => String(point.routeName || "").trim())
+    .filter(point => !filter.value || String(point.routeName || "").trim() === filter.value)
+    .sort((a, b) =>
+      String(a.routeName || "").localeCompare(String(b.routeName || ""), undefined, {numeric: true}) ||
+      Number(a.sequence || 999) - Number(b.sequence || 999) ||
+      String(a.villageName || "").localeCompare(String(b.villageName || ""), undefined, {numeric: true})
+    );
+  const pickupCount = new Set(mappedPoints.map(point => normalizeVillageName(point.villageName || "")).filter(Boolean)).size;
+  const routeCount = new Set(mappedPoints.map(point => String(point.routeName || "").trim()).filter(Boolean)).size;
+  const studentKeys = new Set();
+  const reportRows = mappedPoints.flatMap(point => {
+    const studentsForVillage = getTransportStudentsByVillage(point.villageName);
+    const vehicleName = getRoutePickupVehicleLabel(point);
+    if (!studentsForVillage.length) {
+      return [{
+        routeName: point.routeName || "-",
+        vehicleName,
+        villageName: point.villageName || "-",
+        admissionNo: "-",
+        studentName: "No transport student",
+        classLabel: "-",
+        shift: point.shift || "-"
+      }];
+    }
+    return studentsForVillage.map(student => {
+      const key = normalizeAdmissionNo(student.admissionNo || student.name || "");
+      if (key) studentKeys.add(key);
+      return {
+        routeName: point.routeName || "-",
+        vehicleName,
+        villageName: point.villageName || student.villageTown || "-",
+        admissionNo: student.admissionNo || "-",
+        studentName: student.name || "-",
+        classLabel: [student.className || student.class || "", student.section || ""].filter(Boolean).join(" ") || "-",
+        shift: point.shift || "-"
+      };
+    });
+  });
+
+  summaryBox.innerHTML = mappedPoints.length ? `
+    <div><strong>${routeCount}</strong><span>Routes</span></div>
+    <div><strong>${pickupCount}</strong><span>Pickup Points</span></div>
+    <div><strong>${studentKeys.size}</strong><span>Transport Students</span></div>
+  ` : `<span>No route mapped yet.</span>`;
+
+  rows.innerHTML = reportRows.map(item => `
+    <tr>
+      <td><strong>${escapeHtml(item.routeName)}</strong></td>
+      <td>${escapeHtml(item.vehicleName)}</td>
+      <td>${escapeHtml(item.villageName)}</td>
+      <td>${escapeHtml(item.admissionNo)}</td>
+      <td>${escapeHtml(item.studentName)}</td>
+      <td>${escapeHtml(item.classLabel)}</td>
+      <td>${escapeHtml(item.shift)}</td>
+    </tr>
+  `).join("") || `<tr><td colspan="7">No student pickup point found.</td></tr>`;
+}
+
 function renderTransportRoutePickupPoints() {
   renderRoutePickupOptions();
   const rows = document.getElementById("transportRoutePickupRows");
   if (!rows) {
     renderTransportRouteStudentCounts();
+    renderRoutePickupStudentReport();
     return;
   }
   const villages = getRoutePickupVillages();
@@ -7404,6 +7486,7 @@ function renderTransportRoutePickupPoints() {
     select.value = point?.routeName || "";
   });
   renderTransportRouteStudentCounts();
+  renderRoutePickupStudentReport();
 }
 
 function getStudentTransportFeeType(student = {}) {
@@ -9921,6 +10004,28 @@ document.getElementById("transportRoutePickupRows")?.addEventListener("focusout"
 });
 
 document.getElementById("routePickupCountRoute")?.addEventListener("change", renderTransportRouteStudentCounts);
+
+document.querySelectorAll("[data-route-pickup-tab]").forEach(button => {
+  button.addEventListener("click", () => {
+    const tab = button.dataset.routePickupTab || "map";
+    document.querySelectorAll("[data-route-pickup-tab]").forEach(item => {
+      item.classList.toggle("active", item === button);
+    });
+    const mapPanel = document.getElementById("routePickupMapPanel");
+    const studentPanel = document.getElementById("routePickupStudentPanel");
+    if (mapPanel) {
+      mapPanel.hidden = tab !== "map";
+      mapPanel.classList.toggle("active", tab === "map");
+    }
+    if (studentPanel) {
+      studentPanel.hidden = tab !== "students";
+      studentPanel.classList.toggle("active", tab === "students");
+    }
+    if (tab === "students") renderRoutePickupStudentReport();
+  });
+});
+
+document.getElementById("routePickupStudentRouteFilter")?.addEventListener("change", renderRoutePickupStudentReport);
 
 document.getElementById("routePickupCountSummary")?.addEventListener("click", event => {
   const button = event.target.closest("[data-view-route-students]");

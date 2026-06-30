@@ -5718,6 +5718,106 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   font-weight: 850;
 }
 
+.route-pickup-tabs {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  margin: 4px 0 12px;
+  padding: 5px;
+  border: 1px solid #d5e6f0;
+  border-radius: 8px;
+  background: #f8fbfd;
+}
+
+.route-pickup-tabs button {
+  min-height: 34px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #415268;
+  padding: 0 14px;
+  font-size: .82rem;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.route-pickup-tabs button.active {
+  background: #0f766e;
+  color: #fff;
+  box-shadow: 0 8px 16px rgba(15, 118, 110, .16);
+}
+
+.route-pickup-tab-panel[hidden] {
+  display: none;
+}
+
+.route-pickup-report-head {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(230px, 320px);
+  gap: 12px;
+  align-items: end;
+  margin: 2px 0 12px;
+  padding: 12px;
+  border: 1px solid #d6e8ef;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #f8fcff, #f0fdfa);
+}
+
+.route-pickup-report-head h3 {
+  margin: 0;
+  color: #17334c;
+  font-size: 1rem;
+}
+
+.route-pickup-report-head label {
+  display: grid;
+  gap: 5px;
+  color: #26384f;
+  font-size: .78rem;
+  font-weight: 950;
+}
+
+.route-pickup-report-head select {
+  min-height: 36px;
+  border: 1px solid #cbdde9;
+  border-radius: 6px;
+  background: #fff;
+  padding: 0 10px;
+  font-weight: 850;
+}
+
+.route-pickup-report-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(120px, 1fr));
+  gap: 10px;
+  margin: 0 0 12px;
+}
+
+.route-pickup-report-summary > div,
+.route-pickup-report-summary > span {
+  padding: 10px 12px;
+  border: 1px solid #d8e8f0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.route-pickup-report-summary strong,
+.route-pickup-report-summary span {
+  display: block;
+}
+
+.route-pickup-report-summary strong {
+  color: #0f766e;
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.route-pickup-report-summary span {
+  color: #53657a;
+  font-size: .74rem;
+  font-weight: 900;
+}
+
 .route-pickup-inline-select,
 .route-pickup-inline-input {
   width: 100%;
@@ -7742,6 +7842,12 @@ body.modal-open {
   .transport-route-count-panel {
     grid-template-columns: 1fr;
   }
+  .route-pickup-report-head {
+    grid-template-columns: 1fr;
+  }
+  .route-pickup-report-summary {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
   .transport-route-count-summary {
     grid-template-columns: 1fr;
   }
@@ -7799,6 +7905,17 @@ body.modal-open {
     width: 100%;
   }
   .transport-route-count-panel label {
+    grid-template-columns: 1fr;
+  }
+  .route-pickup-tabs {
+    display: grid;
+    grid-template-columns: 1fr;
+    width: 100%;
+  }
+  .route-pickup-tabs button {
+    width: 100%;
+  }
+  .route-pickup-report-summary {
     grid-template-columns: 1fr;
   }
   .staff-address-field { grid-column: auto; }

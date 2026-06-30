@@ -2557,6 +2557,11 @@
       <section class="view" id="transportRoutePickupPoint">
         <div class="panel">
           <div class="panel-head"><div><p class="eyebrow">Transport</p><h2>Route Pickup Point</h2></div></div>
+          <div class="route-pickup-tabs" role="tablist" aria-label="Route pickup views">
+            <button class="active" type="button" data-route-pickup-tab="map">Map Pickup Point</button>
+            <button type="button" data-route-pickup-tab="students">Student Pickup Point</button>
+          </div>
+          <div class="route-pickup-tab-panel active" id="routePickupMapPanel">
           <div class="route-pickup-helper">Pickup Point page-er village name automatic ekhane asbe. Village-er pase route select korlei mapping save hobe.</div>
           <div class="transport-route-count-panel">
             <label>Route Student Count
@@ -2570,6 +2575,24 @@
           </div>
           <div id="routePickupStudentDetails" class="transport-route-student-details" hidden></div>
           <div class="table-wrap"><table><thead><tr><th>Village / Pickup Point</th><th>Route Name</th><th>Transport Student</th><th>Vehicle</th><th>Trip</th><th>Time</th><th>Sequence</th><th>Action</th></tr></thead><tbody id="transportRoutePickupRows"><tr><td colspan="8">No pickup village entered yet.</td></tr></tbody></table></div>
+          </div>
+          <div class="route-pickup-tab-panel" id="routePickupStudentPanel" hidden>
+            <div class="route-pickup-report-head">
+              <div>
+                <p class="eyebrow">Student Pickup Point</p>
+                <h3>Route wise pickup and student list</h3>
+              </div>
+              <label>Route
+                <select id="routePickupStudentRouteFilter">
+                  <option value="">All routes</option>
+                </select>
+              </label>
+            </div>
+            <div class="route-pickup-report-summary" id="routePickupStudentReportSummary">
+              <span>No route mapped yet.</span>
+            </div>
+            <div class="table-wrap"><table><thead><tr><th>Route Name</th><th>Vehicle Name</th><th>Village Name</th><th>Admission No.</th><th>Student Name</th><th>Class</th><th>Trip</th></tr></thead><tbody id="routePickupStudentReportRows"><tr><td colspan="7">No student pickup point found.</td></tr></tbody></table></div>
+          </div>
         </div>
       </section>
 
