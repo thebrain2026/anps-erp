@@ -5818,6 +5818,74 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   font-weight: 900;
 }
 
+.route-pickup-village-toggle {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 170px;
+  max-width: 100%;
+  min-height: 32px;
+  border: 1px solid #c7dbea;
+  border-radius: 7px;
+  background: #f8fcff;
+  color: #123047;
+  padding: 0 10px;
+  font-size: .82rem;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.route-pickup-village-toggle span {
+  color: #0f766e;
+  transition: transform .15s ease;
+}
+
+.route-pickup-village-toggle.open span {
+  transform: rotate(180deg);
+}
+
+.route-pickup-student-dropdown[hidden] {
+  display: none;
+}
+
+.route-pickup-student-dropdown > td {
+  padding: 0 !important;
+  background: #f8fbfd;
+}
+
+.route-pickup-student-list {
+  margin: 8px 10px 12px;
+  border: 1px solid #d8e8f0;
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.route-pickup-student-list table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: .82rem;
+}
+
+.route-pickup-student-list th,
+.route-pickup-student-list td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #edf2f7;
+  text-align: left;
+}
+
+.route-pickup-student-list th {
+  background: #eef8f4;
+  color: #27435c;
+  font-size: .72rem;
+  text-transform: uppercase;
+}
+
+.route-pickup-student-list tr:last-child td {
+  border-bottom: 0;
+}
+
 .route-pickup-inline-select,
 .route-pickup-inline-input {
   width: 100%;

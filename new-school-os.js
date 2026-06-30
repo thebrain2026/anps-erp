@@ -7380,33 +7380,27 @@ function renderRoutePickupStudentReport() {
   const pickupCount = new Set(mappedPoints.map(point => normalizeVillageName(point.villageName || "")).filter(Boolean)).size;
   const routeCount = new Set(mappedPoints.map(point => String(point.routeName || "").trim()).filter(Boolean)).size;
   const studentKeys = new Set();
-  const reportRows = mappedPoints.flatMap(point => {
+  const reportRows = mappedPoints.map((point, index) => {
     const studentsForVillage = getTransportStudentsByVillage(point.villageName);
     const vehicleName = getRoutePickupVehicleLabel(point);
-    if (!studentsForVillage.length) {
-      return [{
-        routeName: point.routeName || "-",
-        vehicleName,
-        villageName: point.villageName || "-",
-        admissionNo: "-",
-        studentName: "No transport student",
-        classLabel: "-",
-        shift: point.shift || "-"
-      }];
-    }
-    return studentsForVillage.map(student => {
+    const students = studentsForVillage.map(student => {
       const key = normalizeAdmissionNo(student.admissionNo || student.name || "");
       if (key) studentKeys.add(key);
       return {
-        routeName: point.routeName || "-",
-        vehicleName,
-        villageName: point.villageName || student.villageTown || "-",
         admissionNo: student.admissionNo || "-",
         studentName: student.name || "-",
         classLabel: [student.className || student.class || "", student.section || ""].filter(Boolean).join(" ") || "-",
         shift: point.shift || "-"
       };
     });
+    return {
+      key: `route-pickup-student-detail-${index}`,
+      routeName: point.routeName || "-",
+      vehicleName,
+      villageName: point.villageName || "-",
+      shift: point.shift || "-",
+      students
+    };
   });
 
   summaryBox.innerHTML = mappedPoints.length ? `
@@ -7415,17 +7409,40 @@ function renderRoutePickupStudentReport() {
     <div><strong>${studentKeys.size}</strong><span>Transport Students</span></div>
   ` : `<span>No route mapped yet.</span>`;
 
-  rows.innerHTML = reportRows.map(item => `
-    <tr>
+  rows.innerHTML = reportRows.map(item => {
+    const studentRows = item.students.map(student => `
+      <tr>
+        <td>${escapeHtml(student.admissionNo)}</td>
+        <td>${escapeHtml(student.studentName)}</td>
+        <td>${escapeHtml(student.classLabel)}</td>
+        <td>${escapeHtml(student.shift)}</td>
+      </tr>
+    `).join("") || `<tr><td colspan="4">No transport student in this village.</td></tr>`;
+    return `
+    <tr class="route-pickup-report-row">
       <td><strong>${escapeHtml(item.routeName)}</strong></td>
       <td>${escapeHtml(item.vehicleName)}</td>
-      <td>${escapeHtml(item.villageName)}</td>
-      <td>${escapeHtml(item.admissionNo)}</td>
-      <td>${escapeHtml(item.studentName)}</td>
-      <td>${escapeHtml(item.classLabel)}</td>
+      <td>
+        <button class="route-pickup-village-toggle" type="button" data-route-pickup-village-details="${escapeHtml(item.key)}">
+          ${escapeHtml(item.villageName)}
+          <span>▾</span>
+        </button>
+      </td>
+      <td><strong>${item.students.length}</strong></td>
       <td>${escapeHtml(item.shift)}</td>
     </tr>
-  `).join("") || `<tr><td colspan="7">No student pickup point found.</td></tr>`;
+    <tr class="route-pickup-student-dropdown" id="${escapeHtml(item.key)}" hidden>
+      <td colspan="5">
+        <div class="route-pickup-student-list">
+          <table>
+            <thead><tr><th>Admission No.</th><th>Student Name</th><th>Class</th><th>Trip</th></tr></thead>
+            <tbody>${studentRows}</tbody>
+          </table>
+        </div>
+      </td>
+    </tr>
+  `;
+  }).join("") || `<tr><td colspan="5">No student pickup point found.</td></tr>`;
 }
 
 function renderTransportRoutePickupPoints() {
@@ -10026,6 +10043,16 @@ document.querySelectorAll("[data-route-pickup-tab]").forEach(button => {
 });
 
 document.getElementById("routePickupStudentRouteFilter")?.addEventListener("change", renderRoutePickupStudentReport);
+
+document.getElementById("routePickupStudentReportRows")?.addEventListener("click", event => {
+  const button = event.target.closest("[data-route-pickup-village-details]");
+  if (!button) return;
+  const detailRow = document.getElementById(button.dataset.routePickupVillageDetails || "");
+  if (!detailRow) return;
+  const willOpen = detailRow.hidden;
+  detailRow.hidden = !willOpen;
+  button.classList.toggle("open", willOpen);
+});
 
 document.getElementById("routePickupCountSummary")?.addEventListener("click", event => {
   const button = event.target.closest("[data-view-route-students]");
