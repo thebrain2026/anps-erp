@@ -506,6 +506,29 @@
     .complaint-status-bar.warn { color: #9a5d00; background: rgba(248,189,69,.18); }
     .complaint-status-bar.bad { color: #a92727; background: rgba(226,80,80,.12); }
     .complaint-status-bar b { font-size: .82rem; }
+    .complaint-satisfied-btn {
+      width: fit-content;
+      border: 0;
+      border-radius: 999px;
+      background: #0f766e;
+      color: #fff;
+      padding: 8px 12px;
+      font-size: .78rem;
+      font-weight: 900;
+      box-shadow: 0 8px 18px rgba(15,118,110,.2);
+    }
+    .complaint-satisfied-btn:active {
+      transform: scale(.97);
+    }
+    .complaint-satisfied-note {
+      width: fit-content;
+      border-radius: 999px;
+      background: rgba(15,118,110,.12);
+      color: #0f766e;
+      padding: 6px 10px;
+      font-size: .76rem;
+      font-weight: 900;
+    }
 
     .quick-row { display: grid; grid-template-columns: 46px 1fr auto; gap: 11px; align-items: center; }
     .quick-icon { width: 46px; height: 46px; border-radius: 16px; background: linear-gradient(135deg, #246bfe, #22c8a6); overflow: hidden; }
@@ -1014,6 +1037,25 @@
         state.erpUpdatedAt = saved.updated_at || "";
         return entry;
       },
+      async markComplaintSatisfied(complaintId) {
+        const latest = await this.request("/state", { method: "GET" });
+        const erpState = latest.state || {};
+        const list = Array.isArray(erpState.complaintRecords) ? [...erpState.complaintRecords] : [];
+        const index = list.findIndex(item => normalizeText(item.id || item.complaintNo) === normalizeText(complaintId));
+        if (index < 0) throw new Error("Complaint not found");
+        list[index] = {
+          ...list[index],
+          status: "Closed",
+          reviewStatus: "Closed",
+          satisfactionStatus: "Satisfied",
+          guardianSatisfied: true,
+          satisfiedAt: new Date().toISOString()
+        };
+        erpState.complaintRecords = list;
+        const saved = await this.saveStateWithConflictRetry(erpState, latest.updated_at || "");
+        state.erpState = saved.state || erpState;
+        state.erpUpdatedAt = saved.updated_at || "";
+      },
       async saveStateWithConflictRetry(erpState, updatedAt = "") {
         const postState = async (statePayload, baseUpdatedAt) => {
           const headers = {"Content-Type": "application/json"};
@@ -1454,7 +1496,12 @@
       const reviewedBy = normalizeText(item.reviewedBy);
       const reviewedLine = reviewedBy ? `Reviewed by ${reviewedBy}` : "School will review this complaint.";
       const note = reason ? `Reason: ${reason}` : solution ? `Solution: ${solution}` : reviewedLine;
-      return `<span class="complaint-status-bar ${tone}"><b>Status: ${status}</b><span>${note}</span></span>`;
+      const satisfactionPrompt = item.satisfactionStatus === "Waiting" && normalizeText(item.id)
+        ? `<button class="complaint-satisfied-btn" type="button" data-complaint-satisfied="${item.id}">Are you satisfied?</button>`
+        : item.satisfactionStatus === "Satisfied"
+          ? `<span class="complaint-satisfied-note">Satisfied</span>`
+          : "";
+      return `<span class="complaint-status-bar ${tone}"><b>Status: ${status}</b><span>${note}</span>${satisfactionPrompt}</span>`;
     }
 
     function studentComplaintCards(complaints = []) {
@@ -1802,6 +1849,24 @@
     }
 
     function bindStudentForms() {
+      document.querySelectorAll("[data-complaint-satisfied]").forEach(button => {
+        button.addEventListener("click", async () => {
+          const complaintId = button.dataset.complaintSatisfied || "";
+          const originalText = button.textContent;
+          button.disabled = true;
+          button.textContent = "Saving...";
+          try {
+            await AppApi.markComplaintSatisfied(complaintId);
+            state.workspace = await AppApi.workspace("student", state.user.id);
+            renderStudentViews();
+            toast("Complaint closed as satisfied");
+          } catch (error) {
+            button.disabled = false;
+            button.textContent = originalText;
+            toast(error.message || "Status update hoyni.");
+          }
+        });
+      });
       $("#studentRatingForm")?.addEventListener("submit", async event => {
         event.preventDefault();
         await AppApi.create("ratings", {

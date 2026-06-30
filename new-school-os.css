@@ -85,6 +85,51 @@ body {
   font: inherit;
 }
 
+.login-password-wrap {
+  position: relative;
+  display: block;
+}
+
+.login-password-wrap input {
+  padding-right: 46px;
+}
+
+.login-panel .login-password-toggle {
+  position: absolute;
+  top: 50%;
+  right: 7px;
+  width: 34px;
+  min-height: 32px;
+  transform: translateY(-50%);
+  border: 1px solid #d6e0ec;
+  border-radius: 7px;
+  background: #f8fafc;
+  color: #1e293b;
+  padding: 0;
+  font-size: 15px;
+  line-height: 1;
+  box-shadow: none;
+}
+
+.login-panel .login-forgot-link {
+  width: auto;
+  min-height: 26px;
+  margin: -4px 0 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #1d4ed8;
+  padding: 0;
+  font-size: 13px;
+  font-weight: 800;
+  text-align: left;
+  box-shadow: none;
+}
+
+.login-panel .login-forgot-link:hover {
+  text-decoration: underline;
+}
+
 .login-panel button {
   width: 100%;
   min-height: 44px;
@@ -6358,6 +6403,17 @@ body.modal-open {
   font: inherit;
   font-weight: 850;
   resize: vertical;
+}
+
+.complaint-review-reason.compact {
+  max-width: 420px;
+  margin-top: -4px;
+}
+
+.complaint-review-reason.compact textarea {
+  min-height: 54px;
+  max-height: 92px;
+  padding: 8px 10px;
 }
 
 .complaint-review-actions {

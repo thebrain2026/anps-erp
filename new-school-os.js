@@ -1250,13 +1250,35 @@ function ensureLoginOverlay() {
       </label>
       <label>
         <span>Password</span>
-        <input name="password" type="password" autocomplete="current-password" required />
+        <span class="login-password-wrap">
+          <input name="password" type="password" autocomplete="current-password" required />
+          <button class="login-password-toggle" type="button" aria-label="Show password" title="Show password">👁</button>
+        </span>
       </label>
       <p id="loginOverlayError" class="login-error"></p>
+      <button class="login-forgot-link" type="button">Forgot password?</button>
       <button type="submit">Login</button>
     </form>
   `;
   document.body.appendChild(overlay);
+  const passwordInput = overlay.querySelector("input[name='password']");
+  const passwordToggle = overlay.querySelector(".login-password-toggle");
+  passwordToggle?.addEventListener("click", () => {
+    if (!passwordInput) return;
+    const showPassword = passwordInput.type === "password";
+    passwordInput.type = showPassword ? "text" : "password";
+    passwordToggle.textContent = showPassword ? "✕" : "👁";
+    passwordToggle.setAttribute("aria-label", showPassword ? "Hide password" : "Show password");
+    passwordToggle.title = showPassword ? "Hide password" : "Show password";
+    passwordInput.focus();
+  });
+  overlay.querySelector(".login-forgot-link")?.addEventListener("click", () => {
+    const error = overlay.querySelector("#loginOverlayError");
+    if (error) {
+      error.textContent = "Password reset korte Master Admin / office admin-er sathe contact korun.";
+    }
+    showToast("Forgot password: Master Admin theke password reset korte hobe.");
+  });
   overlay.querySelector("form").addEventListener("submit", async event => {
     event.preventDefault();
     const form = event.currentTarget;
@@ -3614,7 +3636,38 @@ function getComplaintShortText(details = "") {
   return text.length > 82 ? `${text.slice(0, 82)}...` : text;
 }
 
+function ensureComplaintRecordId(item = {}) {
+  if (!item.id) item.id = item.complaintNo || `complaint-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+  return item.id;
+}
+
+function getComplaintSatisfactionLabel(item = {}) {
+  if (item.satisfactionStatus === "Satisfied" || item.guardianSatisfied) return "Guardian Satisfied";
+  if (item.satisfactionStatus === "Waiting") return "Waiting Satisfaction";
+  if (item.satisfactionStatus === "Auto Closed") return "Auto Closed";
+  return "";
+}
+
+function autoCloseExpiredComplaintSatisfaction() {
+  const now = Date.now();
+  let changed = false;
+  complaintRecords.forEach(item => {
+    if (item.satisfactionStatus !== "Waiting" || !item.satisfactionRequestedAt) return;
+    const requestedAt = Date.parse(item.satisfactionRequestedAt);
+    if (!Number.isFinite(requestedAt)) return;
+    const autoCloseDays = Number(item.satisfactionAutoCloseDays || 15) || 15;
+    if (now - requestedAt < autoCloseDays * 24 * 60 * 60 * 1000) return;
+    item.status = "Closed";
+    item.reviewStatus = "Closed";
+    item.satisfactionStatus = "Auto Closed";
+    item.autoClosedAt = new Date().toISOString();
+    changed = true;
+  });
+  return changed;
+}
+
 function renderComplaintsDesk() {
+  const autoClosed = autoCloseExpiredComplaintSatisfaction();
   const typeFilter = document.getElementById("complaintTypeFilter")?.value || "All";
   const statusFilter = document.getElementById("complaintStatusFilter")?.value || "All";
   const rows = document.getElementById("complaintsDeskRows");
@@ -3624,6 +3677,7 @@ function renderComplaintsDesk() {
     (statusFilter === "All" || item.status === statusFilter)
   );
   if (summary) summary.textContent = `${filtered.length} of ${complaintRecords.length} complaints showing.`;
+  if (autoClosed) saveAppState();
   if (!rows) return;
   rows.innerHTML = filtered.map((item) => {
     const index = complaintRecords.indexOf(item);
@@ -3633,6 +3687,7 @@ function renderComplaintsDesk() {
     const details = getComplaintDetails(item);
     const source = getComplaintSource(item);
     const status = item.status || "Open";
+    const satisfactionLabel = getComplaintSatisfactionLabel(item);
     return `
       <tr>
         <td>${formatDateDDMMYYYY(item.date)}</td>
@@ -3644,7 +3699,10 @@ function renderComplaintsDesk() {
             <span>${escapeHtml(getComplaintShortText(details))}</span>
           </button>
         </td>
-        <td><span class="complaint-status-pill ${getComplaintStatusClass(status, item.priority)}">${escapeHtml(status)}</span></td>
+        <td>
+          <span class="complaint-status-pill ${getComplaintStatusClass(status, item.priority)}">${escapeHtml(status)}</span>
+          ${satisfactionLabel ? `<br><small>${escapeHtml(satisfactionLabel)}</small>` : ""}
+        </td>
         <td>${escapeHtml(source)}</td>
         <td>
           <button class="icon-action edit" type="button" data-edit-complaint="${index}" title="Edit complaint" aria-label="Edit complaint">✎</button>
@@ -3667,9 +3725,11 @@ function openComplaintReviewModal(index) {
   const item = complaintRecords[index];
   if (!item || !complaintReviewModal || !complaintReviewBody) return;
   activeComplaintReviewIndex = index;
+  ensureComplaintRecordId(item);
   if (complaintReviewReason) complaintReviewReason.value = item.cancelReason || "";
   if (complaintReviewSolution) complaintReviewSolution.value = item.solutionNote || item.solution || "";
   const status = item.status || "Open";
+  const satisfactionLabel = getComplaintSatisfactionLabel(item) || "Not requested";
   complaintReviewBody.innerHTML = `
     <div class="complaint-review-card">
       <span>Name</span>
@@ -3694,6 +3754,10 @@ function openComplaintReviewModal(index) {
     <div class="complaint-review-card">
       <span>Source</span>
       <strong>${escapeHtml(getComplaintSource(item))}</strong>
+    </div>
+    <div class="complaint-review-card">
+      <span>Guardian Satisfaction</span>
+      <strong>${escapeHtml(satisfactionLabel)}</strong>
     </div>
     <div class="complaint-review-card full">
       <span>Complaint Details</span>
@@ -3739,6 +3803,32 @@ function solveComplaintReviewWithNote() {
   renderComplaintsDesk();
   closeComplaintReviewModal();
   showToast("Complaint solved and closed.");
+}
+
+function askComplaintSatisfactionReview() {
+  const item = complaintRecords[activeComplaintReviewIndex];
+  if (!item) return;
+  const solution = String(complaintReviewSolution?.value || "").trim();
+  if (!solution && !(item.solutionNote || item.solution)) {
+    showToast("Guardian satisfaction ask korar age solution note likhun.");
+    complaintReviewSolution?.focus();
+    return;
+  }
+  ensureComplaintRecordId(item);
+  item.status = "Resolved";
+  item.reviewStatus = "Resolved";
+  item.solutionNote = solution || item.solutionNote || item.solution || "";
+  item.cancelReason = "";
+  item.satisfactionStatus = "Waiting";
+  item.guardianSatisfied = false;
+  item.satisfactionRequestedAt = new Date().toISOString();
+  item.satisfactionAutoCloseDays = 15;
+  item.reviewedAt = new Date().toISOString();
+  item.reviewedBy = getCurrentTopbarRole();
+  saveAppState();
+  renderComplaintsDesk();
+  closeComplaintReviewModal();
+  showToast("Satisfaction request sent to student app.");
 }
 
 function cancelComplaintReviewWithReason() {
@@ -7137,9 +7227,10 @@ function renderRoutePickupOptions() {
 
 function getRoutePickupPointForVillage(villageName = "") {
   const cleanVillage = normalizeVillageName(villageName);
-  return transportRoutePickupPoints.find(point =>
+  const matches = transportRoutePickupPoints.filter(point =>
     normalizeVillageName(point.villageName || "") === cleanVillage
-  ) || null;
+  );
+  return matches.find(point => point.cleared || !String(point.routeName || "").trim()) || matches[0] || null;
 }
 
 function sortTransportRoutePickupPoints() {
@@ -7160,12 +7251,26 @@ function removeRoutePickupVillageMapping(villageName = "") {
   }
 }
 
+function clearRoutePickupVillageMapping(villageName = "") {
+  const cleanVillageName = String(villageName || "").trim();
+  if (!cleanVillageName) return;
+  removeRoutePickupVillageMapping(cleanVillageName);
+  transportRoutePickupPoints.push({
+    routeName: "",
+    villageName: cleanVillageName,
+    shift: "Morning Pickup",
+    time: "",
+    sequence: "",
+    cleared: true
+  });
+  sortTransportRoutePickupPoints();
+}
+
 function upsertRoutePickupVillageMapping(villageName = "", patch = {}) {
   const cleanVillageName = String(villageName || "").trim();
   if (!cleanVillageName) return false;
   if (Object.prototype.hasOwnProperty.call(patch, "routeName") && !String(patch.routeName || "").trim()) {
-    removeRoutePickupVillageMapping(cleanVillageName);
-    sortTransportRoutePickupPoints();
+    clearRoutePickupVillageMapping(cleanVillageName);
     return true;
   }
   const matching = transportRoutePickupPoints
@@ -7189,6 +7294,7 @@ function upsertRoutePickupVillageMapping(villageName = "", patch = {}) {
     matching.forEach(({point}, index) => {
       point.routeName = routeName;
       point.villageName = cleanVillageName;
+      delete point.cleared;
       if (index === 0) {
         point.shift = shift || "Morning Pickup";
         point.time = time;
@@ -7201,7 +7307,8 @@ function upsertRoutePickupVillageMapping(villageName = "", patch = {}) {
       villageName: cleanVillageName,
       shift: shift || "Morning Pickup",
       time,
-      sequence
+      sequence,
+      cleared: false
     });
   }
   const seen = new Set();
@@ -8796,7 +8903,10 @@ function getSystemHealthReport() {
         addHealthIssue(issues, "Transport Logic", "Transport student without transport fee", `${student.admissionNo || "-"} ${student.name || ""}`, "warning");
       }
       const cleanVillage = normalizeVillageName(student.villageTown || "");
-      const pickup = transportRoutePickupPoints.find(point => normalizeVillageName(point.villageName || "") === cleanVillage);
+      const pickup = transportRoutePickupPoints.find(point =>
+        normalizeVillageName(point.villageName || "") === cleanVillage &&
+        String(point.routeName || "").trim()
+      );
       if (!pickup) {
         addHealthIssue(issues, "Transport Logic", "Transport student village not mapped to route", `${student.admissionNo || "-"} ${student.name || ""} | ${student.villageTown || "-"}`, "warning");
       } else if (!getTransportAssignment(pickup.routeName, pickup.shift)?.vehicleNo) {
@@ -8806,6 +8916,7 @@ function getSystemHealthReport() {
   });
 
   transportRoutePickupPoints.forEach(point => {
+    if (point.cleared || (!String(point.routeName || "").trim() && String(point.villageName || "").trim())) return;
     if (!point.routeName || !point.villageName || !point.shift) {
       addHealthIssue(issues, "Transport Logic", "Incomplete route pickup mapping", `${point.routeName || "-"} | ${point.villageName || "-"} | ${point.shift || "-"}`, "warning");
     }
@@ -9977,9 +10088,8 @@ document.getElementById("transportRoutePickupRows")?.addEventListener("click", e
     const villageName = deleteVillageButton.dataset.deleteTransportPickupVillage || "";
     if (!villageName) return;
     if (!confirm(`Clear route mapping for ${villageName}?`)) return;
-    removeRoutePickupVillageMapping(villageName);
+    clearRoutePickupVillageMapping(villageName);
     editingTransportPickupIndex = -1;
-    sortTransportRoutePickupPoints();
     saveAppState();
     renderTransportRoutePickupPoints();
     showToast(`${villageName} route cleared.`);
@@ -10373,7 +10483,10 @@ admissionEnquiryForm?.addEventListener("submit", event => {
 complaintRegisterForm?.addEventListener("submit", event => {
   event.preventDefault();
   const data = new FormData(complaintRegisterForm);
+  const previousComplaint = editingComplaintIndex >= 0 ? complaintRecords[editingComplaintIndex] || {} : {};
   const complaint = {
+    ...previousComplaint,
+    id: previousComplaint.id || `complaint-${Date.now()}`,
     date: formatDateDDMMYYYY(data.get("date") || new Date()),
     forType: String(data.get("forType") || "Student").trim(),
     personName: String(data.get("personName") || "").trim(),
@@ -10402,6 +10515,7 @@ teacherComplaintForm?.addEventListener("submit", event => {
   const data = new FormData(teacherComplaintForm);
   const activeStaff = getActiveTeacherStaff();
   const complaint = {
+    id: `complaint-${Date.now()}`,
     date: formatDateDDMMYYYY(data.get("date") || new Date()),
     forType: String(data.get("forType") || "Student").trim(),
     personName: String(data.get("personName") || activeStaff?.name || "").trim(),
@@ -11766,6 +11880,7 @@ document.getElementById("closeComplaintReview")?.addEventListener("click", close
 document.getElementById("acceptComplaintReviewAction")?.addEventListener("click", acceptComplaintReview);
 document.getElementById("cancelComplaintReviewAction")?.addEventListener("click", cancelComplaintReviewWithReason);
 document.getElementById("solveComplaintReviewAction")?.addEventListener("click", solveComplaintReviewWithNote);
+document.getElementById("askComplaintSatisfactionAction")?.addEventListener("click", askComplaintSatisfactionReview);
 
 disableReasonModal.addEventListener("click", event => {
   if (event.target === disableReasonModal) closeDisableReasonModal();
