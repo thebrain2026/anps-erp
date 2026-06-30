@@ -531,6 +531,23 @@
       display: block;
     }
 
+    .bengali-notice-text {
+      display: none;
+      margin-top: 10px;
+      padding: 11px 12px;
+      border: 1px solid rgba(108, 99, 255, .18);
+      border-radius: 14px;
+      color: #312e81;
+      background: linear-gradient(135deg, rgba(238, 242, 255, .96), rgba(255, 247, 237, .92));
+      font-size: .86rem;
+      font-weight: 850;
+      line-height: 1.45;
+    }
+
+    .bengali-notice-text.show {
+      display: block;
+    }
+
     .section-title {
       display: flex;
       justify-content: space-between;
@@ -1646,9 +1663,45 @@
         [/bring\s+colour\s+pencils?/gi, "রঙ পেন্সিল নিয়ে আসবে"],
         [/practice\s+writing/gi, "লেখা অনুশীলন করবে"],
         [/draw\s+and\s+colour/gi, "আঁকবে এবং রং করবে"],
+        [/wear\s+school\s+uniform/gi, "স্কুল ইউনিফর্ম পরে আসবে"],
+        [/come\s+in\s+school\s+uniform/gi, "স্কুল ইউনিফর্ম পরে আসবে"],
+        [/school\s+will\s+remain\s+closed/gi, "স্কুল বন্ধ থাকবে"],
+        [/parents?\s+meeting/gi, "অভিভাবক সভা"],
         [/memorize/gi, "মুখস্থ করবে"]
       ];
       const wordMap = {
+        notice: "নোটিস",
+        school: "স্কুল",
+        student: "ছাত্র",
+        students: "ছাত্রছাত্রী",
+        teacher: "শিক্ষক",
+        teachers: "শিক্ষকরা",
+        parent: "অভিভাবক",
+        parents: "অভিভাবকরা",
+        guardian: "গার্ডিয়ান",
+        guardians: "গার্ডিয়ানরা",
+        class: "ক্লাস",
+        classes: "ক্লাস",
+        uniform: "ইউনিফর্ম",
+        dress: "ড্রেস",
+        wear: "পরে আসবে",
+        come: "আসবে",
+        bring: "নিয়ে আসবে",
+        closed: "বন্ধ",
+        open: "খোলা",
+        holiday: "ছুটি",
+        meeting: "সভা",
+        exam: "পরীক্ষা",
+        test: "পরীক্ষা",
+        fees: "ফি",
+        fee: "ফি",
+        payment: "পেমেন্ট",
+        submit: "জমা দেবে",
+        must: "অবশ্যই",
+        all: "সব",
+        only: "শুধু",
+        important: "গুরুত্বপূর্ণ",
+        urgent: "জরুরি",
         homework: "হোমওয়ার্ক",
         write: "লিখবে",
         read: "পড়বে",
@@ -1683,6 +1736,9 @@
         today: "আজ",
         and: "এবং",
         to: "থেকে",
+        for: "জন্য",
+        from: "থেকে",
+        with: "সঙ্গে",
         the: "",
         a: "",
         an: "",
@@ -1710,6 +1766,23 @@
           <span class="status warn">Homework</span>
         </div>
         ${body ? `<p>${body}</p>` : ""}
+        ${translator}
+      </article>`;
+    }
+
+    function studentNoticeCard(item = {}) {
+      const title = localized(item, "title") || "Notice";
+      const message = localized(item, "message") || "";
+      const translatedTitle = bengaliHomeworkText(title);
+      const translatedMessage = bengaliHomeworkText(message);
+      const hasBangla = /[\u0980-\u09FF]/.test(`${title} ${message}`);
+      const translator = hasBangla ? "" : `<button class="bengali-translate-action" type="button" data-bengali-notice>বাংলায় নোটিস দেখুন</button><div class="bengali-notice-text"><strong>${translatedTitle}</strong><br>${translatedMessage || "বাংলা অনুবাদ পাওয়া যায়নি।"}</div>`;
+      return `<article class="card notice-card">
+        <div class="card-head">
+          <div><h3>${title}</h3><p>${item.audience || item.audienceType || "Notice"} | ${noticeDateLabel(item)}</p></div>
+          <span class="status ok">${state.language === "bn" ? "নোটিশ" : "Notice"}</span>
+        </div>
+        ${message ? `<p>${message}</p>` : ""}
         ${translator}
       </article>`;
     }
@@ -1949,7 +2022,7 @@
       $("#classworkList").innerHTML = ws.classwork.map(item => card({ title: item.subject, meta: item.date, body: item.text, badge: "Classwork" })).join("");
       $("#noticeFormHost").innerHTML = languageControl();
       $("#noticeTotal").textContent = `${ws.notices.length} notices`;
-      $("#noticeList").innerHTML = ws.notices.map(item => card({ title: localized(item, "title"), meta: `${item.audience || item.audienceType || "Notice"} | ${noticeDateLabel(item)}`, body: localized(item, "message"), badge: state.language === "bn" ? "নোটিশ" : "Notice", className: "notice-card" })).join("");
+      $("#noticeList").innerHTML = ws.notices.map(item => studentNoticeCard(item)).join("");
       $("#attendanceScope").textContent = user.attendance;
       $("#attendanceHost").innerHTML = card({ title: "Attendance Summary", meta: `${user.attendance} attendance`, body: "Month-wise attendance API can be connected here.", badge: "Student" });
       $("#ratingTitle").textContent = "Teacher Rating";
@@ -2210,6 +2283,13 @@
           const target = button.nextElementSibling;
           target?.classList.toggle("show");
           button.textContent = target?.classList.contains("show") ? "বাংলা লুকান" : "বাংলায় দেখুন";
+        });
+      });
+      document.querySelectorAll("[data-bengali-notice]").forEach(button => {
+        button.addEventListener("click", () => {
+          const target = button.nextElementSibling;
+          target?.classList.toggle("show");
+          button.textContent = target?.classList.contains("show") ? "বাংলা নোটিস লুকান" : "বাংলায় নোটিস দেখুন";
         });
       });
       document.querySelectorAll("[data-complaint-satisfied]").forEach(button => {
