@@ -590,6 +590,32 @@
       padding: 4px 14px 8px;
     }
 
+    .dashboard-maker-signature {
+      margin: 12px 14px 88px;
+      padding: 10px 12px;
+      border: 1px solid rgba(36,107,254,.12);
+      border-radius: 16px;
+      text-align: center;
+      background: linear-gradient(135deg, rgba(255,255,255,.62), rgba(239,246,255,.54));
+      box-shadow: 0 10px 22px rgba(25,35,80,.08);
+    }
+
+    .dashboard-maker-signature b {
+      display: block;
+      color: var(--deep);
+      font-size: .8rem;
+      line-height: 1.1;
+    }
+
+    .dashboard-maker-signature span {
+      display: block;
+      margin-top: 3px;
+      color: #7a5a12;
+      font-size: .66rem;
+      font-weight: 900;
+      letter-spacing: .02em;
+    }
+
     .section-title h2 { margin: 0; font-size: 1.06rem; }
     .section-title span { color: var(--muted); font-size: .75rem; font-weight: 850; }
 
@@ -609,6 +635,15 @@
     }
 
     .module-icon { width: 42px; height: 42px; border-radius: 15px; }
+    .module-icon svg {
+      width: 22px;
+      height: 22px;
+      stroke: currentColor;
+      stroke-width: 2.4;
+      fill: none;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
     .module b { font-size: .64rem; line-height: 1.08; }
     .module:nth-child(1) { --tile-a: #246bfe; --tile-b: #1bb6d9; }
     .module:nth-child(2) { --tile-a: #7659ff; --tile-b: #f06c9b; }
@@ -641,6 +676,14 @@
       color: #fff;
       font-size: .94rem;
       text-shadow: 0 2px 8px rgba(16,26,74,.22);
+    }
+    .module[data-nav="attendance"] .module-icon {
+      background: linear-gradient(135deg, #14b8a6, #246bfe 58%, #101a4a);
+      color: #fff;
+    }
+    .module[data-nav="leave"] .module-icon {
+      background: linear-gradient(135deg, #f8bd45, #f06c9b 58%, #7659ff);
+      color: #fff;
     }
 
     .stack { display: grid; gap: 11px; padding: 0 12px 14px; }
@@ -930,6 +973,79 @@
 
     .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
+    .birthday-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 80;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      background: rgba(16, 26, 74, .38);
+      backdrop-filter: blur(10px);
+    }
+
+    .birthday-card {
+      width: min(100%, 390px);
+      padding: 22px 18px 18px;
+      border: 1px solid rgba(255,255,255,.78);
+      border-radius: 26px;
+      text-align: center;
+      background:
+        radial-gradient(circle at 18% 0%, rgba(248,189,69,.38), transparent 30%),
+        radial-gradient(circle at 86% 12%, rgba(240,108,155,.34), transparent 32%),
+        linear-gradient(145deg, rgba(255,255,255,.98), rgba(239,246,255,.94));
+      box-shadow: 0 28px 70px rgba(16,26,74,.28);
+    }
+
+    .birthday-ribbon {
+      display: inline-grid;
+      place-items: center;
+      width: 58px;
+      height: 58px;
+      margin-bottom: 10px;
+      border-radius: 20px;
+      color: #fff;
+      background: linear-gradient(135deg, #f06c9b, #f8bd45 54%, #246bfe);
+      font-size: 1.2rem;
+      font-weight: 950;
+      box-shadow: 0 14px 30px rgba(240,108,155,.24);
+    }
+
+    .birthday-card h2 {
+      margin: 0;
+      color: var(--deep);
+      font-size: 1.35rem;
+      line-height: 1.15;
+    }
+
+    .birthday-card p {
+      margin: 10px 0 0;
+      color: var(--muted);
+      font-size: .9rem;
+      font-weight: 800;
+      line-height: 1.45;
+    }
+
+    .birthday-card small {
+      display: block;
+      margin-top: 12px;
+      color: #7a5a12;
+      font-weight: 950;
+      letter-spacing: .02em;
+    }
+
+    .birthday-close {
+      width: 100%;
+      min-height: 44px;
+      margin-top: 16px;
+      border: 0;
+      border-radius: 16px;
+      color: #fff;
+      background: linear-gradient(135deg, #246bfe, #22c8a6);
+      font-weight: 950;
+      box-shadow: 0 12px 26px rgba(36,107,254,.18);
+    }
+
     @media (max-width: 380px) {
       .module-grid { grid-template-columns: repeat(3, 1fr); }
       .metrics { grid-template-columns: 1fr 1fr; }
@@ -1056,6 +1172,10 @@
             <span id="todayLabel"></span>
           </div>
           <div class="stack" id="quickList"></div>
+          <div class="dashboard-maker-signature" aria-label="Developer branding">
+            <b>The Brain</b>
+            <span>Innovation by Samrat Hazra</span>
+          </div>
         </section>
 
         <section class="view" id="profileView">
@@ -1147,6 +1267,15 @@
   </div>
 
   <div class="toast" id="toast"></div>
+  <div class="birthday-modal hidden" id="birthdayModal" role="dialog" aria-modal="true" aria-labelledby="birthdayTitle">
+    <article class="birthday-card">
+      <div class="birthday-ribbon">BD</div>
+      <h2 id="birthdayTitle">Happy Birthday</h2>
+      <p id="birthdayMessage">Alfred Nobel Public School wishes you a bright, joyful and successful year ahead.</p>
+      <small>From Alfred Nobel Public School</small>
+      <button class="birthday-close" id="birthdayCloseBtn" type="button">Thank You</button>
+    </article>
+  </div>
 
   <script>
     const AppConfig = {
@@ -1161,8 +1290,39 @@
     const todayIso = new Date().toISOString().slice(0, 10);
     const academicMonths = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
     const $ = selector => document.querySelector(selector);
+    const attendanceLogo = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3v3"/><path d="M16 3v3"/><path d="M4 8h16"/><rect x="4" y="5" width="16" height="16" rx="3"/><path d="m8 14 2.2 2.2L16 10.5"/></svg>`;
+    const leaveLogo = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v5h5"/><path d="M9 14h6"/><path d="M9 17h4"/><path d="M9 11h2"/></svg>`;
     let state = { role: null, user: null, workspace: null, attendanceClass: "", language: "en" };
     let activitySession = { startedAt: "", lastSavedAt: 0, timer: null };
+    let lastRegisteredPushToken = "";
+
+    async function getNativePushToken() {
+      if (window.ANPS_PUSH_TOKEN) return String(window.ANPS_PUSH_TOKEN);
+      try {
+        if (window.AnpsNative?.getPushToken) {
+          return String(await window.AnpsNative.getPushToken());
+        }
+      } catch (error) {
+        console.warn("Native push token read failed.", error);
+      }
+      return "";
+    }
+
+    async function registerCurrentPushToken() {
+      const token = await getNativePushToken();
+      if (!token || token === lastRegisteredPushToken || !state.user) return;
+      try {
+        await AppApi.registerPushToken(token);
+        lastRegisteredPushToken = token;
+      } catch (error) {
+        console.warn("Push token registration failed.", error);
+      }
+    }
+
+    window.registerNativePushToken = token => {
+      window.ANPS_PUSH_TOKEN = token;
+      registerCurrentPushToken();
+    };
 
     const AppApi = {
       token() {
@@ -1202,6 +1362,33 @@
         state.erpUpdatedAt = payload.updated_at || "";
         if (role === "student") return buildStudentWorkspace(state.erpState, userId);
         return buildTeacherWorkspace(state.erpState, userId);
+      },
+      async registerPushToken(token) {
+        if (!token || !state.user) return null;
+        const payload = await this.request("/mobile/push-token", {
+          method: "POST",
+          body: JSON.stringify({
+            token,
+            role: state.role,
+            userId: state.user.id,
+            name: state.user.name,
+            className: state.user.className || state.user.assignedClass || "",
+            section: state.user.section || "",
+            platform: "android"
+          })
+        });
+        return payload;
+      },
+      async sendBirthdayNotification() {
+        if (!state.user) return null;
+        return this.request("/notifications/birthday", {
+          method: "POST",
+          body: JSON.stringify({
+            role: state.role,
+            userId: state.user.id,
+            name: state.user.name
+          })
+        });
       },
       async create(collection, record) {
         const latest = await this.request("/state", { method: "GET" });
@@ -1372,6 +1559,45 @@
 
     function normalizeAdmission(value) {
       return normalizeText(value).toLowerCase().replace(/[^a-z0-9]/g, "");
+    }
+
+    function birthdayParts(value = "") {
+      const clean = normalizeText(value);
+      let match = clean.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{2,4})$/);
+      if (match) return { day: Number(match[1]), month: Number(match[2]) };
+      match = clean.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+      if (match) return { day: Number(match[3]), month: Number(match[2]) };
+      const parsed = new Date(clean);
+      if (!Number.isNaN(parsed.getTime())) return { day: parsed.getDate(), month: parsed.getMonth() + 1 };
+      return null;
+    }
+
+    function isBirthdayToday(value = "") {
+      const parts = birthdayParts(value);
+      if (!parts) return false;
+      const today = new Date();
+      return parts.day === today.getDate() && parts.month === today.getMonth() + 1;
+    }
+
+    async function sendBirthdayPushIfPossible() {
+      try {
+        const result = await AppApi.sendBirthdayNotification();
+        if (result?.configured && result.sent) console.info(`Birthday notification sent to ${result.sent} device(s).`);
+      } catch (error) {
+        console.warn("Birthday push notification failed.", error);
+      }
+    }
+
+    function showBirthdayGreeting() {
+      if (!state.user?.dob || !isBirthdayToday(state.user.dob)) return;
+      const todayKey = new Date().toISOString().slice(0, 10);
+      const popupKey = `anps_birthday_popup_${state.role}_${state.user.id}_${todayKey}`;
+      if (sessionStorage.getItem(popupKey)) return;
+      sessionStorage.setItem(popupKey, "1");
+      $("#birthdayTitle").textContent = `Happy Birthday, ${state.user.name}!`;
+      $("#birthdayMessage").textContent = "Alfred Nobel Public School wishes you a bright, joyful and successful year ahead. Keep learning, keep smiling, and keep shining.";
+      $("#birthdayModal").classList.remove("hidden");
+      sendBirthdayPushIfPossible();
     }
 
     function initials(name) {
@@ -1587,6 +1813,7 @@
         guardian: student.guardianName || student.fatherName || student.motherName || "-",
         attendance: student.attendance || "0%",
         feesDue: studentDueAmount(erpState, student),
+        dob: student.dob || student.dateOfBirth || student.birthDate || "",
         initials: initials(student.name || state.user.name),
         photo: student.photo || student.studentPhoto || ""
       };
@@ -1670,6 +1897,7 @@
         department: staff.department || state.user.department,
         assignedClass: staff.assignedClass || subjects[0]?.className || "-",
         subjects,
+        dob: staff.dob || staff.dateOfBirth || staff.birthDate || "",
         initials: initials(staff.name || state.user.name),
         photo: staff.photo || staff.staffPhoto || ""
       };
@@ -1738,9 +1966,9 @@
       { id: "classwork", label: "Classwork Entry", icon: "CW" },
       { id: "notice", label: "Notice", icon: "NT" },
       { id: "complaints", label: "Complaints", icon: "CP" },
-      { id: "attendance", label: "Attendance", icon: "AT" },
+      { id: "attendance", label: "Attendance", icon: attendanceLogo },
       { id: "rating", label: "Ratings", icon: "★" },
-      { id: "leave", label: "Apply Leave", icon: "LV" }
+      { id: "leave", label: "Apply Leave", icon: leaveLogo }
     ];
 
     function toast(message) {
@@ -2661,6 +2889,8 @@
       if (role === "teacher") renderTeacherViews();
       openView("dashboard");
       if (role === "student") startStudentActivityTracking();
+      await registerCurrentPushToken();
+      showBirthdayGreeting();
     }
 
     document.querySelectorAll("[data-select-role]").forEach(btn => btn.addEventListener("click", () => setupLogin(btn.dataset.selectRole)));
@@ -2684,6 +2914,7 @@
         toast(error.message);
       }
     });
+    $("#birthdayCloseBtn")?.addEventListener("click", () => $("#birthdayModal")?.classList.add("hidden"));
     $("#menuBtn").addEventListener("click", () => document.body.classList.add("drawer-open"));
     $("#drawerBackdrop").addEventListener("click", () => document.body.classList.remove("drawer-open"));
     $("#syncBtn").addEventListener("click", async () => {

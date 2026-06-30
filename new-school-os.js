@@ -4501,6 +4501,26 @@ function getNoticeDateLabel(notice = {}) {
   return notice.noticeDate || notice.date || notice.publishDate || formatDateDDMMYYYY(new Date());
 }
 
+async function sendNoticePushNotification(notice = {}) {
+  try {
+    const response = await backendFetch("/api/notifications/notice", {
+      method: "POST",
+      headers: backendHeaders({"Content-Type": "application/json"}),
+      body: JSON.stringify({notice})
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!result.configured) {
+      console.info("Notice push saved, but Firebase Cloud Messaging is not configured yet.");
+      return;
+    }
+    if (result.ok) {
+      showToast(`Notice notification sent to ${result.sent || 0} device(s).`);
+    }
+  } catch (error) {
+    console.warn("Notice push notification failed.", error);
+  }
+}
+
 function renderNoticeAudienceOptions() {
   const classSelect = document.getElementById("noticeClassSelect");
   const sectionSelect = document.getElementById("noticeSectionSelect");
@@ -11620,7 +11640,7 @@ noticeForm.addEventListener("submit", event => {
     showToast("Select at least one section for this notice.");
     return;
   }
-  notices.unshift({
+  const noticeEntry = {
     id: `NOTICE-${Date.now()}`,
     title: String(data.get("title") || "").trim(),
     audience,
@@ -11637,8 +11657,10 @@ noticeForm.addEventListener("submit", event => {
     delivery: String(data.get("delivery") || "Notice Board"),
     status: "Published",
     createdAt: new Date().toISOString()
-  });
+  };
+  notices.unshift(noticeEntry);
   saveAppState();
+  sendNoticePushNotification(noticeEntry);
   renderNoticeBoard();
   noticeForm.reset();
   noticeForm.elements.noticeDate.value = formatDateDDMMYYYY(new Date());

@@ -26,6 +26,8 @@ API_TOKEN = os.environ.get("ANPS_ERP_API_TOKEN", "").strip()
 WHATSAPP_ACCESS_TOKEN = os.environ.get("ANPS_WHATSAPP_ACCESS_TOKEN", "").strip()
 WHATSAPP_PHONE_NUMBER_ID = os.environ.get("ANPS_WHATSAPP_PHONE_NUMBER_ID", "").strip()
 WHATSAPP_API_VERSION = os.environ.get("ANPS_WHATSAPP_API_VERSION", "v23.0").strip() or "v23.0"
+FCM_SERVER_KEY = os.environ.get("ANPS_FCM_SERVER_KEY", "").strip()
+FCM_ENDPOINT = os.environ.get("ANPS_FCM_ENDPOINT", "https://fcm.googleapis.com/fcm/send").strip() or "https://fcm.googleapis.com/fcm/send"
 ALLOWED_ORIGINS = [
     origin.strip().rstrip("/")
     for origin in os.environ.get("ANPS_ERP_ALLOWED_ORIGINS", "*").split(",")
@@ -320,6 +322,171 @@ def send_whatsapp_template(payload):
         return {"ok": False, "configured": True, "status": exc.code, "error": error_body}
     except Exception as exc:
         return {"ok": False, "configured": True, "error": str(exc)}
+
+
+def selected_notice_classes(notice):
+    values = notice.get("classes") if isinstance(notice, dict) else []
+    if not isinstance(values, list):
+        values = str(notice.get("noticeClass") or notice.get("className") or "").split(",")
+    return {str(value or "").strip().lower() for value in values if str(value or "").strip()}
+
+
+def selected_notice_sections(notice):
+    values = notice.get("sections") if isinstance(notice, dict) else []
+    if not isinstance(values, list):
+        values = str(notice.get("section") or "").split(",")
+    return {str(value or "").strip().lower() for value in values if str(value or "").strip()}
+
+
+def token_matches_notice(token_record, notice):
+    if not isinstance(token_record, dict) or not token_record.get("token"):
+        return False
+    if str(token_record.get("enabled", "true")).lower() in {"false", "0", "no", "disabled"}:
+        return False
+    audience = str(notice.get("audience") or notice.get("audienceType") or "All Students").lower()
+    role = str(token_record.get("role") or "").lower()
+    if "teacher" in audience and "student" not in audience:
+        if role == "student":
+            return False
+    elif "teacher" not in audience:
+        if role != "student":
+            return False
+    classes = selected_notice_classes(notice)
+    if classes and str(token_record.get("className") or "").strip().lower() not in classes:
+        return False
+    sections = selected_notice_sections(notice)
+    if sections and str(token_record.get("section") or "").strip().lower() not in sections:
+        return False
+    return True
+
+
+def upsert_mobile_push_token(payload, user):
+    token = str(payload.get("token") or "").strip()
+    if not token:
+        return {"ok": False, "error": "Push token required."}
+    state = read_state() or fresh_state()
+    state = ensure_state_school(state)
+    school_id = normalize_school_id(user.get("school_id") or payload.get("school_id") or state.get("school_id") or DEFAULT_SCHOOL_ID)
+    tokens = state.get("mobilePushTokens")
+    if not isinstance(tokens, list):
+        tokens = []
+    user_id = str(payload.get("userId") or user.get("username") or "").strip()
+    role = str(payload.get("role") or user.get("role_name") or "").strip()
+    record = {
+        "token": token,
+        "userId": user_id,
+        "role": role,
+        "name": str(payload.get("name") or user.get("full_name") or "").strip(),
+        "className": str(payload.get("className") or "").strip(),
+        "section": str(payload.get("section") or "").strip(),
+        "platform": str(payload.get("platform") or "android").strip(),
+        "school_id": school_id,
+        "schoolId": school_id,
+        "enabled": True,
+        "updatedAt": datetime.utcnow().isoformat(timespec="seconds") + "Z",
+    }
+    existing_index = next((index for index, item in enumerate(tokens) if isinstance(item, dict) and item.get("token") == token), -1)
+    if existing_index >= 0:
+        tokens[existing_index] = {**tokens[existing_index], **record}
+    else:
+        tokens.insert(0, record)
+    state["mobilePushTokens"] = tokens[:5000]
+    updated_at = write_state(state)
+    return {"ok": True, "configured": bool(FCM_SERVER_KEY), "updated_at": updated_at}
+
+
+def send_fcm_notifications(tokens, title, body, data=None):
+    if not tokens:
+        return {"ok": True, "configured": bool(FCM_SERVER_KEY), "sent": 0, "message": "No target device tokens."}
+    if not FCM_SERVER_KEY:
+        return {
+            "ok": False,
+            "configured": False,
+            "sent": 0,
+            "error": "Firebase Cloud Messaging is not configured. Set ANPS_FCM_SERVER_KEY on Render.",
+        }
+    payload = {
+        "registration_ids": tokens[:1000],
+        "notification": {
+            "title": title,
+            "body": body,
+            "sound": "default",
+        },
+        "data": data or {},
+        "priority": "high",
+    }
+    request = urllib.request.Request(
+        FCM_ENDPOINT,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={
+            "Authorization": f"key={FCM_SERVER_KEY}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=15) as response:
+            result = json.loads(response.read().decode("utf-8") or "{}")
+        return {
+            "ok": True,
+            "configured": True,
+            "sent": int(result.get("success") or 0),
+            "failed": int(result.get("failure") or 0),
+            "result": result,
+        }
+    except urllib.error.HTTPError as exc:
+        error_body = exc.read().decode("utf-8", errors="replace")
+        return {"ok": False, "configured": True, "status": exc.code, "error": error_body}
+    except Exception as exc:
+        return {"ok": False, "configured": True, "error": str(exc)}
+
+
+def send_notice_push(payload):
+    notice = payload.get("notice") if isinstance(payload.get("notice"), dict) else payload
+    state = read_state() or {}
+    tokens = [
+        item.get("token")
+        for item in state.get("mobilePushTokens", []) or []
+        if token_matches_notice(item, notice)
+    ]
+    title = str(notice.get("title") or "School Notice").strip()
+    body = str(notice.get("message") or "New notice published.").strip()
+    if len(body) > 160:
+        body = body[:157].rstrip() + "..."
+    return send_fcm_notifications(
+        list(dict.fromkeys(tokens)),
+        title,
+        body,
+        {
+            "type": "notice",
+            "noticeId": str(notice.get("id") or ""),
+            "noticeDate": str(notice.get("noticeDate") or notice.get("publishDate") or ""),
+        },
+    )
+
+
+def send_birthday_push(payload, user):
+    state = read_state() or {}
+    user_id = str(payload.get("userId") or user.get("username") or "").strip()
+    role = str(payload.get("role") or user.get("role_name") or "").strip().lower()
+    name = str(payload.get("name") or user.get("full_name") or "Student").strip()
+    tokens = []
+    for item in state.get("mobilePushTokens", []) or []:
+        if not isinstance(item, dict) or not item.get("token"):
+            continue
+        if str(item.get("enabled", "true")).lower() in {"false", "0", "no", "disabled"}:
+            continue
+        if user_id and str(item.get("userId") or "").strip().lower() != user_id.lower():
+            continue
+        if role and str(item.get("role") or "").strip().lower() != role:
+            continue
+        tokens.append(item.get("token"))
+    return send_fcm_notifications(
+        list(dict.fromkeys(tokens)),
+        f"Happy Birthday, {name}!",
+        "Alfred Nobel Public School wishes you a bright, joyful and successful year ahead.",
+        {"type": "birthday", "userId": user_id, "role": role},
+    )
 
 
 def connect():
@@ -2607,6 +2774,12 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             return self.school_upsert_request()
         if path == "/api/whatsapp/send":
             return self.whatsapp_send_request()
+        if path == "/api/mobile/push-token":
+            return self.mobile_push_token_request()
+        if path == "/api/notifications/notice":
+            return self.notice_push_request()
+        if path == "/api/notifications/birthday":
+            return self.birthday_push_request()
         self.save_state_request()
 
     def do_PUT(self):
@@ -2668,6 +2841,44 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             result = send_whatsapp_template(payload)
             status = 200 if result.get("ok") else 400
             self.json_response(result, status=status)
+        except Exception as exc:
+            self.json_response({"ok": False, "error": str(exc)}, status=400)
+
+    def mobile_push_token_request(self):
+        length = int(self.headers.get("Content-Length") or "0")
+        if length > MAX_BODY:
+            self.send_error(413, "Request body too large")
+            return
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+            token = self.headers.get("Authorization", "").replace("Bearer ", "", 1).strip()
+            result = upsert_mobile_push_token(payload, get_session_user(token) or {})
+            self.json_response(result, status=200 if result.get("ok") else 400)
+        except Exception as exc:
+            self.json_response({"ok": False, "error": str(exc)}, status=400)
+
+    def notice_push_request(self):
+        length = int(self.headers.get("Content-Length") or "0")
+        if length > MAX_BODY:
+            self.send_error(413, "Request body too large")
+            return
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+            result = send_notice_push(payload)
+            self.json_response(result, status=200 if result.get("ok") or not result.get("configured") else 400)
+        except Exception as exc:
+            self.json_response({"ok": False, "error": str(exc)}, status=400)
+
+    def birthday_push_request(self):
+        length = int(self.headers.get("Content-Length") or "0")
+        if length > MAX_BODY:
+            self.send_error(413, "Request body too large")
+            return
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+            token = self.headers.get("Authorization", "").replace("Bearer ", "", 1).strip()
+            result = send_birthday_push(payload, get_session_user(token) or {})
+            self.json_response(result, status=200 if result.get("ok") or not result.get("configured") else 400)
         except Exception as exc:
             self.json_response({"ok": False, "error": str(exc)}, status=400)
 

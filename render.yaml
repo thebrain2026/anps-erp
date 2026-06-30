@@ -26,3 +26,5 @@ services:
         value: "*"
       - key: ANPS_ERP_API_TOKEN
         sync: false
+      - key: ANPS_FCM_SERVER_KEY
+        sync: false
