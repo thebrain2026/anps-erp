@@ -35,6 +35,7 @@ const rolePermissionAudit = {};
 const staffAttendanceRecords = [];
 const classTimetableEntries = [];
 const syllabusEntries = [];
+const marksheetEntries = [];
 const holidayReports = [];
 const transportRoutes = [];
 const transportVehicles = [];
@@ -288,6 +289,7 @@ const titleMap = {
   classTimetable: "Class Timetable",
   teacherTimetable: "Teachers Time Table",
   syllabus: "Syllabus",
+  marksheet: "Marksheet",
   teacherComplaint: "Teacher Complaint",
   holidayReport: "Holiday Report",
   annualCalendar: "Annual Calendar",
@@ -326,7 +328,7 @@ const ACCESS_PERMISSION_GROUPS = [
   {name: "Communication", modules: ["noticeBoard", "teacherNoticeRequests", "sendSms"]},
   {name: "Homework", modules: ["addHomework", "dailyAssignment"]},
   {name: "Reports", modules: ["reportStudentInformation", "dailyCollectionReport", "entireSchoolFeesReport"]},
-  {name: "Academic", modules: ["classTimetable", "teacherTimetable", "syllabus", "teacherComplaint", "holidayReport", "annualCalendar"]},
+  {name: "Academic", modules: ["classTimetable", "teacherTimetable", "syllabus", "marksheet", "teacherComplaint", "holidayReport", "annualCalendar"]},
   {name: "Certificate", modules: ["studentIdCard", "teacherIdCard"]},
   {name: "Settings", modules: ["masterAdmin", "schoolManagement", "userAccessSettings", "studentUserLogin", "mobileAppActivity"]},
   {name: "Security", modules: ["securityMaintenance", "securityDuplicateReceipts", "securityAlertSolver", "securityRoleHealth"]},
@@ -438,6 +440,7 @@ function getAppStateSnapshot() {
     staffAttendanceRecords,
     classTimetableEntries,
     syllabusEntries,
+    marksheetEntries,
     holidayReports,
     staffBiometricDevice,
     customAdmissionClasses,
@@ -702,6 +705,7 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
     staffAttendanceRecords: ["id", "staffId", "date"],
     classTimetableEntries: ["id"],
     syllabusEntries: ["id"],
+    marksheetEntries: ["id", "studentAdmissionNo", "exam", "subject"],
     holidayReports: ["id", "date", "holidayName"],
     transportRoutes: ["routeName"],
     transportVehicles: ["id", "vehicleNo"],
@@ -1027,6 +1031,15 @@ function applySavedState(saved = {}) {
     if (Array.isArray(saved.syllabusEntries)) {
       syllabusEntries.splice(0, syllabusEntries.length, ...saved.syllabusEntries);
     }
+    if (Array.isArray(saved.marksheetEntries)) {
+      marksheetEntries.splice(0, marksheetEntries.length, ...saved.marksheetEntries);
+    } else if (Array.isArray(saved.resultEntries)) {
+      marksheetEntries.splice(0, marksheetEntries.length, ...saved.resultEntries.map(item => ({
+        ...item,
+        studentAdmissionNo: item.studentAdmissionNo || item.studentId || "",
+        status: item.status || "Published"
+      })));
+    }
     if (Array.isArray(saved.holidayReports)) {
       holidayReports.splice(0, holidayReports.length, ...saved.holidayReports);
     }
@@ -1168,6 +1181,7 @@ function applyProductionCleanSeedOnce() {
   staffAttendanceRecords.splice(0, staffAttendanceRecords.length);
   classTimetableEntries.splice(0, classTimetableEntries.length);
   syllabusEntries.splice(0, syllabusEntries.length);
+  marksheetEntries.splice(0, marksheetEntries.length);
   holidayReports.splice(0, holidayReports.length);
   transportRoutes.splice(0, transportRoutes.length);
   transportVehicles.splice(0, transportVehicles.length);
@@ -1565,6 +1579,7 @@ function renderActiveView(viewName = document.querySelector(".view.active")?.id 
   if (viewName === "classTimetable") renderClassTimetable();
   if (viewName === "teacherTimetable") renderTeacherTimetable();
   if (viewName === "syllabus") renderSyllabusModule();
+  if (viewName === "marksheet") renderMarksheetModule();
   if (viewName === "holidayReport") renderHolidayReport();
   if (viewName === "annualCalendar") renderAnnualCalendar();
   if (viewName === "studentIdCard") renderStudentIdCardModule();
@@ -4018,6 +4033,153 @@ function renderSyllabusModule() {
       </tr>
     `;
   }).join("") || `<tr><td colspan="8">No syllabus saved yet.</td></tr>`;
+}
+
+function getMarksheetStatusTone(status = "") {
+  const clean = String(status || "").toLowerCase();
+  if (clean === "published") return "stable";
+  if (clean === "checked") return "watch";
+  return "pending";
+}
+
+function getMarksheetGrade(marks = 0, maxMarks = 100, fallback = "") {
+  if (fallback) return fallback;
+  const max = Number(maxMarks) || 100;
+  const percent = max ? (Number(marks) || 0) / max * 100 : 0;
+  if (percent >= 90) return "A+";
+  if (percent >= 80) return "A";
+  if (percent >= 70) return "B+";
+  if (percent >= 60) return "B";
+  if (percent >= 50) return "C";
+  return "D";
+}
+
+function getMarksheetStudentOptions(className = "", sectionName = "") {
+  return getActiveStudents()
+    .filter(student => !className || String(student.className || student.class || "") === className)
+    .filter(student => !sectionName || String(student.section || "") === sectionName)
+    .sort((a, b) => String(a.name || "").localeCompare(String(b.name || ""), undefined, {numeric: true}));
+}
+
+function renderMarksheetOptions({ preserveSubject = true, preserveStudent = true } = {}) {
+  const form = document.getElementById("marksheetEntryForm");
+  if (!form) return;
+  const classSelect = document.getElementById("marksheetClassSelect");
+  const sectionSelect = document.getElementById("marksheetSectionSelect");
+  const subjectSelect = document.getElementById("marksheetSubjectSelect");
+  const studentSelect = document.getElementById("marksheetStudentSelect");
+  const selectedClass = classSelect?.value || "";
+  const selectedSection = sectionSelect?.value || "";
+  const selectedSubject = preserveSubject ? subjectSelect?.value || "" : "";
+  const selectedStudent = preserveStudent ? studentSelect?.value || "" : "";
+  if (classSelect) {
+    classSelect.innerHTML = `<option value="">Select Class</option>${getAdmissionClassOptions().map(className => `<option value="${escapeHtml(className)}">${escapeHtml(className)}</option>`).join("")}`;
+    if (selectedClass) setSelectValue(classSelect, selectedClass);
+  }
+  if (sectionSelect) {
+    sectionSelect.innerHTML = `<option value="">All Section</option>${getAdmissionSectionOptions().map(section => `<option value="${escapeHtml(section)}">${escapeHtml(section)}</option>`).join("")}`;
+    if (selectedSection) setSelectValue(sectionSelect, selectedSection);
+  }
+  const subjects = getTimetableSubjectsForClass(classSelect?.value || "");
+  if (subjectSelect) {
+    subjectSelect.innerHTML = `<option value="">Select Subject</option>${subjects.map(subject => `<option value="${escapeHtml(subject)}">${escapeHtml(subject)}</option>`).join("")}`;
+    if (selectedSubject) setSelectValue(subjectSelect, selectedSubject);
+  }
+  const studentsForClass = getMarksheetStudentOptions(classSelect?.value || "", sectionSelect?.value || "");
+  if (studentSelect) {
+    studentSelect.innerHTML = `<option value="">Select Student</option>${studentsForClass.map(student => `<option value="${escapeHtml(student.admissionNo || "")}">${escapeHtml(student.admissionNo || "-")} - ${escapeHtml(student.name || "-")}</option>`).join("")}`;
+    if (selectedStudent) setSelectValue(studentSelect, selectedStudent);
+  }
+}
+
+function renderMarksheetModule() {
+  renderMarksheetOptions();
+  const rows = document.getElementById("marksheetRows");
+  const summary = document.getElementById("marksheetSummary");
+  const preview = document.getElementById("marksheetPreviewBox");
+  const statusFilter = String(document.getElementById("marksheetStatusFilter")?.value || "");
+  const search = String(document.getElementById("marksheetSearch")?.value || "").trim().toLowerCase();
+  const reviewCount = marksheetEntries.filter(item => String(item.status || "Review") !== "Published").length;
+  const publishedCount = marksheetEntries.filter(item => String(item.status || "") === "Published").length;
+  if (summary) summary.textContent = `${reviewCount} review | ${publishedCount} published`;
+  if (preview) {
+    const latest = marksheetEntries[0];
+    preview.innerHTML = latest ? `
+      <strong>${escapeHtml(latest.studentName || "-")} | ${escapeHtml(latest.exam || "-")}</strong>
+      <span>${escapeHtml(latest.subject || "-")} - ${escapeHtml(latest.marks || 0)}/${escapeHtml(latest.maxMarks || 100)}</span>
+      <p>Status: ${escapeHtml(latest.status || "Review")}. Published hole student app-e result visible hobe.</p>
+    ` : "Marks save korle first review status-e thakbe. Publish korle student app-e visible hobe.";
+  }
+  if (!rows) return;
+  const filtered = marksheetEntries.filter(item => {
+    const status = String(item.status || "Review");
+    if (statusFilter && status !== statusFilter) return false;
+    if (!search) return true;
+    return [item.studentName, item.studentAdmissionNo, item.exam, item.subject, item.className, item.teacherName]
+      .some(value => String(value || "").toLowerCase().includes(search));
+  });
+  rows.innerHTML = filtered.map((entry, index) => {
+    const originalIndex = marksheetEntries.indexOf(entry);
+    const status = entry.status || "Review";
+    const marks = Number(entry.marks || entry.total || 0);
+    const maxMarks = Number(entry.maxMarks || entry.maxTotal || 100);
+    const grade = getMarksheetGrade(marks, maxMarks, entry.grade || "");
+    return `
+      <tr>
+        <td><strong>${escapeHtml(entry.studentName || "-")}</strong><br><small>${escapeHtml(entry.studentAdmissionNo || entry.studentId || "-")}</small></td>
+        <td>${escapeHtml([entry.className, entry.sectionName].filter(Boolean).join(" ") || "-")}</td>
+        <td>${escapeHtml(entry.exam || "-")}</td>
+        <td>${escapeHtml(entry.subject || "-")}</td>
+        <td><strong>${escapeHtml(marks)}/${escapeHtml(maxMarks)}</strong><br><small>Grade: ${escapeHtml(grade)}</small></td>
+        <td>${escapeHtml(entry.teacherName || entry.source || "Main ERP")}</td>
+        <td><span class="status-pill ${getMarksheetStatusTone(status)}">${escapeHtml(status)}</span></td>
+        <td class="inline-actions">
+          ${status !== "Published" ? `<button class="icon-action edit" type="button" data-check-marksheet="${originalIndex}" title="Mark checked" aria-label="Mark checked">✓</button>
+          <button class="primary-action mini" type="button" data-publish-marksheet="${originalIndex}">Publish</button>` : `<span class="status-pill stable">Visible</span>`}
+          <button class="icon-action delete" type="button" data-delete-marksheet="${originalIndex}" title="Delete marks" aria-label="Delete marks">×</button>
+        </td>
+      </tr>
+    `;
+  }).join("") || `<tr><td colspan="8">No marks entry found.</td></tr>`;
+}
+
+function saveMarksheetEntry(form) {
+  const data = new FormData(form);
+  const admissionNo = String(data.get("studentAdmissionNo") || "").trim();
+  const student = getActiveStudents().find(item => normalizeAdmissionNo(item.admissionNo || "") === normalizeAdmissionNo(admissionNo)) || {};
+  const marks = Number(data.get("marks") || 0);
+  const maxMarks = Number(data.get("maxMarks") || 100);
+  const entry = {
+    id: `MARK-${Date.now()}`,
+    studentAdmissionNo: admissionNo,
+    studentId: admissionNo,
+    studentName: student.name || "",
+    className: String(data.get("className") || student.className || "").trim(),
+    sectionName: String(data.get("sectionName") || student.section || "").trim(),
+    exam: String(data.get("exam") || "").trim(),
+    subject: String(data.get("subject") || "").trim(),
+    marks,
+    maxMarks,
+    total: marks,
+    maxTotal: maxMarks,
+    percentage: maxMarks ? `${((marks / maxMarks) * 100).toFixed(1)}%` : "0.0%",
+    grade: getMarksheetGrade(marks, maxMarks, String(data.get("grade") || "").trim()),
+    note: String(data.get("note") || "").trim(),
+    teacherName: getCurrentTopbarRole(),
+    source: "Main ERP",
+    status: "Review",
+    createdAt: new Date().toISOString()
+  };
+  if (!entry.studentAdmissionNo || !entry.exam || !entry.className || !entry.subject) {
+    showToast("Student, exam, class and subject required.");
+    return;
+  }
+  marksheetEntries.unshift(entry);
+  saveAppState();
+  form.reset();
+  if (form.elements.maxMarks) form.elements.maxMarks.value = "100";
+  renderMarksheetModule();
+  showToast("Marks saved for review.");
 }
 
 function toDateInputValue(value = new Date()) {
@@ -12503,6 +12665,58 @@ document.getElementById("homeworkRows")?.addEventListener("click", event => {
   saveAppState();
   renderHomeworkModule();
   showToast("Homework deleted.");
+});
+
+document.getElementById("marksheetEntryForm")?.addEventListener("submit", event => {
+  event.preventDefault();
+  saveMarksheetEntry(event.currentTarget);
+});
+
+document.getElementById("marksheetClassSelect")?.addEventListener("change", () => {
+  renderMarksheetOptions({ preserveSubject: false, preserveStudent: false });
+});
+
+document.getElementById("marksheetSectionSelect")?.addEventListener("change", () => {
+  renderMarksheetOptions({ preserveSubject: true, preserveStudent: false });
+});
+
+document.getElementById("marksheetStatusFilter")?.addEventListener("change", renderMarksheetModule);
+document.getElementById("marksheetSearch")?.addEventListener("input", renderMarksheetModule);
+
+document.getElementById("marksheetRows")?.addEventListener("click", event => {
+  const checkButton = event.target.closest("[data-check-marksheet]");
+  const publishButton = event.target.closest("[data-publish-marksheet]");
+  const deleteButton = event.target.closest("[data-delete-marksheet]");
+  if (checkButton) {
+    const entry = marksheetEntries[Number(checkButton.dataset.checkMarksheet)];
+    if (!entry) return;
+    entry.status = "Checked";
+    entry.checkedAt = new Date().toISOString();
+    entry.checkedBy = getCurrentTopbarRole();
+    saveAppState();
+    renderMarksheetModule();
+    showToast("Marks checked.");
+  }
+  if (publishButton) {
+    const entry = marksheetEntries[Number(publishButton.dataset.publishMarksheet)];
+    if (!entry) return;
+    entry.status = "Published";
+    entry.publishedAt = new Date().toISOString();
+    entry.publishedBy = getCurrentTopbarRole();
+    saveAppState();
+    renderMarksheetModule();
+    showToast("Result published to student app.");
+  }
+  if (deleteButton) {
+    const index = Number(deleteButton.dataset.deleteMarksheet);
+    const entry = marksheetEntries[index];
+    if (!entry) return;
+    if (!confirm(`Delete marks for ${entry.studentName || entry.studentAdmissionNo || "student"}?`)) return;
+    marksheetEntries.splice(index, 1);
+    saveAppState();
+    renderMarksheetModule();
+    showToast("Marks entry deleted.");
+  }
 });
 
 if (homeworkEntryForm?.elements.due) {

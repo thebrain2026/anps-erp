@@ -103,6 +103,7 @@
             <button data-view="classTimetable" type="button">Class Timetable</button>
             <button data-view="teacherTimetable" type="button">Teachers Time Table</button>
             <button data-view="syllabus" type="button">Syllabus</button>
+            <button data-view="marksheet" type="button">Marksheet</button>
             <button data-view="teacherComplaint" type="button">Teacher Complaint</button>
             <button data-view="holidayReport" type="button">Holiday Report</button>
             <button data-view="annualCalendar" type="button">Annual Calendar</button>
@@ -1773,6 +1774,75 @@
               </table>
             </div>
           </section>
+        </div>
+      </section>
+
+      <section class="view" id="marksheet">
+        <div class="panel homework-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Academic</p>
+              <h2>Marksheet Review</h2>
+              <small>Teacher app theke marks ekhane review hobe. Publish korle student app-e result dekhabe.</small>
+            </div>
+            <span class="status-pill pending" id="marksheetSummary">0 marks entries</span>
+          </div>
+          <form class="homework-form" id="marksheetEntryForm">
+            <label>Exam Name
+              <input name="exam" placeholder="Half Yearly / Unit Test" required />
+            </label>
+            <label>Class
+              <select name="className" id="marksheetClassSelect" required></select>
+            </label>
+            <label>Section
+              <select name="sectionName" id="marksheetSectionSelect"></select>
+            </label>
+            <label>Subject
+              <select name="subject" id="marksheetSubjectSelect" required></select>
+            </label>
+            <label>Max Marks
+              <input name="maxMarks" type="number" min="1" value="100" required />
+            </label>
+            <label>Student
+              <select name="studentAdmissionNo" id="marksheetStudentSelect" required></select>
+            </label>
+            <label>Marks
+              <input name="marks" type="number" min="0" step="0.01" required />
+            </label>
+            <label>Grade
+              <input name="grade" placeholder="A+" />
+            </label>
+            <label class="wide">Teacher / Review Note
+              <input name="note" placeholder="Optional note" />
+            </label>
+            <button class="primary-action" id="saveMarksheetButton" type="submit">Save For Review</button>
+          </form>
+          <div class="homework-preview" id="marksheetPreviewBox">Marks save korle first review status-e thakbe. Publish korle student app-e visible hobe.</div>
+        </div>
+        <div class="panel homework-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Saved marks</p>
+              <h2>Student Marksheet Entries</h2>
+            </div>
+            <div class="report-filter-row">
+              <select id="marksheetStatusFilter">
+                <option value="">All Status</option>
+                <option value="Review">Review</option>
+                <option value="Checked">Checked</option>
+                <option value="Published">Published</option>
+              </select>
+              <input id="marksheetSearch" type="search" placeholder="Search student, admission no, exam" />
+            </div>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Student</th><th>Class</th><th>Exam</th><th>Subject</th><th>Marks</th><th>Teacher</th><th>Status</th><th>Action</th></tr></thead>
+              <tbody id="marksheetRows">
+                <tr><td colspan="8">No marks entered yet.</td></tr>
+              </tbody>
+            </table>
+          </div>
         </div>
       </section>
 

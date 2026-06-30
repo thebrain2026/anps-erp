@@ -1309,7 +1309,7 @@
         teacherNoticeRequests: "teacherNoticeRequests",
         homework: "homework",
         classwork: "classworkEntries",
-        results: "resultEntries",
+        results: "marksheetEntries",
         ratings: "teacherRatings",
         leaves: "teacherLeaves"
       };
@@ -1495,7 +1495,9 @@
         students: studentList(erpState),
         teachers: teacherList(erpState),
         receipts: studentReceipts(erpState, student),
-        results: (erpState.resultEntries || []).filter(item => normalizeAdmission(item.studentId) === normalizeAdmission(student.admissionNo)),
+        results: [...(erpState.marksheetEntries || []), ...(erpState.resultEntries || [])]
+          .filter(item => String(item.status || "Published") === "Published")
+          .filter(item => normalizeAdmission(item.studentAdmissionNo || item.studentId) === normalizeAdmission(student.admissionNo)),
         timetable: timetableForStudent(erpState, student),
         syllabus: (erpState.syllabusEntries || []).filter(item => !item.className || className.includes(item.className)),
         homework: (erpState.homework || []).filter(item => !item.className || className.includes(item.className)),
@@ -1587,7 +1589,16 @@
         teachers: teacherList(erpState),
         subjects,
         timetable,
-        results: erpState.resultEntries || [],
+        results: [...(erpState.marksheetEntries || []), ...(erpState.resultEntries || [])]
+          .filter(item => {
+            const byTeacher = normalizeText(item.teacherId) === normalizeText(state.user.id)
+              || normalizeText(item.teacherName).toLowerCase() === normalizeText(state.user.name).toLowerCase();
+            const byAssignment = subjects.some(subject =>
+              normalizeText(subject.className).toLowerCase() === normalizeText(item.className).toLowerCase()
+              && normalizeText(subject.subject).toLowerCase() === normalizeText(item.subject).toLowerCase()
+            );
+            return byTeacher || byAssignment;
+          }),
         syllabus: erpState.syllabusEntries || [],
         homework: erpState.homework || [],
         classwork: erpState.classworkEntries || [],
@@ -1941,8 +1952,22 @@
       return { avg: (total / ratings.length).toFixed(1), count: ratings.length };
     }
 
+    function gradeForMarks(marks = 0, maxMarks = 100, fallback = "") {
+      if (fallback) return fallback;
+      const percent = (Number(maxMarks) || 100) ? ((Number(marks) || 0) / (Number(maxMarks) || 100)) * 100 : 0;
+      if (percent >= 90) return "A+";
+      if (percent >= 80) return "A";
+      if (percent >= 70) return "B+";
+      if (percent >= 60) return "B";
+      if (percent >= 50) return "C";
+      return "D";
+    }
+
     function resultSubjectList(result) {
-      return `<div class="stack" style="padding:10px 0 0">${(result.subjects || []).map(subject => `<div class="student-row"><div><b>${subject.subject}</b><span>${subject.marks}/${subject.max}</span></div><span class="badge">${subject.grade}</span></div>`).join("")}</div>`;
+      const subjects = (result.subjects || []).length
+        ? result.subjects
+        : [{subject: result.subject || "Overall", marks: result.marks ?? result.total ?? 0, max: result.maxMarks ?? result.maxTotal ?? 100, grade: result.grade || "-"}];
+      return `<div class="stack" style="padding:10px 0 0">${subjects.map(subject => `<div class="student-row"><div><b>${subject.subject}</b><span>${subject.marks}/${subject.max}</span></div><span class="badge">${subject.grade}</span></div>`).join("")}</div>`;
     }
 
     function complaintStatusTone(status = "") {
@@ -2209,8 +2234,10 @@
       $("#subjectsList").innerHTML = ws.subjects.map(item => card({ title: item.className, meta: item.subject, badge: "Assigned" })).join("");
       renderDashboardLatestNotice(ws.notices);
       $("#resultTotal").textContent = `${ws.results.length} records`;
-      $("#resultSummary").innerHTML = `<article class="card"><form class="form-grid" id="resultForm"><label>Student<select id="resultStudent">${ws.students.map(item => `<option value="${item.admissionId}|${item.name}|${item.className}">${item.name} - ${item.className}</option>`).join("")}</select></label><label>Exam Name<input id="resultExam" placeholder="Exam name" required /></label><label>Marks Summary<input id="resultSummaryInput" placeholder="Example: 86/100" required /></label><label>Grade<select id="resultGrade"><option>A+</option><option>A</option><option>B+</option><option>B</option><option>C</option></select></label><button class="primary" type="submit">Publish Result</button></form></article>`;
-      $("#resultList").innerHTML = ws.results.map(result => card({ title: `${result.exam} | ${result.studentId}`, meta: `${result.className} | ${result.total}/${result.maxTotal} | ${result.percentage}`, body: `Grade: ${result.grade} | Status: ${result.status}`, badge: "Published" })).join("");
+      const initialResultClass = firstTeacherClass();
+      const resultStudents = ws.students.filter(item => !initialResultClass || item.className === initialResultClass);
+      $("#resultSummary").innerHTML = `<article class="card"><form class="form-grid" id="resultForm"><label>Class<select id="resultClass" required>${teacherClassOptions(initialResultClass)}</select></label><label>Subject<select id="resultSubject" required>${teacherSubjectOptionsForClass(initialResultClass)}</select></label><label>Student<select id="resultStudent">${resultStudents.map(item => `<option value="${item.admissionId}|${item.name}|${item.className}">${item.name} - ${item.className}</option>`).join("")}</select></label><label>Exam Name<input id="resultExam" placeholder="Exam name" required /></label><label>Marks Summary<input id="resultSummaryInput" placeholder="Example: 86/100" required /></label><label>Grade<select id="resultGrade"><option value="">Auto</option><option>A+</option><option>A</option><option>B+</option><option>B</option><option>C</option><option>D</option></select></label><button class="primary" type="submit">Submit For ERP Review</button></form></article>`;
+      $("#resultList").innerHTML = ws.results.map(result => card({ title: `${result.exam} | ${result.studentName || result.studentId || result.studentAdmissionNo}`, meta: `${result.className} | ${result.subject || "Overall"} | ${result.marks ?? result.total}/${result.maxMarks ?? result.maxTotal} | ${result.percentage || ""}`, body: `Grade: ${result.grade || "-"} | Status: ${result.status || "Review"}`, badge: result.status || "Review", status: result.status === "Published" ? "ok" : "warn" })).join("");
       $("#syllabusTitle").textContent = "Syllabus Entry";
       $("#syllabusFormHost").innerHTML = `<article class="card"><form class="form-grid" id="syllabusForm"><label>Class and Subject<select id="syllabusSubject">${subjectOptions()}</select></label><label>Topic<input id="syllabusTopic" placeholder="Chapter topic" required /></label><label>Progress<select id="syllabusProgress"><option>Started</option><option>In Progress</option><option>Completed</option></select></label><button class="primary" type="submit">Save Syllabus Entry</button></form></article>`;
       $("#syllabusTotal").textContent = `${ws.syllabus.length} entries`;
@@ -2273,6 +2300,15 @@
         btn.classList.add("active");
       }));
       $("#saveAttendanceBtn")?.addEventListener("click", () => toast(`${state.attendanceClass} attendance saved`));
+      bindTeacherSubjectDropdowns("#resultClass", "#resultSubject");
+      $("#resultClass")?.addEventListener("change", () => {
+        const selectedClass = $("#resultClass").value;
+        const studentSelect = $("#resultStudent");
+        if (studentSelect) {
+          const students = state.workspace.students.filter(item => !selectedClass || item.className === selectedClass);
+          studentSelect.innerHTML = students.map(item => `<option value="${item.admissionId}|${item.name}|${item.className}">${item.name} - ${item.className}</option>`).join("");
+        }
+      });
       bindTeacherSubjectDropdowns("#homeworkClass", "#homeworkSubject");
       bindTeacherSubjectDropdowns("#classworkClass", "#classworkSubject");
       $("#syllabusForm")?.addEventListener("submit", async event => {
@@ -2285,26 +2321,40 @@
       });
       $("#resultForm")?.addEventListener("submit", async event => {
         event.preventDefault();
+        const selectedClass = $("#resultClass").value;
+        const subject = $("#resultSubject").value;
+        if (!teacherAssignmentAllowed(selectedClass, subject)) {
+          toast("This class and subject is not assigned to this teacher.");
+          return;
+        }
         const [studentId, studentName, className] = $("#resultStudent").value.split("|");
         const [marksRaw, maxRaw] = $("#resultSummaryInput").value.split("/");
         const total = Number(marksRaw) || 0;
         const maxTotal = Number(maxRaw) || 100;
         const percentage = maxTotal ? `${((total / maxTotal) * 100).toFixed(1)}%` : "0.0%";
+        const grade = gradeForMarks(total, maxTotal, $("#resultGrade").value);
         await AppApi.create("results", {
+          teacherId: state.user.id,
+          teacherName: state.user.name,
           studentId,
+          studentAdmissionNo: studentId,
           studentName,
           className,
           exam: $("#resultExam").value,
+          subject,
+          marks: total,
+          maxMarks: maxTotal,
           total,
           maxTotal,
           percentage,
-          grade: $("#resultGrade").value,
-          status: "Published",
-          subjects: [{ subject: "Overall", marks: total, max: maxTotal, grade: $("#resultGrade").value }]
+          grade,
+          status: "Review",
+          source: "Teacher App",
+          subjects: [{ subject, marks: total, max: maxTotal, grade }]
         });
         state.workspace = await AppApi.workspace("teacher", state.user.id);
         renderTeacherViews();
-        toast("Result published");
+        toast("Marks sent to ERP for review");
       });
       $("#homeworkForm")?.addEventListener("submit", async event => {
         event.preventDefault();
