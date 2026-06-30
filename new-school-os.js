@@ -15,6 +15,13 @@ const admissionEnquiries = [];
 const complaintRecords = [];
 
 const staffMembers = [];
+const schools = [{
+  id: "anps",
+  school_id: "anps",
+  name: "Alfred Nobel Public School",
+  status: "Active",
+  plan: "Single School"
+}];
 const departments = [];
 const roles = [];
 const designations = [];
@@ -280,6 +287,7 @@ const titleMap = {
   studentIdCard: "Student ID Card",
   teacherIdCard: "Teachers ID Card",
   masterAdmin: "Master Admin",
+  schoolManagement: "School Management",
   userAccessSettings: "User Access & Permissions",
   studentUserLogin: "Student User Login",
   mobileAppActivity: "Mobile App Activity",
@@ -312,7 +320,7 @@ const ACCESS_PERMISSION_GROUPS = [
   {name: "Reports", modules: ["reportStudentInformation", "dailyCollectionReport", "entireSchoolFeesReport"]},
   {name: "Academic", modules: ["classTimetable", "teacherTimetable", "syllabus", "teacherComplaint", "holidayReport", "annualCalendar"]},
   {name: "Certificate", modules: ["studentIdCard", "teacherIdCard"]},
-  {name: "Settings", modules: ["masterAdmin", "userAccessSettings", "studentUserLogin", "mobileAppActivity"]},
+  {name: "Settings", modules: ["masterAdmin", "schoolManagement", "userAccessSettings", "studentUserLogin", "mobileAppActivity"]},
   {name: "Security", modules: ["securityMaintenance", "securityDuplicateReceipts", "securityAlertSolver", "securityRoleHealth"]},
   {name: "Transport", modules: ["transportFeesMaster", "transportFineSetup", "transportPickupPoint", "transportRoute", "transportVehicle", "transportAssignVehicle", "transportRoutePickupPoint", "studentTransportFees", "nonTransportStudents"]}
 ];
@@ -351,6 +359,7 @@ const departmentForm = document.getElementById("departmentForm");
 const roleForm = document.getElementById("roleForm");
 const designationForm = document.getElementById("designationForm");
 const masterAdminForm = document.getElementById("masterAdminForm");
+const schoolManagementForm = document.getElementById("schoolManagementForm");
 const userAccessForm = document.getElementById("userAccessForm");
 const studentUserAccessForm = document.getElementById("studentUserAccessForm");
 const accessPermissionForm = document.getElementById("accessPermissionForm");
@@ -390,6 +399,7 @@ let timetableBuilderRows = [];
 let timetableIntervalMap = {};
 let editingSyllabusIndex = -1;
 let editingHolidayIndex = -1;
+let editingSchoolIndex = -1;
 
 function getAppStateSnapshot() {
   return {
@@ -402,6 +412,7 @@ function getAppStateSnapshot() {
     admissionEnquiries,
     complaintRecords,
     staffMembers,
+    schools,
     departments,
     roles,
     designations,
@@ -893,6 +904,10 @@ function applySavedState(saved = {}) {
     if (Array.isArray(saved.staffMembers)) {
       staffMembers.splice(0, staffMembers.length, ...saved.staffMembers);
     }
+    if (Array.isArray(saved.schools)) {
+      schools.splice(0, schools.length, ...saved.schools);
+    }
+    ensureDefaultSchool();
     if (Array.isArray(saved.departments)) {
       departments.splice(0, departments.length, ...saved.departments);
     }
@@ -1450,6 +1465,7 @@ function renderActiveView(viewName = document.querySelector(".view.active")?.id 
   if (viewName === "securityAlertSolver") renderAlertSolverPage();
   if (viewName === "securityRoleHealth") renderRolePermissionHealth();
   if (viewName === "masterAdmin") renderMasterAdminSettings();
+  if (viewName === "schoolManagement") renderSchoolManagement();
   if (viewName === "reportStudentInformation") {
     renderClassSectionReport();
     renderStudentGenderRatioReport();
@@ -1518,6 +1534,9 @@ function setView(viewName, options = {}) {
   }
   if (viewName === "masterAdmin") {
     renderMasterAdminSettings();
+  }
+  if (viewName === "schoolManagement") {
+    renderSchoolManagement();
   }
   if (viewName === "userAccessSettings") {
     renderUserAccessSettings();
@@ -4675,6 +4694,122 @@ function renderMasterAdminSettings() {
     status.innerHTML = account
       ? `<strong>Master Admin ready.</strong><br>Login ID: ${escapeHtml(account.loginId || "-")} | Status: Active | Full access locked.`
       : `<strong>Master Admin not saved yet.</strong><br>Set a login ID and password, then save.`;
+  }
+}
+
+function normalizeSchoolId(value = "") {
+  return String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "anps";
+}
+
+function ensureDefaultSchool() {
+  if (!schools.some(school => normalizeSchoolId(school.school_id || school.id) === "anps")) {
+    schools.unshift({
+      id: "anps",
+      school_id: "anps",
+      name: "Alfred Nobel Public School",
+      status: "Active",
+      plan: "Single School"
+    });
+  }
+}
+
+async function loadSchoolsFromBackend() {
+  try {
+    const response = await backendFetch(`/api/schools?v=${Date.now()}`, {headers: backendHeaders(), cache: "no-store"});
+    const result = await response.json().catch(() => ({}));
+    if (response.ok && Array.isArray(result.schools)) {
+      schools.splice(0, schools.length, ...result.schools.map(school => ({
+        id: normalizeSchoolId(school.school_id || school.id),
+        school_id: normalizeSchoolId(school.school_id || school.id),
+        name: school.name || school.schoolName || "School",
+        status: school.status || "Active",
+        plan: school.plan || "School Tenant",
+        created_at: school.created_at || school.createdAt || ""
+      })));
+      ensureDefaultSchool();
+      renderSchoolManagement(false);
+    }
+  } catch (error) {
+    console.warn("Could not load school registry.", error);
+  }
+}
+
+function renderSchoolManagement(shouldRefreshBackend = true) {
+  ensureDefaultSchool();
+  const rows = document.getElementById("schoolManagementRows");
+  const summary = document.getElementById("schoolManagementSummary");
+  if (summary) {
+    const activeCount = schools.filter(school => String(school.status || "Active") === "Active").length;
+    summary.textContent = `${activeCount} active | ${schools.length} schools`;
+  }
+  if (rows) {
+    rows.innerHTML = schools.map((school, index) => `
+      <tr>
+        <td><strong>${escapeHtml(school.school_id || school.id || "-")}</strong></td>
+        <td>${escapeHtml(school.name || "-")}</td>
+        <td>${escapeHtml(school.plan || "School Tenant")}</td>
+        <td><span class="status-pill ${String(school.status || "Active") === "Active" ? "stable" : "pending"}">${escapeHtml(school.status || "Active")}</span></td>
+        <td><button class="mini" type="button" data-edit-school="${index}">Edit</button></td>
+      </tr>
+    `).join("") || `<tr><td colspan="5">No schools saved yet.</td></tr>`;
+  }
+  if (shouldRefreshBackend && backendSyncReady) loadSchoolsFromBackend();
+}
+
+async function saveSchoolManagementForm(event) {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = new FormData(form);
+  const schoolId = normalizeSchoolId(data.get("schoolId"));
+  const school = {
+    id: schoolId,
+    school_id: schoolId,
+    schoolId,
+    name: String(data.get("schoolName") || "").trim(),
+    plan: String(data.get("plan") || "School Tenant"),
+    status: String(data.get("status") || "Active"),
+    createdAt: new Date().toISOString()
+  };
+  if (!school.name) {
+    showToast("School name required.");
+    return;
+  }
+  const existingIndex = schools.findIndex(item => normalizeSchoolId(item.school_id || item.id) === schoolId);
+  if (existingIndex >= 0) schools[existingIndex] = {...schools[existingIndex], ...school};
+  else schools.unshift(school);
+  editingSchoolIndex = -1;
+  form.reset();
+  form.querySelector("button[type='submit']").textContent = "Save School";
+  renderSchoolManagement(false);
+  saveAppState();
+  try {
+    const response = await backendFetch("/api/schools", {
+      method: "POST",
+      headers: backendHeaders({"Content-Type": "application/json"}),
+      body: JSON.stringify(school)
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok) throw new Error(result.error || "School save failed");
+    if (Array.isArray(result.schools)) {
+      schools.splice(0, schools.length, ...result.schools.map(item => ({
+        id: normalizeSchoolId(item.school_id || item.id),
+        school_id: normalizeSchoolId(item.school_id || item.id),
+        name: item.name || "School",
+        plan: item.plan || "School Tenant",
+        status: item.status || "Active",
+        created_at: item.created_at || ""
+      })));
+    }
+    renderSchoolManagement(false);
+    document.getElementById("schoolManagementOutput").innerHTML = `<strong>${escapeHtml(school.name)} saved.</strong><br>School ID: ${escapeHtml(school.school_id)} | Status: ${escapeHtml(school.status)}`;
+    showToast(`${school.name} school saved.`);
+  } catch (error) {
+    document.getElementById("schoolManagementOutput").innerHTML = `<strong>Saved locally.</strong><br>Backend school registry sync pending.`;
+    console.warn("School backend save failed.", error);
   }
 }
 
@@ -10819,6 +10954,30 @@ if (masterAdminForm) {
     showToast("Master Admin login saved.");
   });
 }
+
+if (schoolManagementForm) {
+  schoolManagementForm.addEventListener("submit", saveSchoolManagementForm);
+}
+
+document.getElementById("refreshSchoolsBtn")?.addEventListener("click", () => {
+  loadSchoolsFromBackend();
+  showToast("School list refresh requested.");
+});
+
+document.getElementById("schoolManagementRows")?.addEventListener("click", event => {
+  const editButton = event.target.closest("[data-edit-school]");
+  if (!editButton || !schoolManagementForm) return;
+  const index = Number(editButton.dataset.editSchool);
+  const school = schools[index];
+  if (!school) return;
+  editingSchoolIndex = index;
+  schoolManagementForm.elements.schoolId.value = school.school_id || school.id || "";
+  schoolManagementForm.elements.schoolName.value = school.name || "";
+  setSelectValue(schoolManagementForm.elements.plan, school.plan || "School Tenant");
+  setSelectValue(schoolManagementForm.elements.status, school.status || "Active");
+  schoolManagementForm.querySelector("button[type='submit']").textContent = "Update School";
+  showToast(`${school.name || school.school_id} loaded for edit.`);
+});
 
 if (studentUserAccessForm) {
   studentUserAccessForm.addEventListener("submit", event => {

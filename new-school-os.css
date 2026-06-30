@@ -2961,6 +2961,26 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   align-items: start;
 }
 
+.school-management-layout .user-access-panel {
+  border-top: 4px solid #0f766e;
+  background: linear-gradient(180deg, #f0fdfa 0%, #ffffff 46%);
+}
+
+.school-management-layout .role-permission-panel {
+  border-top: 4px solid #2563eb;
+  background: linear-gradient(180deg, #eff6ff 0%, #ffffff 45%);
+}
+
+.school-management-table-wrap table th {
+  background: #0f172a;
+  color: #f8fafc;
+}
+
+.school-management-table-wrap table td:first-child strong {
+  color: #0f766e;
+  letter-spacing: .02em;
+}
+
 .user-access-panel,
 .student-user-panel,
 .role-permission-panel {

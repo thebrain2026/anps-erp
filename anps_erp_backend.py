@@ -2182,6 +2182,36 @@ def list_schools():
     return [dict(row) for row in rows]
 
 
+def upsert_school(payload):
+    school_id = normalize_school_id(payload.get("school_id") or payload.get("schoolId") or payload.get("id") or payload.get("name"))
+    if not school_id:
+        return {"ok": False, "error": "School ID is required"}
+    row = {
+        "id": school_id,
+        "school_id": school_id,
+        "name": str(payload.get("name") or payload.get("schoolName") or school_id).strip(),
+        "status": str(payload.get("status") or "Active").strip() or "Active",
+        "plan": str(payload.get("plan") or "School Tenant").strip() or "School Tenant",
+        "created_at": payload.get("created_at") or payload.get("createdAt") or datetime.utcnow().isoformat(timespec="seconds") + "Z",
+    }
+    with connect() as conn:
+        ensure_default_school_row(conn, {"schools": [row], "school_id": school_id})
+        conn.execute(
+            """
+            INSERT INTO audit_events (actor, action, entity_type, entity_id, details)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                str(payload.get("actor") or "super-admin"),
+                "School Upsert",
+                "school",
+                school_id,
+                row["name"],
+            ),
+        )
+    return {"ok": True, "school": row, "schools": list_schools()}
+
+
 def record_audit(action, entity_type="", entity_id="", actor="", details=""):
     with connect() as conn:
         conn.execute(
@@ -2573,6 +2603,8 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             token = self.headers.get("Authorization", "").replace("Bearer ", "", 1).strip()
             remove_session_token(token)
             return self.json_response({"ok": True})
+        if path == "/api/schools":
+            return self.school_upsert_request()
         if path == "/api/whatsapp/send":
             return self.whatsapp_send_request()
         self.save_state_request()
@@ -2636,6 +2668,18 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             result = send_whatsapp_template(payload)
             status = 200 if result.get("ok") else 400
             self.json_response(result, status=status)
+        except Exception as exc:
+            self.json_response({"ok": False, "error": str(exc)}, status=400)
+
+    def school_upsert_request(self):
+        length = int(self.headers.get("Content-Length") or "0")
+        if length > MAX_BODY:
+            self.send_error(413, "Request body too large")
+            return
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+            result = upsert_school(payload)
+            self.json_response(result, status=200 if result.get("ok") else 400)
         except Exception as exc:
             self.json_response({"ok": False, "error": str(exc)}, status=400)
 

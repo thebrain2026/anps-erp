@@ -119,6 +119,7 @@
           <button class="nav-group-title" id="settingsToggle" type="button" aria-expanded="false">Settings</button>
           <div class="nav-sub">
             <button data-view="masterAdmin" type="button">Master Admin</button>
+            <button data-view="schoolManagement" type="button">School Management</button>
             <button data-view="userAccessSettings" type="button">User Access & Permissions</button>
             <button data-view="studentUserLogin" type="button">Student User Login</button>
             <button data-view="mobileAppActivity" type="button">Mobile App Activity</button>
@@ -1951,6 +1952,70 @@
             <div class="task-list">
               <article><b>1</b><div><strong>Protected Login</strong><p>Disable/delete blocked.</p><small>Always Active</small></div><em>Locked</em></article>
               <article><b>2</b><div><strong>Full Access</strong><p>View, add, edit, delete, print sob allowed.</p><small>System</small></div><em>Full</em></article>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="schoolManagement">
+        <div class="settings-access-layout school-management-layout">
+          <section class="panel user-access-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Super Admin</p>
+                <h2>School Management</h2>
+                <small>Multi-school SaaS-er jonno school create/manage korun. Current ANPS school default tenant hisebe thakbe.</small>
+              </div>
+              <span class="status-pill stable" id="schoolManagementSummary">ANPS active</span>
+            </div>
+            <form id="schoolManagementForm" class="user-access-form">
+              <label>School ID
+                <input name="schoolId" placeholder="example: anps, sunrise-school" required />
+              </label>
+              <label>School Name
+                <input name="schoolName" placeholder="School full name" required />
+              </label>
+              <label>Plan
+                <select name="plan">
+                  <option>Single School</option>
+                  <option>School Tenant</option>
+                  <option>Premium School</option>
+                </select>
+              </label>
+              <label>Status
+                <select name="status">
+                  <option>Active</option>
+                  <option>Disabled</option>
+                </select>
+              </label>
+              <button class="primary-action" type="submit">Save School</button>
+            </form>
+            <div class="security-output" id="schoolManagementOutput">School-wise login/settings next phase-e connect hobe.</div>
+          </section>
+          <section class="panel role-permission-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Schools</p>
+                <h2>Saved Schools</h2>
+                <small>Super Admin ekhane school list dekhte pabe. ANPS data current school hisebe protected thakbe.</small>
+              </div>
+              <button class="ghost-action" id="refreshSchoolsBtn" type="button">Refresh</button>
+            </div>
+            <div class="table-scroll school-management-table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>School ID</th>
+                    <th>School Name</th>
+                    <th>Plan</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                  </tr>
+                </thead>
+                <tbody id="schoolManagementRows">
+                  <tr><td colspan="5">No school loaded yet.</td></tr>
+                </tbody>
+              </table>
             </div>
           </section>
         </div>
