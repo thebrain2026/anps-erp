@@ -93,6 +93,8 @@ ALLOWED_STATIC_FILES = {
     "/new-school-os.js",
     "/new-school-os.css",
     "/assets/anps-logo.png",
+    "/assets/anps-icici-upi-qr.png",
+    "/assets/anps-icici-upi-qr-compact.png",
     "/favicon.ico",
 }
 LEGACY_STATIC_PREFIXES = (
