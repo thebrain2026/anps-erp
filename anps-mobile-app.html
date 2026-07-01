@@ -399,6 +399,17 @@
       text-align: center;
     }
 
+    button.metric {
+      width: 100%;
+      color: inherit;
+      font: inherit;
+      cursor: pointer;
+    }
+
+    button.metric:active {
+      transform: translateY(1px) scale(.98);
+    }
+
     .metric b { display: block; font-size: 1.2rem; }
     .metric span { color: rgba(255,255,255,.78); font-size: .66rem; font-weight: 950; text-transform: uppercase; }
 
@@ -2610,7 +2621,7 @@
 
       $("#metricGrid").innerHTML = isTeacher
         ? `<div class="metric"><b>${todays.length}</b><span>Today</span></div><div class="metric"><b>${ws.subjects.length}</b><span>Subjects</span></div><div class="metric"><b>${ws.students.length}</b><span>Students</span></div>`
-        : `<div class="metric"><b>${user.attendance}</b><span>Attendance</span></div><div class="metric"><b>₹${user.feesDue}</b><span>Due</span></div><div class="metric"><b>${ws.classwork.length}</b><span>Classwork</span></div>`;
+        : `<div class="metric"><b>${user.attendance}</b><span>Attendance</span></div><button class="metric" type="button" data-nav="fees" aria-label="Open fees payment page"><b>₹${user.feesDue}</b><span>Due</span></button><div class="metric"><b>${ws.classwork.length}</b><span>Classwork</span></div>`;
 
       $("#moduleGrid").innerHTML = modules.map(item => `<button class="module" data-nav="${item.id}"><span class="module-icon">${item.icon}</span><b>${item.label}</b></button>`).join("");
       $("#quickList").innerHTML = todays.length
