@@ -7098,10 +7098,33 @@ function isLedgerMonthPartiallyPaid(student, row, month) {
   return paid > 0 && paid < Number(row.monthlyAmount || 0);
 }
 
+function getLedgerMonthFeePaidAmount(student, row, month) {
+  if (!student || !row || !month) return 0;
+  if (row.name === "Tuition Fee") {
+    return Number(getTuitionMonthPaidInfo(student, row, month).tuition || 0);
+  }
+  if (row.name === "Transport Fees") {
+    return Number(getTransportMonthPaidInfo(student, row, month).transport || 0);
+  }
+  return getLedgerMonthPaymentSplit(student, row, month).amount || getLedgerMonthPaidAmount(student, row, month);
+}
+
+function renderLedgerMonthAmountCell(monthAmount, paidAmount) {
+  const total = Number(monthAmount || 0);
+  const paid = Math.min(Number(paidAmount || 0), total);
+  const due = Math.max(total - paid, 0);
+  if (paid > 0 && due > 0) {
+    return `<strong>${formatRs(due)}</strong><small>Paid ${formatRs(paid)}</small>`;
+  }
+  if (paid >= total && total > 0) {
+    return `<strong>${formatRs(total)}</strong><small>Paid</small>`;
+  }
+  return formatRs(total);
+}
+
 function renderLedgerPeriodCell(student, row) {
   const payments = getLedgerPaymentDetails(student, row);
   const months = Array.isArray(row.months) ? row.months : [];
-  const paidMonths = getPaidLedgerMonths(student, row);
   if (!months.length && !payments.length) return `<span class="fee-period">${row.period}</span>`;
   return `
     <details class="period-details ledger-payment-details">
@@ -7110,18 +7133,21 @@ function renderLedgerPeriodCell(student, row) {
         ${months.length ? `
           <div class="period-breakdown-head period-month-row"><span>Month</span><span>Amount</span><span>Fine</span><span>Total</span><span></span></div>
           ${months.map(month => {
-            const isPaid = paidMonths.has(month);
-            const isPartial = !isPaid && isLedgerMonthPartiallyPaid(student, row, month);
-            const monthFine = getLedgerMonthDisplayFineAmount(student, row, month);
             const monthAmount = Number(row.monthlyAmount || 0);
+            const paidAmount = getLedgerMonthFeePaidAmount(student, row, month);
+            const dueAmount = Math.max(monthAmount - Math.min(paidAmount, monthAmount), 0);
+            const isPaid = monthAmount > 0 && dueAmount <= 0;
+            const isPartial = paidAmount > 0 && dueAmount > 0;
+            const monthFine = getLedgerMonthDisplayFineAmount(student, row, month);
+            const collectTotal = isPaid ? monthAmount + monthFine : dueAmount + monthFine;
             return `
             <div class="period-breakdown-row period-month-row ${isPaid ? "paid-month" : isPartial ? "partial-month" : ""}">
               <span>${month}${isPaid ? " Paid" : isPartial ? " Part Paid" : ""}</span>
-              <span>${formatRs(row.monthlyAmount || 0)}</span>
+              <span>${renderLedgerMonthAmountCell(monthAmount, paidAmount)}</span>
               <span>${formatRs(monthFine)}</span>
-              <span>${formatRs(monthAmount + monthFine)}</span>
+              <span>${formatRs(collectTotal)}</span>
               <span class="month-row-actions">
-                <button class="month-collect-action" type="button" data-student-fees="${student.admissionNo || ""}" data-due-amount="${monthAmount + monthFine}" data-fee-head="${row.name}" data-fine-amount="${monthFine}" data-fee-month="${month}" ${isPaid ? "disabled" : ""} title="${isPaid ? `${month} paid` : `Collect ${month}`}" aria-label="${isPaid ? `${month} paid` : `Collect ${month} ${row.name} for ${student.name || "student"}`}">
+                <button class="month-collect-action" type="button" data-student-fees="${student.admissionNo || ""}" data-due-amount="${collectTotal}" data-fee-head="${row.name}" data-fine-amount="${monthFine}" data-fee-month="${month}" ${isPaid ? "disabled" : ""} title="${isPaid ? `${month} paid` : `Collect ${month}`}" aria-label="${isPaid ? `${month} paid` : `Collect ${month} ${row.name} for ${student.name || "student"}`}">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5C4 5.1 5.1 4 6.5 4h11C18.9 4 20 5.1 20 6.5v11c0 1.4-1.1 2.5-2.5 2.5h-11C5.1 20 4 18.9 4 17.5v-11ZM6.5 6a.5.5 0 0 0-.5.5V8h12V6.5a.5.5 0 0 0-.5-.5h-11ZM6 10v7.5c0 .3.2.5.5.5h11c.3 0 .5-.2.5-.5V10H6Zm6.8 6.7h-1.6v-1.1c-1-.2-1.8-.8-2.2-1.6l1.5-.8c.3.5.8.8 1.6.8.7 0 1-.2 1-.6s-.4-.5-1.4-.8c-1.4-.4-2.4-.9-2.4-2.2 0-1.1.8-1.9 1.9-2.1V7.3h1.6v1c.8.2 1.5.7 1.9 1.5l-1.4.8c-.3-.5-.7-.7-1.2-.7-.6 0-.9.2-.9.5 0 .4.4.5 1.4.8 1.4.4 2.4.9 2.4 2.2 0 1.2-.8 2-2.2 2.2v1.1Z"/></svg>
                 </button>
               </span>
