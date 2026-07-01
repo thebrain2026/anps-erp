@@ -30,6 +30,7 @@ const designations = [];
 const userAccessAccounts = [];
 const studentUserAccounts = [];
 const mobileAppActivity = [];
+const upiPaymentRequests = [];
 const rolePermissions = {};
 const rolePermissionAudit = {};
 const staffAttendanceRecords = [];
@@ -264,6 +265,7 @@ const titleMap = {
   finance: "Collect Fees",
   feeBook: "Fee Book",
   dueFeesSearch: "Search Due Fees",
+  upiPaymentVerification: "UPI Verification",
   feeMaster: "Fee Master",
   feeGroup: "Fee Group",
   addClassSection: "Add Class/Section",
@@ -324,7 +326,7 @@ const ACCESS_PERMISSION_GROUPS = [
   {name: "Dashboard", modules: ["dashboard"]},
   {name: "Front Office", modules: ["admissionEnquiry", "complaintRegister", "complaintsDesk"]},
   {name: "Student Information", modules: ["students", "studentAdmission", "disableStudent", "bulkDeleteStudent"]},
-  {name: "Fees Collection", modules: ["finance", "feeBook", "dueFeesSearch", "feeMaster", "feeGroup", "addClassSection", "tuitionFineSetup", "feeReminder"]},
+  {name: "Fees Collection", modules: ["finance", "feeBook", "dueFeesSearch", "upiPaymentVerification", "feeMaster", "feeGroup", "addClassSection", "tuitionFineSetup", "feeReminder"]},
   {name: "Human Resources", modules: ["staffDetails", "staffAttendance", "applyLeave", "leaveType", "approveLeave", "teachersRating", "department", "designation", "disabledStaff"]},
   {name: "Communication", modules: ["noticeBoard", "teacherNoticeRequests", "sendSms"]},
   {name: "Homework", modules: ["addHomework", "dailyAssignment"]},
@@ -436,6 +438,7 @@ function getAppStateSnapshot() {
     userAccessAccounts,
     studentUserAccounts,
     mobileAppActivity,
+    upiPaymentRequests,
     rolePermissions,
     rolePermissionAudit,
     staffAttendanceRecords,
@@ -998,6 +1001,9 @@ function applySavedState(saved = {}) {
     if (Array.isArray(saved.mobileAppActivity)) {
       mobileAppActivity.splice(0, mobileAppActivity.length, ...saved.mobileAppActivity);
     }
+    if (Array.isArray(saved.upiPaymentRequests)) {
+      upiPaymentRequests.splice(0, upiPaymentRequests.length, ...saved.upiPaymentRequests);
+    }
     if (saved.rolePermissions && typeof saved.rolePermissions === "object") {
       Object.keys(rolePermissions).forEach(role => delete rolePermissions[role]);
       Object.assign(rolePermissions, saved.rolePermissions);
@@ -1558,6 +1564,7 @@ function renderActiveView(viewName = document.querySelector(".view.active")?.id 
     renderFeeBook();
   }
   if (viewName === "dueFeesSearch") renderDueFeesSearch();
+  if (viewName === "upiPaymentVerification") renderUpiPaymentVerification();
   if (viewName === "feeMaster") renderFeeMaster();
   if (viewName === "feeGroup") renderFeeGroups();
   if (viewName === "addClassSection") renderClassSectionSetup();
@@ -6627,6 +6634,105 @@ function renderStudentFeeCounter(admissionNo = activeFeeStudentAdmissionNo, requ
   document.getElementById("receiptBox").innerHTML = `<strong>${student.name}</strong><br>${student.admissionNo} | ${student.klass}<br><small>${dueText} Select payment mode and generate receipt.</small>`;
 }
 
+function getFilteredUpiPaymentRequests() {
+  const statusFilter = String(document.getElementById("upiPaymentStatusFilter")?.value || "").trim();
+  const admissionFilter = normalizeAdmissionNo(document.getElementById("upiPaymentAdmissionFilter")?.value || "");
+  return upiPaymentRequests
+    .filter(request => !statusFilter || String(request.status || "Pending") === statusFilter)
+    .filter(request => !admissionFilter || normalizeAdmissionNo(request.admissionNo || "").includes(admissionFilter))
+    .sort((a, b) => Date.parse(b.createdAt || b.date || 0) - Date.parse(a.createdAt || a.date || 0));
+}
+
+function renderUpiPaymentVerification() {
+  const rows = document.getElementById("upiPaymentRows");
+  if (!rows) return;
+  const filtered = getFilteredUpiPaymentRequests();
+  const pendingCount = upiPaymentRequests.filter(request => String(request.status || "Pending") === "Pending").length;
+  const summary = document.getElementById("upiPaymentSummary");
+  if (summary) {
+    summary.textContent = `${pendingCount} pending`;
+    summary.className = `status-pill ${pendingCount ? "pending" : "stable"}`;
+  }
+  rows.innerHTML = filtered.map(request => {
+    const status = request.status || "Pending";
+    const screenshot = request.screenshot?.url
+      ? `<a class="ghost-action" href="${escapeHtml(request.screenshot.url)}" target="_blank" rel="noopener">View</a>`
+      : "-";
+    const canAct = status === "Pending";
+    return `
+      <tr>
+        <td>${escapeHtml(formatDateDDMMYYYY(request.date || request.createdAt || new Date()))}</td>
+        <td><strong>${escapeHtml(request.studentName || "-")}</strong><br><small>${escapeHtml(request.className || "")}</small></td>
+        <td>${escapeHtml(request.admissionNo || "-")}</td>
+        <td><strong>${formatRs(request.amount)}</strong></td>
+        <td>${escapeHtml(request.utr || "-")}</td>
+        <td><span class="status-pill ${status === "Approved" ? "stable" : status === "Rejected" ? "danger" : "pending"}">${escapeHtml(status)}</span></td>
+        <td>${screenshot}</td>
+        <td class="inline-actions">
+          ${canAct ? `<button class="icon-action edit" type="button" data-approve-upi-payment="${escapeHtml(request.id)}" title="Approve UPI payment">✓</button>
+          <button class="icon-action delete" type="button" data-reject-upi-payment="${escapeHtml(request.id)}" title="Reject UPI payment">×</button>` : escapeHtml(request.receiptNo || request.rejectReason || "-")}
+        </td>
+      </tr>
+    `;
+  }).join("") || `<tr><td colspan="8">No UPI payment request found.</td></tr>`;
+}
+
+function approveUpiPaymentRequest(requestId = "") {
+  const request = upiPaymentRequests.find(item => String(item.id || "") === String(requestId || ""));
+  if (!request) {
+    showToast("UPI request not found.");
+    return;
+  }
+  if (request.status !== "Pending") {
+    showToast("This UPI request is already processed.");
+    return;
+  }
+  const student = findActiveStudentByAdmissionNo(request.admissionNo);
+  if (!student) {
+    showToast("Student not found or disabled.");
+    return;
+  }
+  const receiptNo = getSafeReceiptNoForPayment(student.admissionNo, getNextReceiptNo()).receiptNo;
+  const amount = Number(request.amount || 0);
+  const payment = collectStudentPayment(student, amount, request.date || new Date(), "Bank", "", 0, "", receiptNo, {
+    bankAmount: amount,
+    cashAmount: 0,
+    remarks: `Student app UPI verification | UTR: ${request.utr || "-"}`
+  });
+  if (!payment) {
+    showToast("UPI payment could not be approved.");
+    return;
+  }
+  request.status = "Approved";
+  request.receiptNo = payment.receipt;
+  request.approvedAt = new Date().toISOString();
+  request.approvedBy = getCurrentCollectorRoleName();
+  setNextReceiptNo();
+  saveAppState();
+  renderUpiPaymentVerification();
+  renderStudentFeeCounter(student.admissionNo);
+  renderFeeBook(student.admissionNo);
+  renderFinanceSession();
+  showToast(`UPI payment approved. Receipt ${payment.receipt} created.`);
+}
+
+function rejectUpiPaymentRequest(requestId = "") {
+  const request = upiPaymentRequests.find(item => String(item.id || "") === String(requestId || ""));
+  if (!request) {
+    showToast("UPI request not found.");
+    return;
+  }
+  const reason = prompt("Reject reason লিখুন", request.rejectReason || "Payment not matched");
+  if (reason === null) return;
+  request.status = "Rejected";
+  request.rejectReason = String(reason || "").trim() || "Payment not matched";
+  request.rejectedAt = new Date().toISOString();
+  request.rejectedBy = getCurrentCollectorRoleName();
+  saveAppState();
+  renderUpiPaymentVerification();
+  showToast("UPI payment request rejected.");
+}
+
 function updateFeeFineAmountFromPaymentDate() {
   const feeForm = document.getElementById("feeForm");
   const feeHead = feeForm.dataset.feeHead || "";
@@ -8679,6 +8785,7 @@ function collectStudentPayment(student, amount, date, mode, preferredHead = "", 
     by: getCurrentCollectorRoleName(),
     amount: totalAmount,
     discountAmount,
+    remarks: String(paymentBreakdown.remarks || "").trim(),
     bankAmount: Number(paymentBreakdown.bankAmount || 0),
     cashAmount: Number(paymentBreakdown.cashAmount || 0),
     allocations
@@ -12335,6 +12442,15 @@ document.getElementById("collectionHistoryAdmissionNo")?.addEventListener("input
 
 document.getElementById("collectionHistoryReceiptNo")?.addEventListener("input", () => {
   scheduleCollectionHistoryFilterRender(false);
+});
+
+document.getElementById("upiPaymentStatusFilter")?.addEventListener("change", renderUpiPaymentVerification);
+document.getElementById("upiPaymentAdmissionFilter")?.addEventListener("input", renderUpiPaymentVerification);
+document.getElementById("upiPaymentRows")?.addEventListener("click", event => {
+  const approve = event.target.closest("[data-approve-upi-payment]");
+  const reject = event.target.closest("[data-reject-upi-payment]");
+  if (approve) approveUpiPaymentRequest(approve.dataset.approveUpiPayment);
+  if (reject) rejectUpiPaymentRequest(reject.dataset.rejectUpiPayment);
 });
 
 document.getElementById("importStaffAttendanceBtn").addEventListener("click", () => {
