@@ -378,15 +378,12 @@ button { cursor: pointer; }
 }
 
 #feesNavGroup .nav-sub {
-  max-height: 190px;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(134, 239, 172, .45) transparent;
+  max-height: none;
+  overflow: visible;
 }
 
 #feesNavGroup .nav-sub::-webkit-scrollbar {
-  width: 5px;
+  width: 0;
 }
 
 #feesNavGroup .nav-sub::-webkit-scrollbar-thumb {
