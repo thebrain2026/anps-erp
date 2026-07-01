@@ -2464,10 +2464,46 @@
       return item.noticeDate || item.publishDate || item.date || item.createdAt?.slice?.(0, 10) || "-";
     }
 
+    function parseNoticeDateValue(value = "") {
+      const text = normalizeText(value);
+      if (!text || text === "-") return null;
+      let day;
+      let month;
+      let year;
+      const dmy = text.match(/^(\d{1,2})[-./](\d{1,2})[-./](\d{4})$/);
+      const ymd = text.match(/^(\d{4})[-./](\d{1,2})[-./](\d{1,2})$/);
+      if (dmy) {
+        day = Number(dmy[1]);
+        month = Number(dmy[2]);
+        year = Number(dmy[3]);
+      } else if (ymd) {
+        year = Number(ymd[1]);
+        month = Number(ymd[2]);
+        day = Number(ymd[3]);
+      } else {
+        const parsed = new Date(text);
+        if (Number.isNaN(parsed.getTime())) return null;
+        return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+      }
+      if (!day || !month || !year) return null;
+      const date = new Date(year, month - 1, day);
+      if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+      return date;
+    }
+
+    function isNoticeFreshForDashboard(item = {}, maxDays = 5) {
+      const noticeDate = parseNoticeDateValue(noticeDateLabel(item));
+      if (!noticeDate) return true;
+      const today = new Date();
+      const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const ageDays = Math.floor((todayOnly - noticeDate) / 86400000);
+      return ageDays <= maxDays;
+    }
+
     function renderDashboardLatestNotice(notices = []) {
       const host = $("#dashboardLatestNotice");
       if (!host) return;
-      const latest = notices[0];
+      const latest = notices.find(item => isNoticeFreshForDashboard(item));
       if (!latest) {
         host.hidden = true;
         host.innerHTML = "";
