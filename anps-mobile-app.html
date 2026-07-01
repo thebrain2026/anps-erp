@@ -105,6 +105,32 @@
     #landingScreen > * { position: relative; z-index: 1; }
 
     .brand-lockup { display: grid; justify-items: center; gap: 10px; text-align: center; }
+    .landing-school-name {
+      margin: 2px 0 10px;
+      max-width: 420px;
+      font-size: clamp(2rem, 8vw, 3.18rem);
+      line-height: 1.02;
+      font-weight: 950;
+      color: var(--deep);
+      text-shadow: 0 10px 28px rgba(16, 26, 74, .16);
+    }
+
+    .landing-school-name span {
+      display: inline-block;
+      background: linear-gradient(120deg, #101a4a 0%, #246bfe 44%, #f8bd45 76%, #20a064 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .student-blessing {
+      max-width: 390px;
+      margin: 0 auto;
+      color: #23315f;
+      font-size: .98rem;
+      line-height: 1.48;
+      font-weight: 850;
+    }
     .crest {
       display: grid;
       place-items: center;
@@ -1118,9 +1144,8 @@
       <div class="brand-lockup">
         <div class="crest"><img src="./assets/anps-logo.png" alt="ANPS school logo" /></div>
         <div>
-          <p class="eyebrow">Alfred Nobel Public School</p>
-          <h1>ANPS App</h1>
-          <p>Student and teacher portal in one Play Store ready mobile shell.</p>
+          <h1 class="landing-school-name"><span>Alfred Nobel Public School</span></h1>
+          <p class="student-blessing">Dear students, learn with joy, stay curious, and keep shining every day.</p>
         </div>
       </div>
       <article class="landing-card glass">
