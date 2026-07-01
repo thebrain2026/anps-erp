@@ -28,3 +28,21 @@ services:
         sync: false
       - key: ANPS_FCM_SERVER_KEY
         sync: false
+      - key: ANPS_ICICI_GATEWAY_ENABLED
+        value: "false"
+      - key: ANPS_ICICI_MERCHANT_ID
+        sync: false
+      - key: ANPS_ICICI_TERMINAL_ID
+        sync: false
+      - key: ANPS_ICICI_ACCESS_CODE
+        sync: false
+      - key: ANPS_ICICI_SECRET_KEY
+        sync: false
+      - key: ANPS_ICICI_ENCRYPTION_KEY
+        sync: false
+      - key: ANPS_ICICI_PAYMENT_URL
+        sync: false
+      - key: ANPS_ICICI_RETURN_URL
+        sync: false
+      - key: ANPS_ICICI_WEBHOOK_SECRET
+        sync: false

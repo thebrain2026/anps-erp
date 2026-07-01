@@ -28,6 +28,15 @@ WHATSAPP_PHONE_NUMBER_ID = os.environ.get("ANPS_WHATSAPP_PHONE_NUMBER_ID", "").s
 WHATSAPP_API_VERSION = os.environ.get("ANPS_WHATSAPP_API_VERSION", "v23.0").strip() or "v23.0"
 FCM_SERVER_KEY = os.environ.get("ANPS_FCM_SERVER_KEY", "").strip()
 FCM_ENDPOINT = os.environ.get("ANPS_FCM_ENDPOINT", "https://fcm.googleapis.com/fcm/send").strip() or "https://fcm.googleapis.com/fcm/send"
+ICICI_GATEWAY_ENABLED = os.environ.get("ANPS_ICICI_GATEWAY_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
+ICICI_MERCHANT_ID = os.environ.get("ANPS_ICICI_MERCHANT_ID", "").strip()
+ICICI_TERMINAL_ID = os.environ.get("ANPS_ICICI_TERMINAL_ID", "").strip()
+ICICI_ACCESS_CODE = os.environ.get("ANPS_ICICI_ACCESS_CODE", "").strip()
+ICICI_SECRET_KEY = os.environ.get("ANPS_ICICI_SECRET_KEY", "").strip()
+ICICI_ENCRYPTION_KEY = os.environ.get("ANPS_ICICI_ENCRYPTION_KEY", "").strip()
+ICICI_PAYMENT_URL = os.environ.get("ANPS_ICICI_PAYMENT_URL", "").strip()
+ICICI_RETURN_URL = os.environ.get("ANPS_ICICI_RETURN_URL", "").strip()
+ICICI_WEBHOOK_SECRET = os.environ.get("ANPS_ICICI_WEBHOOK_SECRET", "").strip()
 ALLOWED_ORIGINS = [
     origin.strip().rstrip("/")
     for origin in os.environ.get("ANPS_ERP_ALLOWED_ORIGINS", "*").split(",")
@@ -489,6 +498,58 @@ def send_birthday_push(payload, user):
         "Alfred Nobel Public School wishes you a bright, joyful and successful year ahead.",
         {"type": "birthday", "userId": user_id, "role": role},
     )
+
+
+def icici_gateway_missing_fields():
+    required = {
+        "ANPS_ICICI_MERCHANT_ID": ICICI_MERCHANT_ID,
+        "ANPS_ICICI_PAYMENT_URL": ICICI_PAYMENT_URL,
+        "ANPS_ICICI_RETURN_URL": ICICI_RETURN_URL,
+    }
+    return [key for key, value in required.items() if not value]
+
+
+def create_icici_payment_order(payload, user):
+    try:
+        amount = float(payload.get("amount") or 0)
+    except (TypeError, ValueError):
+        amount = 0
+    admission_no = str(payload.get("admissionNo") or payload.get("studentId") or "").strip()
+    student_name = str(payload.get("studentName") or "").strip()
+    if amount <= 0:
+        return {"ok": False, "error": "Payment amount required."}
+    if not admission_no:
+        return {"ok": False, "error": "Admission no required."}
+    missing = icici_gateway_missing_fields()
+    if not ICICI_GATEWAY_ENABLED or missing:
+        return {
+            "ok": False,
+            "configured": False,
+            "error": "ICICI gateway credentials are not configured yet.",
+            "missing": missing,
+            "requiredEnv": [
+                "ANPS_ICICI_GATEWAY_ENABLED=true",
+                "ANPS_ICICI_MERCHANT_ID",
+                "ANPS_ICICI_PAYMENT_URL",
+                "ANPS_ICICI_RETURN_URL",
+                "ANPS_ICICI_ACCESS_CODE / SECRET / ENCRYPTION KEY as per ICICI document",
+            ],
+        }
+    order_id = f"ANPS-{admission_no}-{datetime.utcnow().strftime('%Y%m%d%H%M%S')}"
+    return {
+        "ok": True,
+        "configured": True,
+        "provider": "ICICI",
+        "orderId": order_id,
+        "merchantId": ICICI_MERCHANT_ID,
+        "terminalId": ICICI_TERMINAL_ID,
+        "paymentUrl": ICICI_PAYMENT_URL,
+        "returnUrl": ICICI_RETURN_URL,
+        "amount": amount,
+        "admissionNo": admission_no,
+        "studentName": student_name,
+        "message": "ICICI gateway credentials found. Final request signing/encryption must follow the ICICI API document before live payment.",
+    }
 
 
 def connect():
@@ -2644,6 +2705,14 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             return self.json_response({"name": "ANPS School ERP", "version": "1.1.1"})
         if path == "/api/summary":
             return self.json_response(summary())
+        if path == "/api/payments/icici/callback":
+            params = {key: values[-1] for key, values in parse_qs(parsed.query).items()}
+            return self.json_response({
+                "ok": True,
+                "provider": "ICICI",
+                "received": params,
+                "message": "ICICI callback endpoint is reachable. Final success/failure mapping requires the ICICI response document.",
+            })
         if path == "/api/schema":
             if not self.authorized():
                 return
@@ -2760,6 +2829,8 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/api/login":
             return self.login_request()
+        if path == "/api/payments/icici/callback":
+            return self.icici_payment_callback_request()
         if not self.authorized(write=True):
             return
         if path == "/api/backup":
@@ -2782,6 +2853,8 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             return self.notice_push_request()
         if path == "/api/notifications/birthday":
             return self.birthday_push_request()
+        if path == "/api/payments/icici/create":
+            return self.icici_payment_create_request()
         self.save_state_request()
 
     def do_PUT(self):
@@ -2881,6 +2954,39 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             token = self.headers.get("Authorization", "").replace("Bearer ", "", 1).strip()
             result = send_birthday_push(payload, get_session_user(token) or {})
             self.json_response(result, status=200 if result.get("ok") or not result.get("configured") else 400)
+        except Exception as exc:
+            self.json_response({"ok": False, "error": str(exc)}, status=400)
+
+    def icici_payment_create_request(self):
+        length = int(self.headers.get("Content-Length") or "0")
+        if length > MAX_BODY:
+            self.send_error(413, "Request body too large")
+            return
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+            token = self.headers.get("Authorization", "").replace("Bearer ", "", 1).strip()
+            result = create_icici_payment_order(payload, get_session_user(token) or {})
+            self.json_response(result, status=200 if result.get("ok") else 400)
+        except Exception as exc:
+            self.json_response({"ok": False, "error": str(exc)}, status=400)
+
+    def icici_payment_callback_request(self):
+        length = int(self.headers.get("Content-Length") or "0")
+        if length > MAX_BODY:
+            self.send_error(413, "Request body too large")
+            return
+        try:
+            raw = self.rfile.read(length).decode("utf-8") if length else ""
+            try:
+                payload = json.loads(raw or "{}")
+            except json.JSONDecodeError:
+                payload = {key: values[-1] for key, values in parse_qs(raw).items()}
+            self.json_response({
+                "ok": True,
+                "provider": "ICICI",
+                "received": payload,
+                "message": "ICICI callback received. Final receipt auto-posting requires the ICICI response document.",
+            })
         except Exception as exc:
             self.json_response({"ok": False, "error": str(exc)}, status=400)
 

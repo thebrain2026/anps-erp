@@ -87,7 +87,18 @@ ANPS_ERP_BACKUP_DIR=/data/backups
 ANPS_ERP_UPLOAD_DIR=/data/uploads
 ANPS_ERP_ALLOWED_ORIGINS=*
 ANPS_ERP_API_TOKEN=
+ANPS_ICICI_GATEWAY_ENABLED=false
+ANPS_ICICI_MERCHANT_ID=
+ANPS_ICICI_TERMINAL_ID=
+ANPS_ICICI_ACCESS_CODE=
+ANPS_ICICI_SECRET_KEY=
+ANPS_ICICI_ENCRYPTION_KEY=
+ANPS_ICICI_PAYMENT_URL=
+ANPS_ICICI_RETURN_URL=https://YOUR-RENDER-SERVICE.onrender.com/api/payments/icici/callback
+ANPS_ICICI_WEBHOOK_SECRET=
 ```
+
+ICICI payment gateway live korar age bank/gateway theke merchant id, terminal id, access code, secret key, encryption/signing key, payment URL, return/callback URL format, webhook/server-to-server response format, and test credentials nite hobe. Ei values Render environment-e boshbe; GitHub-e real secret value commit korben na.
 
 After deploy, open:
 
