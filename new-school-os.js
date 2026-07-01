@@ -142,7 +142,7 @@ const DEFAULT_TUITION_FINE_SETUP = {
   laterMonth: 150
 };
 const DEFAULT_TRANSPORT_FINE_SETUP = {
-  sameMonth: 120,
+  sameMonth: 110,
   nextMonth: 150,
   secondMonth: 180,
   laterMonth: 200
@@ -6516,28 +6516,24 @@ function getTransportMonthPaidInfo(student, row, month) {
 function getTuitionMonthFineDue(student, row, month, paymentDate = new Date()) {
   const paid = getTuitionMonthPaidInfo(student, row, month);
   if (paid.isSettled) return 0;
-  if (Number(paid.tuition || 0) > 0) return 0;
   return Math.max(calculateTuitionFineForMonth(month, paymentDate) - Number(paid.fine || 0), 0);
 }
 
 function getTuitionMonthCollectFineDue(student, row, month, paymentDate = new Date()) {
   const paid = getTuitionMonthPaidInfo(student, row, month);
   if (paid.isSettled) return 0;
-  if (Number(paid.tuition || 0) > 0) return 0;
   return Math.max(calculateTuitionFineForMonth(month, paymentDate) - Number(paid.fine || 0), 0);
 }
 
 function getTransportMonthFineDue(student, row, month, paymentDate = new Date()) {
   const paid = getTransportMonthPaidInfo(student, row, month);
   if (paid.isSettled) return 0;
-  if (Number(paid.transport || 0) > 0) return 0;
   return Math.max(calculateTransportFineForMonth(month, paymentDate) - Number(paid.fine || 0), 0);
 }
 
 function getTransportMonthCollectFineDue(student, row, month, paymentDate = new Date()) {
   const paid = getTransportMonthPaidInfo(student, row, month);
   if (paid.isSettled) return 0;
-  if (Number(paid.transport || 0) > 0) return 0;
   return Math.max(calculateTransportFineForMonth(month, paymentDate) - Number(paid.fine || 0), 0);
 }
 
@@ -13295,7 +13291,12 @@ document.getElementById("transportFineForm").addEventListener("submit", event =>
   transportFineSetup.nextMonth = Number(data.get("nextMonth") || 0);
   transportFineSetup.secondMonth = Number(data.get("secondMonth") || 0);
   transportFineSetup.laterMonth = Number(data.get("laterMonth") || 0);
-  saveAppState();
+  transportFineSetup.updatedAt = new Date().toISOString();
+  if (!saveAppState()) {
+    renderTransportFineSetup();
+    showToast("Transport fine setup save hoyni. Internet/server connection check korun.", "error", 6000);
+    return;
+  }
   renderTransportFineSetup();
   renderDueFeesSearch();
   renderFeeBook(activeLedgerAdmissionNo);
