@@ -1883,14 +1883,14 @@
       const qr = upiQrImageUrl(state.erpState || {}, amount, user.id);
       const upiLink = upiPaymentUri(state.erpState || {}, amount, user.id);
       return `<article class="card upi-pay-card">
-        <div class="card-head"><div><h3>Pay by UPI QR</h3><p>School QR scan kore ba UPI app open kore amount manually diye payment korun, tarpor UTR submit korun.</p></div><span class="status warn">Manual Verify</span></div>
+        <div class="card-head"><div><h3>Pay by UPI QR</h3><p>School QR scan kore amount manually diye payment korun, tarpor UTR submit korun.</p></div><span class="status warn">Manual Verify</span></div>
         <div class="upi-pay-grid">
           <div class="upi-qr"><img src="${escapeHtml(qr)}" alt="UPI QR" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'upi-qr-fallback',textContent:'School UPI QR'}))"></div>
           <form class="form-grid" id="upiPaymentForm">
             <label>Amount<input id="upiPaymentAmount" type="number" min="1" value="${amount}" required /></label>
             <label>UTR / Transaction ID<input id="upiPaymentUtr" placeholder="UPI transaction id" required /></label>
             <label>Payment Screenshot<input id="upiPaymentScreenshot" type="file" accept="image/*" /></label>
-            <a class="primary" href="${escapeHtml(upiLink)}">Open UPI App - Enter Amount</a>
+            <a class="ghost" href="${escapeHtml(qr)}" download="anps-upi-qr.png">Download QR</a>
             <button class="primary" type="submit">Submit for Verification</button>
           </form>
         </div>
