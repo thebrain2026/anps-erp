@@ -7113,13 +7113,15 @@ function renderLedgerMonthAmountCell(monthAmount, paidAmount) {
   const total = Number(monthAmount || 0);
   const paid = Math.min(Number(paidAmount || 0), total);
   const due = Math.max(total - paid, 0);
-  if (paid > 0 && due > 0) {
-    return `<strong>${formatRs(due)}</strong><small>Paid ${formatRs(paid)}</small>`;
-  }
-  if (paid >= total && total > 0) {
-    return `<strong>${formatRs(total)}</strong><small>Paid</small>`;
-  }
-  return formatRs(total);
+  return due > 0 ? formatRs(due) : formatRs(total);
+}
+
+function renderLedgerMonthPartialCell(monthAmount, paidAmount) {
+  const total = Number(monthAmount || 0);
+  const paid = Math.min(Number(paidAmount || 0), total);
+  if (paid <= 0) return "-";
+  if (paid >= total && total > 0) return `<span class="paid-chip">${formatRs(paid)}</span>`;
+  return `<strong>${formatRs(paid)}</strong>`;
 }
 
 function renderLedgerPeriodCell(student, row) {
@@ -7131,7 +7133,7 @@ function renderLedgerPeriodCell(student, row) {
       <summary><span class="fee-period">${row.period}</span></summary>
       <div class="period-breakdown ledger-payment-breakdown">
         ${months.length ? `
-          <div class="period-breakdown-head period-month-row"><span>Month</span><span>Amount</span><span>Fine</span><span>Total</span><span></span></div>
+          <div class="period-breakdown-head period-month-row"><span>Month</span><span>Amount</span><span>Partial Payment</span><span>Fine</span><span>Total</span><span></span></div>
           ${months.map(month => {
             const monthAmount = Number(row.monthlyAmount || 0);
             const paidAmount = getLedgerMonthFeePaidAmount(student, row, month);
@@ -7144,6 +7146,7 @@ function renderLedgerPeriodCell(student, row) {
             <div class="period-breakdown-row period-month-row ${isPaid ? "paid-month" : isPartial ? "partial-month" : ""}">
               <span>${month}${isPaid ? " Paid" : isPartial ? " Part Paid" : ""}</span>
               <span>${renderLedgerMonthAmountCell(monthAmount, paidAmount)}</span>
+              <span>${renderLedgerMonthPartialCell(monthAmount, paidAmount)}</span>
               <span>${formatRs(monthFine)}</span>
               <span>${formatRs(collectTotal)}</span>
               <span class="month-row-actions">

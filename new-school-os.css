@@ -5094,7 +5094,19 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
 }
 
 .ledger-payment-breakdown .period-month-row {
-  grid-template-columns: 1fr 1fr .8fr 1fr 64px;
+  grid-template-columns: .9fr .95fr 1fr .75fr .95fr 64px;
+  min-width: 580px;
+}
+
+.paid-chip {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #166534;
+  font-weight: 950;
 }
 
 .payment-split-details {
