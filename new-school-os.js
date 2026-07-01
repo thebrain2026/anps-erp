@@ -3060,6 +3060,48 @@ function renderTimetableBuilderRows() {
   renderTimetableIntervalOptions();
 }
 
+function renderTimetableBuilderSavedEntries() {
+  const container = document.getElementById("classTimetableBuilderSavedRows");
+  const summary = document.getElementById("classTimetableBuilderSavedSummary");
+  if (!container) return;
+  const className = String(classTimetableForm?.elements.className?.value || "").trim();
+  const sectionName = String(classTimetableForm?.elements.sectionName?.value || "").trim();
+  if (!className || !sectionName) {
+    container.innerHTML = `<div class="timetable-empty-card">Select class and section to view saved timetable entries.</div>`;
+    if (summary) summary.textContent = "Select class and section to view saved periods.";
+    return;
+  }
+  const classSection = `${className} ${sectionName}`.trim();
+  const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  const dayOrder = new Map(days.map((day, index) => [day, index]));
+  const entries = classTimetableEntries
+    .filter(entry => entry.classSection === classSection)
+    .sort((a, b) => (dayOrder.get(a.day) ?? 99) - (dayOrder.get(b.day) ?? 99) || Number(a.period || 0) - Number(b.period || 0));
+  if (summary) summary.textContent = `${entries.length} saved periods for ${classSection}`;
+  container.innerHTML = entries.length ? `
+    <div class="timetable-builder-saved-row header">
+      <span>Day</span><span>Period</span><span>Subject</span><span>Teacher</span><span>Time</span><span>Action</span>
+    </div>
+    ${entries.map(entry => `
+      <div class="timetable-builder-saved-row">
+        <span>${escapeHtml(entry.day || "-")}</span>
+        <span>${escapeHtml(entry.period || "-")}</span>
+        <span>${escapeHtml(entry.subject || entry.entryType || "-")}</span>
+        <span>${escapeHtml(entry.teacher || "-")}</span>
+        <span>${escapeHtml(entry.startTime || "-")} - ${escapeHtml(entry.endTime || "-")}</span>
+        <span class="inline-actions">
+          <button class="icon-action edit" type="button" data-edit-timetable-day="${escapeHtml(entry.day || "Monday")}" title="Edit ${escapeHtml(entry.day || "day")}" aria-label="Edit ${escapeHtml(entry.day || "day")} timetable">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4.7L19.3 9.4a2.1 2.1 0 0 0 0-3L17.6 4.7a2.1 2.1 0 0 0-3 0L4 15.3V20Zm3.8-2H6v-1.8l8.5-8.5 1.8 1.8L7.8 18Zm7.9-11.5.4-.4 1.8 1.8-.4.4-1.8-1.8Z"/></svg>
+          </button>
+          <button class="icon-action delete" type="button" data-delete-timetable="${escapeHtml(entry.id)}" title="Delete period" aria-label="Delete period">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 21c-.6 0-1.1-.2-1.5-.6S5 19.5 5 19V8H4V6h5V4h6v2h5v2h-1v11c0 .6-.2 1.1-.6 1.5s-.9.6-1.5.6H7ZM17 8H7v11h10V8Zm-8 9h2v-7H9v7Zm4 0h2v-7h-2v7Z"/></svg>
+          </button>
+        </span>
+      </div>
+    `).join("")}
+  ` : `<div class="timetable-empty-card">No saved timetable found for ${escapeHtml(classSection)}.</div>`;
+}
+
 function renderTimetableIntervalOptions() {
   const select = document.getElementById("intervalAfterPeriod");
   const list = document.getElementById("timetableIntervalList");
@@ -3125,7 +3167,10 @@ function loadTimetableBuilderForSelection() {
   const sectionName = String(classTimetableForm.elements.sectionName?.value || "").trim();
   const day = String(classTimetableForm.elements.day?.value || activeTimetableDay || "Monday");
   if (!className || !sectionName || !day) {
+    timetableBuilderRows = [createTimetableBuilderRow()];
+    timetableIntervalMap = {};
     renderTimetableBuilderRows();
+    renderTimetableBuilderSavedEntries();
     return;
   }
   const classSection = `${className} ${sectionName}`.trim();
@@ -3133,7 +3178,10 @@ function loadTimetableBuilderForSelection() {
     .filter(entry => entry.classSection === classSection && entry.day === day)
     .sort((a, b) => Number(a.period || 0) - Number(b.period || 0));
   if (!existingEntries.length) {
+    timetableBuilderRows = [createTimetableBuilderRow()];
+    timetableIntervalMap = {};
     renderTimetableBuilderRows();
+    renderTimetableBuilderSavedEntries();
     return;
   }
   timetableBuilderRows = existingEntries.map(entry => ({
@@ -3146,6 +3194,7 @@ function loadTimetableBuilderForSelection() {
   }));
   timetableIntervalMap = {};
   renderTimetableBuilderRows();
+  renderTimetableBuilderSavedEntries();
 }
 
 function renderClassTimetableOptions() {
@@ -3190,6 +3239,7 @@ function renderClassTimetableOptions() {
     if (selected && sections.includes(selected)) sectionFilter.value = selected;
   }
   renderTimetableBuilderRows();
+  renderTimetableBuilderSavedEntries();
 }
 
 function renderClassTimetable() {
@@ -12682,6 +12732,7 @@ classTimetableForm.addEventListener("submit", event => {
   saveAppState();
   renderClassTimetable();
   renderClassTimetableOptions();
+  renderTimetableBuilderSavedEntries();
   renderTeacherTimetable();
   showToast(`${classSection} ${day} timetable saved.`);
 });
@@ -12732,6 +12783,18 @@ document.getElementById("classTimetableBuilderRows").addEventListener("click", e
   timetableBuilderRows = timetableBuilderRows.filter(row => row.id !== deleteButton.dataset.deleteTimetableRow);
   if (!timetableBuilderRows.length) timetableBuilderRows = [createTimetableBuilderRow()];
   renderTimetableBuilderRows();
+});
+document.getElementById("classTimetableBuilderSavedRows")?.addEventListener("click", event => {
+  const editButton = event.target.closest("[data-edit-timetable-day]");
+  if (!editButton) return;
+  activeTimetableDay = editButton.dataset.editTimetableDay || "Monday";
+  classTimetableForm.elements.day.value = activeTimetableDay;
+  document.querySelectorAll("[data-timetable-day]").forEach(dayButton => {
+    dayButton.classList.toggle("active", dayButton.dataset.timetableDay === activeTimetableDay);
+  });
+  loadTimetableBuilderForSelection();
+  document.getElementById("classTimetableBuilderRows")?.scrollIntoView({behavior: "smooth", block: "center"});
+  showToast(`${activeTimetableDay} timetable loaded for edit.`);
 });
 document.getElementById("classTimetableClassFilter").addEventListener("change", renderClassTimetable);
 document.getElementById("classTimetableSectionFilter").addEventListener("change", renderClassTimetable);
@@ -13648,6 +13711,7 @@ document.body.addEventListener("click", event => {
       classTimetableEntries.splice(index, 1);
       saveAppState();
       renderClassTimetable();
+      renderTimetableBuilderSavedEntries();
       renderTeacherTimetable();
       showToast("Timetable entry deleted.");
     }

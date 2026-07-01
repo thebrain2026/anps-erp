@@ -3091,6 +3091,54 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   gap: 10px;
 }
 
+.timetable-builder-saved {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
+}
+
+.timetable-builder-saved-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.timetable-builder-saved-head h3 {
+  margin: 0 0 4px;
+  font-size: .9rem;
+}
+
+.timetable-builder-saved-list {
+  display: grid;
+  gap: 8px;
+}
+
+.timetable-builder-saved-row {
+  display: grid;
+  grid-template-columns: .85fr .7fr 1.1fr 1.1fr .8fr 72px;
+  gap: 8px;
+  align-items: center;
+  padding: 9px 10px;
+  border: 1px solid #dbe5ef;
+  border-radius: 12px;
+  background: #f8fbff;
+  font-size: .78rem;
+  font-weight: 850;
+}
+
+.timetable-builder-saved-row.header {
+  background: #eef5ff;
+  color: var(--muted);
+  font-size: .72rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.timetable-builder-saved-row .inline-actions {
+  justify-content: flex-end;
+}
+
 .timetable-overview-panel {
   border-color: #d8e7d2;
 }
@@ -8240,6 +8288,7 @@ body.modal-open {
   }
   .timetable-builder-head,
   .timetable-builder-row { grid-template-columns: minmax(190px, 1.2fr) minmax(190px, 1.2fr) minmax(120px, .8fr) minmax(120px, .8fr) minmax(100px, .65fr) 62px; }
+  .timetable-builder-saved-row { grid-template-columns: minmax(90px, .8fr) minmax(60px, .55fr) minmax(150px, 1fr) minmax(150px, 1fr) minmax(115px, .85fr) 72px; overflow-x: auto; }
   .class-section-setup-layout { grid-template-columns: 1fr; }
   .student-user-form { grid-template-columns: repeat(2, minmax(180px, 1fr)); }
   .id-card-tools { grid-template-columns: minmax(220px, 1fr) auto auto; }
