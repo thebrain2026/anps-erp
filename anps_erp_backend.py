@@ -37,6 +37,9 @@ ICICI_ENCRYPTION_KEY = os.environ.get("ANPS_ICICI_ENCRYPTION_KEY", "").strip()
 ICICI_PAYMENT_URL = os.environ.get("ANPS_ICICI_PAYMENT_URL", "").strip()
 ICICI_RETURN_URL = os.environ.get("ANPS_ICICI_RETURN_URL", "").strip()
 ICICI_WEBHOOK_SECRET = os.environ.get("ANPS_ICICI_WEBHOOK_SECRET", "").strip()
+SMART_BUS_TRACKING_BASE_URL = os.environ.get("SMART_BUS_TRACKING_BASE_URL", "").strip().rstrip("/")
+SMART_BUS_TRACKING_DASHBOARD_URL = os.environ.get("SMART_BUS_TRACKING_DASHBOARD_URL", "").strip()
+SMART_BUS_ERP_TOKEN = os.environ.get("SMART_BUS_ERP_TOKEN", "").strip()
 ALLOWED_ORIGINS = [
     origin.strip().rstrip("/")
     for origin in os.environ.get("ANPS_ERP_ALLOWED_ORIGINS", "*").split(",")
@@ -549,6 +552,144 @@ def create_icici_payment_order(payload, user):
         "admissionNo": admission_no,
         "studentName": student_name,
         "message": "ICICI gateway credentials found. Final request signing/encryption must follow the ICICI API document before live payment.",
+    }
+
+
+def smart_bus_config():
+    base_url = SMART_BUS_TRACKING_BASE_URL or "http://127.0.0.1:4190"
+    dashboard_url = SMART_BUS_TRACKING_DASHBOARD_URL or f"{base_url.rstrip('/')}/office-live-map.html"
+    return {
+        "baseUrl": base_url,
+        "dashboardUrl": dashboard_url,
+        "configured": bool(SMART_BUS_TRACKING_BASE_URL and SMART_BUS_ERP_TOKEN),
+        "tokenConfigured": bool(SMART_BUS_ERP_TOKEN),
+    }
+
+
+def normalize_lookup(value=""):
+    return " ".join(str(value or "").strip().lower().split())
+
+
+def smart_bus_student_takes_transport(student):
+    services = student.get("otherServices") if isinstance(student.get("otherServices"), list) else []
+    try:
+        transport_fee = float(student.get("transportFee") or 0)
+    except (TypeError, ValueError):
+        transport_fee = 0
+    return bool(
+        student.get("transportRequired") or
+        "Transport" in services or
+        "Special/Custom" in services or
+        transport_fee > 0
+    )
+
+
+def build_smart_bus_master_payload(state):
+    school_id = str(state.get("school_id") or state.get("schoolId") or DEFAULT_SCHOOL_ID or "anps").strip() or "anps"
+    routes = state.get("transportRoutes") if isinstance(state.get("transportRoutes"), list) else []
+    vehicles = state.get("transportVehicles") if isinstance(state.get("transportVehicles"), list) else []
+    assignments = state.get("transportVehicleAssignments") if isinstance(state.get("transportVehicleAssignments"), list) else []
+    pickup_points = state.get("transportRoutePickupPoints") if isinstance(state.get("transportRoutePickupPoints"), list) else []
+    students = state.get("students") if isinstance(state.get("students"), list) else []
+
+    vehicle_by_no = {
+        normalize_lookup(vehicle.get("vehicleNo")): vehicle
+        for vehicle in vehicles
+        if isinstance(vehicle, dict) and normalize_lookup(vehicle.get("vehicleNo"))
+    }
+
+    def pickup_for_village(village):
+        clean = normalize_lookup(village)
+        for point in pickup_points:
+            if isinstance(point, dict) and normalize_lookup(point.get("villageName")) == clean and normalize_lookup(point.get("routeName")):
+                return point
+        return {}
+
+    def assignment_for(route, shift):
+        clean_route = normalize_lookup(route)
+        clean_shift = normalize_lookup(shift)
+        for item in assignments:
+            if not isinstance(item, dict):
+                continue
+            if normalize_lookup(item.get("routeName")) == clean_route and normalize_lookup(item.get("shift")) == clean_shift:
+                return item
+        for item in assignments:
+            if isinstance(item, dict) and normalize_lookup(item.get("routeName")) == clean_route:
+                return item
+        return {}
+
+    synced_students = []
+    seen_admissions = set()
+    for student in students:
+        if not isinstance(student, dict) or not smart_bus_student_takes_transport(student):
+            continue
+        admission_no = str(student.get("admissionNo") or student.get("admission_no") or "").strip()
+        if not admission_no or admission_no.lower() in seen_admissions:
+            continue
+        seen_admissions.add(admission_no.lower())
+        pickup = pickup_for_village(student.get("villageTown") or student.get("pickupPoint") or "")
+        assignment = assignment_for(pickup.get("routeName"), pickup.get("shift"))
+        vehicle = vehicle_by_no.get(normalize_lookup(assignment.get("vehicleNo"))) or {}
+        route_name = str(pickup.get("routeName") or assignment.get("routeName") or "").strip()
+        route = next((item for item in routes if isinstance(item, dict) and normalize_lookup(item.get("routeName")) == normalize_lookup(route_name)), {})
+        synced_students.append({
+            "admission_no": admission_no,
+            "student_name": str(student.get("name") or student.get("studentName") or "").strip(),
+            "class_name": str(student.get("klass") or student.get("className") or student.get("class") or "").strip(),
+            "section": str(student.get("section") or "").strip(),
+            "route": route_name,
+            "route_note": str((route or {}).get("routeNote") or "").strip(),
+            "pickup_point": str(pickup.get("villageName") or student.get("villageTown") or "").strip(),
+            "trip": str(pickup.get("shift") or assignment.get("shift") or "").strip(),
+            "vehicle": str(vehicle.get("vehicleName") or assignment.get("vehicleName") or "").strip(),
+            "vehicle_no": str(vehicle.get("vehicleNo") or assignment.get("vehicleNo") or "").strip(),
+            "driver": str(vehicle.get("driverName") or assignment.get("driverName") or "").strip(),
+            "driver_mobile": str(vehicle.get("driverMobile") or assignment.get("driverMobile") or "").strip(),
+        })
+
+    return {"school_id": school_id, "students": synced_students}
+
+
+def sync_smart_bus_master_data():
+    config = smart_bus_config()
+    if not SMART_BUS_TRACKING_BASE_URL or not SMART_BUS_ERP_TOKEN:
+        return {
+            "ok": False,
+            "configured": False,
+            "error": "Smart Bus Tracking URL or ERP token is not configured.",
+            "requiredEnv": [
+                "SMART_BUS_TRACKING_BASE_URL",
+                "SMART_BUS_TRACKING_DASHBOARD_URL",
+                "SMART_BUS_ERP_TOKEN",
+            ],
+            **config,
+        }
+    payload = build_smart_bus_master_payload(read_state() or {})
+    endpoint = f"{SMART_BUS_TRACKING_BASE_URL}/api/erp/sync-master-data"
+    body = json.dumps(payload).encode("utf-8")
+    request = urllib.request.Request(
+        endpoint,
+        data=body,
+        method="POST",
+        headers={
+            "Authorization": f"Bearer {SMART_BUS_ERP_TOKEN}",
+            "Content-Type": "application/json",
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=20) as response:
+            result = json.loads(response.read().decode("utf-8") or "{}")
+    except urllib.error.HTTPError as exc:
+        details = exc.read().decode("utf-8", errors="replace")
+        return {"ok": False, "error": f"Smart Bus sync failed {exc.code}", "details": details, **config}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc), **config}
+    return {
+        "ok": bool(result.get("ok", True)),
+        "synced": result.get("synced", len(payload["students"])),
+        "message": result.get("message", "ERP master data synced"),
+        "payloadCount": len(payload["students"]),
+        **config,
     }
 
 
@@ -2705,6 +2846,10 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             return self.json_response({"name": "ANPS School ERP", "version": "1.1.1"})
         if path == "/api/summary":
             return self.json_response(summary())
+        if path == "/api/smart-bus/config":
+            if not self.authorized():
+                return
+            return self.json_response({"ok": True, **smart_bus_config()})
         if path == "/api/payments/icici/callback":
             params = {key: values[-1] for key, values in parse_qs(parsed.query).items()}
             return self.json_response({
@@ -2855,6 +3000,8 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             return self.birthday_push_request()
         if path == "/api/payments/icici/create":
             return self.icici_payment_create_request()
+        if path == "/api/smart-bus/sync-master-data":
+            return self.smart_bus_sync_request()
         self.save_state_request()
 
     def do_PUT(self):
@@ -2989,6 +3136,10 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             })
         except Exception as exc:
             self.json_response({"ok": False, "error": str(exc)}, status=400)
+
+    def smart_bus_sync_request(self):
+        result = sync_smart_bus_master_data()
+        self.json_response(result, status=200 if result.get("ok") else 400)
 
     def school_upsert_request(self):
         length = int(self.headers.get("Content-Length") or "0")

@@ -316,7 +316,8 @@ const titleMap = {
   transportAssignVehicle: "Assign Vehicle",
   transportRoutePickupPoint: "Route Pickup Point",
   studentTransportFees: "Student Transport Fees",
-  nonTransportStudents: "Non Transport Students"
+  nonTransportStudents: "Non Transport Students",
+  smartBusTracking: "Smart Bus Tracking"
 };
 
 const ACCESS_PERMISSION_MODULES = Object.keys(titleMap);
@@ -335,7 +336,7 @@ const ACCESS_PERMISSION_GROUPS = [
   {name: "Certificate", modules: ["studentIdCard", "teacherIdCard"]},
   {name: "Settings", modules: ["masterAdmin", "schoolManagement", "userAccessSettings", "studentUserLogin", "mobileAppActivity"]},
   {name: "Security", modules: ["securityMaintenance", "securityDuplicateReceipts", "securityAlertSolver", "securityRoleHealth"]},
-  {name: "Transport", modules: ["transportFeesMaster", "transportFineSetup", "transportPickupPoint", "transportRoute", "transportVehicle", "transportAssignVehicle", "transportRoutePickupPoint", "studentTransportFees", "nonTransportStudents"]}
+  {name: "Transport", modules: ["transportFeesMaster", "transportFineSetup", "transportPickupPoint", "transportRoute", "transportVehicle", "transportAssignVehicle", "transportRoutePickupPoint", "studentTransportFees", "nonTransportStudents", "smartBusTracking"]}
 ];
 
 const pageTitle = document.getElementById("pageTitle");
@@ -1577,6 +1578,7 @@ function renderActiveView(viewName = document.querySelector(".view.active")?.id 
   if (viewName === "transportFineSetup") renderTransportFineSetup();
   if (viewName === "studentTransportFees") renderStudentTransportFees();
   if (viewName === "nonTransportStudents") renderNonTransportStudents();
+  if (viewName === "smartBusTracking") renderSmartBusTracking();
   if (viewName === "staffDetails") renderStaffDetails();
   if (viewName === "department") renderHrSetup();
   if (viewName === "staffAttendance") renderStaffAttendance();
@@ -1699,6 +1701,9 @@ function setView(viewName, options = {}) {
   }
   if (viewName === "nonTransportStudents") {
     renderNonTransportStudents();
+  }
+  if (viewName === "smartBusTracking") {
+    renderSmartBusTracking();
   }
   document.body.classList.remove("nav-open");
 }
@@ -8602,6 +8607,116 @@ function renderNonTransportStudents() {
   if (summary) summary.textContent = `Non transport students: ${nonTransportStudents.length}`;
 }
 
+function getSmartBusSyncPreviewRows() {
+  return getActiveStudents()
+    .filter(student => studentTakesTransport(student))
+    .map(student => {
+      const villageName = student.villageTown || "";
+      const pickupPoint = getRoutePickupPointForVillage(villageName) || {};
+      const assignment = getTransportAssignment(pickupPoint.routeName, pickupPoint.shift) || {};
+      const vehicle = getTransportVehicleByNo(assignment.vehicleNo) || {};
+      return {
+        admissionNo: student.admissionNo || "",
+        studentName: student.name || "",
+        routeName: pickupPoint.routeName || assignment.routeName || "",
+        pickupPoint: pickupPoint.villageName || villageName || "",
+        vehicleName: vehicle.vehicleName || assignment.vehicleName || "",
+        driverName: vehicle.driverName || assignment.driverName || "",
+        trip: pickupPoint.shift || assignment.shift || ""
+      };
+    })
+    .sort((a, b) =>
+      String(a.routeName || "").localeCompare(String(b.routeName || ""), undefined, {numeric: true}) ||
+      String(a.pickupPoint || "").localeCompare(String(b.pickupPoint || ""), undefined, {numeric: true}) ||
+      String(a.studentName || "").localeCompare(String(b.studentName || ""), undefined, {numeric: true})
+    );
+}
+
+async function loadSmartBusConfig() {
+  const response = await backendFetch(`/api/smart-bus/config?v=${Date.now()}`, {
+    headers: backendHeaders(),
+    cache: "no-store"
+  });
+  if (!response.ok) throw new Error(`Smart Bus config failed ${response.status}`);
+  return response.json();
+}
+
+async function renderSmartBusTracking() {
+  const rows = document.getElementById("smartBusSyncRows");
+  if (!rows) return;
+  const previewRows = getSmartBusSyncPreviewRows();
+  const routeCount = new Set(previewRows.map(row => row.routeName).filter(Boolean)).size;
+  const vehicleCount = new Set(previewRows.map(row => row.vehicleName).filter(Boolean)).size;
+  document.getElementById("smartBusSyncStudents").textContent = String(previewRows.length);
+  document.getElementById("smartBusSyncRoutes").textContent = String(routeCount);
+  document.getElementById("smartBusSyncVehicles").textContent = String(vehicleCount);
+  rows.innerHTML = previewRows.map(row => `
+    <tr>
+      <td><strong>${escapeHtml(row.admissionNo || "-")}</strong></td>
+      <td>${escapeHtml(row.studentName || "-")}</td>
+      <td>${escapeHtml(row.routeName || "Not mapped")}</td>
+      <td>${escapeHtml(row.pickupPoint || "-")}</td>
+      <td>${escapeHtml(row.vehicleName || "Not assigned")}</td>
+      <td>${escapeHtml(row.driverName || "-")}</td>
+      <td>${escapeHtml(row.trip || "-")}</td>
+    </tr>
+  `).join("") || `<tr><td colspan="7">No transport student ready for sync.</td></tr>`;
+
+  const statusBox = document.getElementById("smartBusSyncStatus");
+  const statusPill = document.getElementById("smartBusConfigStatus");
+  const dashboardLink = document.getElementById("smartBusDashboardLink");
+  if (statusBox) statusBox.textContent = "Checking Smart Bus Tracking connection...";
+  try {
+    const config = await loadSmartBusConfig();
+    if (dashboardLink && config.dashboardUrl) dashboardLink.href = config.dashboardUrl;
+    if (statusPill) {
+      statusPill.textContent = config.configured ? "Configured" : "Setup Needed";
+      statusPill.className = `status-pill ${config.configured ? "stable" : "pending"}`;
+    }
+    if (statusBox) {
+      statusBox.textContent = config.configured
+        ? `Smart Bus Tracking ready. Dashboard: ${config.dashboardUrl || "-"}`
+        : "Smart Bus Tracking env setup needed on ERP: SMART_BUS_TRACKING_BASE_URL, SMART_BUS_TRACKING_DASHBOARD_URL, SMART_BUS_ERP_TOKEN.";
+    }
+  } catch (error) {
+    if (statusPill) {
+      statusPill.textContent = "Unavailable";
+      statusPill.className = "status-pill danger";
+    }
+    if (statusBox) statusBox.textContent = error.message || "Smart Bus Tracking config check failed.";
+  }
+}
+
+async function syncSmartBusMasterData() {
+  const button = document.getElementById("smartBusSyncButton");
+  const statusBox = document.getElementById("smartBusSyncStatus");
+  const originalText = button?.textContent || "Sync Bus Master Data";
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Syncing...";
+  }
+  if (statusBox) statusBox.textContent = "Sending master data to Smart Bus Tracking service...";
+  try {
+    const response = await backendFetch("/api/smart-bus/sync-master-data", {
+      method: "POST",
+      headers: backendHeaders({"Content-Type": "application/json"}),
+      body: JSON.stringify({})
+    }, 30000);
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || result.ok === false) throw new Error(result.error || `Smart Bus sync failed ${response.status}`);
+    if (statusBox) statusBox.textContent = `${result.message || "ERP master data synced"} (${result.synced ?? result.payloadCount ?? 0} students).`;
+    showToast(`Smart Bus synced: ${result.synced ?? result.payloadCount ?? 0} students`);
+  } catch (error) {
+    if (statusBox) statusBox.textContent = error.message || "Smart Bus sync failed.";
+    showToast(error.message || "Smart Bus sync failed.");
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = originalText;
+    }
+  }
+}
+
 function renderTuitionFineSetup() {
   const form = document.getElementById("tuitionFineForm");
   if (!form) return;
@@ -10609,6 +10724,8 @@ document.querySelector(".brand")?.addEventListener("click", event => {
   setView("dashboard");
   window.location.hash = "dashboard";
 });
+
+document.getElementById("smartBusSyncButton")?.addEventListener("click", syncSmartBusMasterData);
 
 const navGroups = [
   ["frontOfficeNavGroup", "frontOfficeToggle"],

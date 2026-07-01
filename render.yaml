@@ -46,3 +46,9 @@ services:
         sync: false
       - key: ANPS_ICICI_WEBHOOK_SECRET
         sync: false
+      - key: SMART_BUS_TRACKING_BASE_URL
+        sync: false
+      - key: SMART_BUS_TRACKING_DASHBOARD_URL
+        sync: false
+      - key: SMART_BUS_ERP_TOKEN
+        sync: false

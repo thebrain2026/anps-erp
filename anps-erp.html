@@ -150,6 +150,7 @@
             <button data-view="transportRoutePickupPoint" type="button">Route Pickup Point</button>
             <button data-view="studentTransportFees" type="button">Student Transport Fees</button>
             <button data-view="nonTransportStudents" type="button">Non Transport Students</button>
+            <button data-view="smartBusTracking" type="button">Smart Bus Tracking</button>
           </div>
         </div>
       </nav>
@@ -2784,6 +2785,36 @@
           <div class="panel-head"><div><p class="eyebrow">Transport</p><h2>Non Transport Students</h2></div></div>
           <div class="table-wrap"><table><thead><tr><th>Admission No.</th><th>Student</th><th>Class</th><th>Section</th><th>Village / Town</th><th>Guardian</th><th>Mobile</th><th>Action</th></tr></thead><tbody id="nonTransportStudentRows"><tr><td colspan="8">No non-transport students found.</td></tr></tbody></table></div>
           <p class="transport-fee-summary" id="nonTransportStudentSummary">Non transport students: 0</p>
+        </div>
+      </section>
+
+      <section class="view" id="smartBusTracking">
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Transport</p>
+              <h2>Smart Bus Tracking</h2>
+              <small>ERP only syncs route, pickup, vehicle, driver and student master data. Live GPS runs in the separate tracking service.</small>
+            </div>
+            <div class="inline-actions">
+              <a class="ghost-action" id="smartBusDashboardLink" href="http://127.0.0.1:4190/office-live-map.html" target="_blank" rel="noopener">Open Tracking Dashboard</a>
+              <button class="primary-action" id="smartBusSyncButton" type="button">Sync Bus Master Data</button>
+            </div>
+          </div>
+          <div class="report-cards">
+            <article><div><strong id="smartBusSyncStudents">0</strong><small>Transport students ready to sync</small></div><span class="status-pill stable">Master Data</span></article>
+            <article><div><strong id="smartBusSyncRoutes">0</strong><small>Mapped routes</small></div><span class="status-pill pending" id="smartBusConfigStatus">Checking</span></article>
+            <article><div><strong id="smartBusSyncVehicles">0</strong><small>Vehicles assigned</small></div><span class="status-pill stable">Separate GPS</span></article>
+          </div>
+          <div class="security-health-summary" id="smartBusSyncStatus">
+            Smart Bus Tracking service configuration check pending.
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Admission No.</th><th>Student</th><th>Route</th><th>Pickup Point</th><th>Vehicle</th><th>Driver</th><th>Trip</th></tr></thead>
+              <tbody id="smartBusSyncRows"><tr><td colspan="7">No transport student ready for sync.</td></tr></tbody>
+            </table>
+          </div>
         </div>
       </section>
     </main>

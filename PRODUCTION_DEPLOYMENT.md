@@ -96,9 +96,14 @@ ANPS_ICICI_ENCRYPTION_KEY=
 ANPS_ICICI_PAYMENT_URL=
 ANPS_ICICI_RETURN_URL=https://YOUR-RENDER-SERVICE.onrender.com/api/payments/icici/callback
 ANPS_ICICI_WEBHOOK_SECRET=
+SMART_BUS_TRACKING_BASE_URL=https://YOUR-SMART-BUS-SERVICE.onrender.com
+SMART_BUS_TRACKING_DASHBOARD_URL=https://YOUR-SMART-BUS-SERVICE.onrender.com/office-live-map.html
+SMART_BUS_ERP_TOKEN=
 ```
 
 ICICI payment gateway live korar age bank/gateway theke merchant id, terminal id, access code, secret key, encryption/signing key, payment URL, return/callback URL format, webhook/server-to-server response format, and test credentials nite hobe. Ei values Render environment-e boshbe; GitHub-e real secret value commit korben na.
+
+Smart Bus Tracking integration-e ERP sudhu master data sync korbe. Live GPS, map refresh, stoppage calculation and student bus location API separate Smart Bus Tracking service-e thakbe. Same `SMART_BUS_ERP_TOKEN` Smart Bus service and ANPS ERP service du jaygay set korte hobe.
 
 After deploy, open:
 
