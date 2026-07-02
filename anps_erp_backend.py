@@ -1174,6 +1174,33 @@ def merge_collected_payments(server_collected, incoming_collected):
     return merged
 
 
+def merge_object_lists_by_key(server_items, incoming_items, key_fields):
+    merged = []
+    index_by_key = {}
+    for item in [*(server_items if isinstance(server_items, list) else []), *(incoming_items if isinstance(incoming_items, list) else [])]:
+        if not isinstance(item, dict):
+            continue
+        item_id = str(item.get("id") or "").strip()
+        if item_id:
+            key = f"id:{item_id}"
+        else:
+            key = "|".join(str(item.get(field) or "").strip().lower() for field in key_fields)
+        if not key or key == "|".join("" for _ in key_fields):
+            key = json.dumps(item, sort_keys=True, default=str)
+        if key not in index_by_key:
+            index_by_key[key] = len(merged)
+            merged.append(dict(item))
+            continue
+        merged[index_by_key[key]].update(item)
+    return merged
+
+
+def merge_dict_value(server_value, incoming_value):
+    server_dict = server_value if isinstance(server_value, dict) else {}
+    incoming_dict = incoming_value if isinstance(incoming_value, dict) else {}
+    return {**server_dict, **incoming_dict}
+
+
 def merge_state_without_losing_receipts(server_state, incoming_state):
     if not isinstance(server_state, dict):
         server_state = {}
@@ -1187,6 +1214,15 @@ def merge_state_without_losing_receipts(server_state, incoming_state):
     merged["collectedPayments"] = merge_collected_payments(
         server_state.get("collectedPayments") or {},
         incoming_state.get("collectedPayments") or {},
+    )
+    merged["classTimetableEntries"] = merge_object_lists_by_key(
+        server_state.get("classTimetableEntries") or [],
+        incoming_state.get("classTimetableEntries") or [],
+        ["classSection", "day", "period", "subject", "teacher"],
+    )
+    merged["teacherTimetableEntryControl"] = merge_dict_value(
+        server_state.get("teacherTimetableEntryControl"),
+        incoming_state.get("teacherTimetableEntryControl"),
     )
     return merged
 

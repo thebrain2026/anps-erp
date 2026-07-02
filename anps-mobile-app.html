@@ -3071,43 +3071,65 @@
       syncTeacherTimetableForm();
       $("#teacherTimetableForm")?.addEventListener("submit", async event => {
         event.preventDefault();
+        const submitButton = event.submitter || event.currentTarget.querySelector("button[type='submit']");
+        const originalText = submitButton?.textContent || "Save To Main ERP Timetable";
         if (!teacherTimetableEntryAllowed()) {
           toast("Timetable entry locked by Main ERP.");
           return;
+        }
+        if (submitButton) {
+          submitButton.disabled = true;
+          submitButton.textContent = "Saving...";
+          submitButton.classList.add("saving");
         }
         const classLabel = $("#teacherTimetableClass").value;
         const subject = $("#teacherTimetableSubject").value;
         const day = $("#teacherTimetableDay").value;
         const period = Number($("#teacherTimetablePeriod").value || 0);
-        if (!teacherAssignmentAllowed(classLabel, subject)) {
-          toast("This class and subject is not assigned to this teacher.");
-          return;
+        try {
+          if (!teacherAssignmentAllowed(classLabel, subject)) {
+            toast("This class and subject is not assigned to this teacher.");
+            if (submitButton) {
+              submitButton.disabled = false;
+              submitButton.textContent = originalText;
+              submitButton.classList.remove("saving");
+            }
+            return;
+          }
+          const split = splitClassSectionLabel(classLabel);
+          const timing = teacherTimetableTiming(classLabel, day, period);
+          const startTime = timing.startTime || timing.timeFrom || timing.from || "";
+          const endTime = timing.endTime || timing.timeTo || timing.to || "";
+          await AppApi.upsertTimetableEntry({
+            className: split.className || classLabel,
+            sectionName: split.sectionName || "",
+            section: split.sectionName || "",
+            classSection: classLabel,
+            day,
+            period,
+            entryType: "Class",
+            subject,
+            teacher: `${state.user.name} (${state.user.id})`,
+            teacherId: state.user.id,
+            teacherName: state.user.name,
+            startTime,
+            endTime,
+            duration: startTime && endTime ? `${Math.max(0, ((Number(endTime.slice(0, 2)) * 60 + Number(endTime.slice(3, 5))) - (Number(startTime.slice(0, 2)) * 60 + Number(startTime.slice(3, 5)))))} min` : "",
+            room: $("#teacherTimetableRoom").value.trim(),
+            note: ""
+          });
+          if (submitButton) submitButton.textContent = "Saved";
+          state.workspace = await AppApi.workspace("teacher", state.user.id);
+          renderTeacherViews();
+          toast("Timetable saved to Main ERP");
+        } catch (error) {
+          toast(error.message || "Timetable save failed.");
+          if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.textContent = originalText;
+            submitButton.classList.remove("saving");
+          }
         }
-        const split = splitClassSectionLabel(classLabel);
-        const timing = teacherTimetableTiming(classLabel, day, period);
-        const startTime = timing.startTime || timing.timeFrom || timing.from || "";
-        const endTime = timing.endTime || timing.timeTo || timing.to || "";
-        await AppApi.upsertTimetableEntry({
-          className: split.className || classLabel,
-          sectionName: split.sectionName || "",
-          section: split.sectionName || "",
-          classSection: classLabel,
-          day,
-          period,
-          entryType: "Class",
-          subject,
-          teacher: `${state.user.name} (${state.user.id})`,
-          teacherId: state.user.id,
-          teacherName: state.user.name,
-          startTime,
-          endTime,
-          duration: startTime && endTime ? `${Math.max(0, ((Number(endTime.slice(0, 2)) * 60 + Number(endTime.slice(3, 5))) - (Number(startTime.slice(0, 2)) * 60 + Number(startTime.slice(3, 5)))))} min` : "",
-          room: $("#teacherTimetableRoom").value.trim(),
-          note: ""
-        });
-        state.workspace = await AppApi.workspace("teacher", state.user.id);
-        renderTeacherViews();
-        toast("Timetable saved to Main ERP");
       });
       bindTeacherSubjectDropdowns("#resultClass", "#resultSubject");
       $("#resultClass")?.addEventListener("change", () => {
