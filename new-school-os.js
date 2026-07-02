@@ -3485,8 +3485,8 @@ function renderClassTimetable() {
   const classFilter = document.getElementById("classTimetableClassFilter")?.value || "";
   const sectionFilter = document.getElementById("classTimetableSectionFilter")?.value || "";
   const visibleEntries = classTimetableEntries
-    .filter(entry => !classFilter || entry.className === classFilter)
-    .filter(entry => !sectionFilter || entry.sectionName === sectionFilter)
+    .filter(entry => !classFilter || entry.className === classFilter || String(entry.classSection || "").startsWith(classFilter))
+    .filter(entry => !sectionFilter || entry.sectionName === sectionFilter || (!entry.sectionName && String(entry.classSection || "").startsWith(classFilter || "")))
     .sort((a, b) => a.classSection.localeCompare(b.classSection, undefined, {numeric: true})
       || ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].indexOf(a.day) - ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].indexOf(b.day)
       || Number(a.period || 0) - Number(b.period || 0));

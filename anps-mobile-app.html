@@ -1377,6 +1377,7 @@
     const todayName = new Intl.DateTimeFormat("en-US", { weekday: "long" }).format(new Date());
     const todayIso = new Date().toISOString().slice(0, 10);
     const academicMonths = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
+    const defaultAdmissionSections = ["Amber", "Ruby", "A", "B", "C", "IGCSE", "IB", "Science", "Commerce"];
     const $ = selector => document.querySelector(selector);
     const attendanceLogo = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3v3"/><path d="M16 3v3"/><path d="M4 8h16"/><rect x="4" y="5" width="16" height="16" rx="3"/><path d="m8 14 2.2 2.2L16 10.5"/></svg>`;
     const leaveLogo = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v5h5"/><path d="M9 14h6"/><path d="M9 17h4"/><path d="M9 11h2"/></svg>`;
@@ -2833,15 +2834,27 @@
     }
 
     function teacherSubjectOptionsForClass(className = "", selected = "") {
+      const cleanClass = normalizeText(className);
       const subjects = (state.user.subjects || [])
-        .filter(item => !className || item.className === className)
+        .filter(item => {
+          const split = splitClassSectionLabel(item.className);
+          return !cleanClass || item.className === cleanClass || split.className === cleanClass;
+        })
         .map(item => item.subject)
         .filter(Boolean);
       return [...new Set(subjects)].map(subject => `<option value="${subject}" ${subject === selected ? "selected" : ""}>${subject}</option>`).join("");
     }
 
     function firstTeacherClass() {
-      return [...new Set((state.user.subjects || []).map(item => item.className).filter(Boolean))][0] || "";
+      return [...new Set((state.user.subjects || []).map(item => splitClassSectionLabel(item.className).className).filter(Boolean))][0] || "";
+    }
+
+    function firstTeacherSection(className = "") {
+      const cleanClass = normalizeText(className);
+      const subjectMatch = (state.user.subjects || [])
+        .map(item => splitClassSectionLabel(item.className))
+        .find(item => item.className === cleanClass && item.sectionName);
+      return subjectMatch?.sectionName || teacherTimetableSections()[0] || "";
     }
 
     function teacherAssignedClassName() {
@@ -2854,7 +2867,13 @@
     }
 
     function teacherAssignmentAllowed(className = "", subject = "") {
-      return (state.user.subjects || []).some(item => item.className === className && item.subject === subject);
+      const cleanClass = normalizeText(className);
+      const splitSelected = splitClassSectionLabel(cleanClass);
+      return (state.user.subjects || []).some(item => {
+        const splitItem = splitClassSectionLabel(item.className);
+        return item.subject === subject
+          && (item.className === cleanClass || splitItem.className === cleanClass || item.className === splitSelected.className);
+      });
     }
 
     function teacherTimetableEntryAllowed() {
@@ -2885,23 +2904,41 @@
 
     function splitClassSectionLabel(label = "") {
       const clean = normalizeText(label);
-      const sections = ["A", "B", "C", "D", "E"];
+      const sections = [...defaultAdmissionSections, ...(state.erpState.customAdmissionSections || [])].map(item => normalizeText(item));
       const parts = clean.split(/\s+/).filter(Boolean);
-      const last = parts[parts.length - 1] || "";
-      if (sections.includes(last.toUpperCase()) && parts.length > 1) {
-        return {className: parts.slice(0, -1).join(" "), sectionName: last};
+      for (const section of sections.sort((a, b) => b.length - a.length)) {
+        if (!section) continue;
+        const suffix = ` ${section}`.toLowerCase();
+        if (clean.toLowerCase().endsWith(suffix)) {
+          return {className: clean.slice(0, -section.length).trim(), sectionName: clean.slice(-section.length).trim()};
+        }
       }
       return {className: clean, sectionName: ""};
     }
 
     function teacherTimetableClasses() {
-      return [...new Set((state.user.subjects || []).map(item => item.className).filter(Boolean))];
+      return [...new Set((state.user.subjects || []).map(item => splitClassSectionLabel(item.className).className).filter(Boolean))];
     }
 
     function teacherTimetableClassOptions(selected = "") {
       return teacherTimetableClasses()
         .map(className => `<option value="${escapeHtml(className)}" ${className === selected ? "selected" : ""}>${escapeHtml(className)}</option>`)
         .join("");
+    }
+
+    function teacherTimetableSections() {
+      const custom = Array.isArray(state.erpState.customAdmissionSections) ? state.erpState.customAdmissionSections : [];
+      return [...new Set([...custom, ...defaultAdmissionSections].map(item => normalizeText(item)).filter(Boolean))];
+    }
+
+    function teacherTimetableSectionOptions(selected = "") {
+      return teacherTimetableSections()
+        .map(section => `<option value="${escapeHtml(section)}" ${section === selected ? "selected" : ""}>${escapeHtml(section)}</option>`)
+        .join("");
+    }
+
+    function combineClassSection(className = "", sectionName = "") {
+      return [normalizeText(className), normalizeText(sectionName)].filter(Boolean).join(" ");
     }
 
     function teacherTimetableDayOptions(selected = todayName) {
@@ -2969,6 +3006,8 @@
         card({ title: "Teacher Profile", meta: `${user.role} | ${user.department}`, body: `Assigned class: ${user.assignedClass}`, badge: "Staff" })
       ].join("");
       const initialTimetableClass = firstTeacherClass();
+      const initialTimetableSection = firstTeacherSection(initialTimetableClass);
+      const initialTimetableClassSection = combineClassSection(initialTimetableClass, initialTimetableSection);
       const initialTimetableDay = timetableDays.includes(todayName) ? todayName : "Monday";
       const initialTimetableSubject = teacherSubjectOptionsForClass(initialTimetableClass);
       const canEditTimetable = teacherTimetableEntryAllowed();
@@ -2976,7 +3015,7 @@
         ? ""
         : `<article class="card"><div class="card-head"><div><h3>Timetable Entry Locked</h3><p>Main ERP theke pass dile abar entry/edit korte parben.</p></div><span class="status bad">Locked</span></div></article>`;
       $("#timetableScope").textContent = "Main ERP format";
-      $("#timetableFormHost").innerHTML = `${lockNotice}<article class="card homework-card"><form class="form-grid" id="teacherTimetableForm"><label>Class<select id="teacherTimetableClass" required ${canEditTimetable ? "" : "disabled"}>${teacherTimetableClassOptions(initialTimetableClass)}</select></label><label>Day<select id="teacherTimetableDay" required ${canEditTimetable ? "" : "disabled"}>${teacherTimetableDayOptions(initialTimetableDay)}</select></label><label>Period<select id="teacherTimetablePeriod" required ${canEditTimetable ? "" : "disabled"}>${teacherTimetablePeriodOptions(initialTimetableClass, initialTimetableDay)}</select></label><label>Subject<select id="teacherTimetableSubject" required ${canEditTimetable ? "" : "disabled"}>${initialTimetableSubject}</select></label><label>Timing<input id="teacherTimetableTiming" value="" readonly placeholder="Main ERP timing auto" /></label><label>Room<input id="teacherTimetableRoom" placeholder="Room optional" ${canEditTimetable ? "" : "disabled"} /></label><button class="primary" type="submit" ${canEditTimetable ? "" : "disabled"}>Save To Main ERP Timetable</button></form></article>`;
+      $("#timetableFormHost").innerHTML = `${lockNotice}<article class="card homework-card"><form class="form-grid" id="teacherTimetableForm"><label>Class<select id="teacherTimetableClass" required ${canEditTimetable ? "" : "disabled"}>${teacherTimetableClassOptions(initialTimetableClass)}</select></label><label>Section<select id="teacherTimetableSection" required ${canEditTimetable ? "" : "disabled"}>${teacherTimetableSectionOptions(initialTimetableSection)}</select></label><label>Day<select id="teacherTimetableDay" required ${canEditTimetable ? "" : "disabled"}>${teacherTimetableDayOptions(initialTimetableDay)}</select></label><label>Period<select id="teacherTimetablePeriod" required ${canEditTimetable ? "" : "disabled"}>${teacherTimetablePeriodOptions(initialTimetableClassSection, initialTimetableDay)}</select></label><label>Subject<select id="teacherTimetableSubject" required ${canEditTimetable ? "" : "disabled"}>${initialTimetableSubject}</select></label><label>Timing<input id="teacherTimetableTiming" value="" readonly placeholder="Main ERP timing auto" /></label><label>Room<input id="teacherTimetableRoom" placeholder="Room optional" ${canEditTimetable ? "" : "disabled"} /></label><button class="primary" type="submit" ${canEditTimetable ? "" : "disabled"}>Save To Main ERP Timetable</button></form></article>`;
       $("#timetableList").innerHTML = ws.timetable.map(item => card({ title: `${item.day}, ${item.time}`, meta: `${item.className} - ${item.subject}`, badge: item.room })).join("");
       $("#subjectsList").innerHTML = ws.subjects.map(item => card({ title: item.className, meta: item.subject, badge: "Assigned" })).join("");
       renderDashboardLatestNotice(ws.notices);
@@ -3051,21 +3090,24 @@
       $("#saveAttendanceBtn")?.addEventListener("click", () => toast(`${state.attendanceClass} attendance saved`));
       const syncTeacherTimetableForm = () => {
         const classEl = $("#teacherTimetableClass");
+        const sectionEl = $("#teacherTimetableSection");
         const dayEl = $("#teacherTimetableDay");
         const periodEl = $("#teacherTimetablePeriod");
         const subjectEl = $("#teacherTimetableSubject");
         const timingEl = $("#teacherTimetableTiming");
         if (!classEl || !dayEl || !periodEl) return;
+        const classSection = combineClassSection(classEl.value, sectionEl?.value || "");
         const previousPeriod = periodEl.value;
-        periodEl.innerHTML = teacherTimetablePeriodOptions(classEl.value, dayEl.value, previousPeriod);
+        periodEl.innerHTML = teacherTimetablePeriodOptions(classSection, dayEl.value, previousPeriod);
         if (previousPeriod && [...periodEl.options].some(option => option.value === previousPeriod)) periodEl.value = previousPeriod;
         if (subjectEl) subjectEl.innerHTML = teacherSubjectOptionsForClass(classEl.value, subjectEl.value);
-        const timing = teacherTimetableTiming(classEl.value, dayEl.value, periodEl.value);
+        const timing = teacherTimetableTiming(classSection, dayEl.value, periodEl.value);
         const start = timing.startTime || timing.timeFrom || timing.from || "";
         const end = timing.endTime || timing.timeTo || timing.to || "";
         if (timingEl) timingEl.value = start || end ? `${start || "-"} - ${end || "-"}` : "Timing not set in ERP";
       };
       $("#teacherTimetableClass")?.addEventListener("change", syncTeacherTimetableForm);
+      $("#teacherTimetableSection")?.addEventListener("change", syncTeacherTimetableForm);
       $("#teacherTimetableDay")?.addEventListener("change", syncTeacherTimetableForm);
       $("#teacherTimetablePeriod")?.addEventListener("change", syncTeacherTimetableForm);
       syncTeacherTimetableForm();
@@ -3083,6 +3125,8 @@
           submitButton.classList.add("saving");
         }
         const classLabel = $("#teacherTimetableClass").value;
+        const sectionName = $("#teacherTimetableSection").value;
+        const classSection = combineClassSection(classLabel, sectionName);
         const subject = $("#teacherTimetableSubject").value;
         const day = $("#teacherTimetableDay").value;
         const period = Number($("#teacherTimetablePeriod").value || 0);
@@ -3096,15 +3140,14 @@
             }
             return;
           }
-          const split = splitClassSectionLabel(classLabel);
-          const timing = teacherTimetableTiming(classLabel, day, period);
+          const timing = teacherTimetableTiming(classSection, day, period);
           const startTime = timing.startTime || timing.timeFrom || timing.from || "";
           const endTime = timing.endTime || timing.timeTo || timing.to || "";
           await AppApi.upsertTimetableEntry({
-            className: split.className || classLabel,
-            sectionName: split.sectionName || "",
-            section: split.sectionName || "",
-            classSection: classLabel,
+            className: classLabel,
+            sectionName,
+            section: sectionName,
+            classSection,
             day,
             period,
             entryType: "Class",
