@@ -3154,7 +3154,9 @@ function renderTimetableBuilderRows() {
 function renderTimetableBuilderSavedEntries() {
   const container = document.getElementById("classTimetableBuilderSavedRows");
   const summary = document.getElementById("classTimetableBuilderSavedSummary");
+  const dayFilter = document.getElementById("classTimetableSavedDayFilter");
   if (!container) return;
+  if (dayFilter && !dayFilter.value) dayFilter.value = activeTimetableDay || "Monday";
   const className = String(classTimetableForm?.elements.className?.value || "").trim();
   const sectionName = String(classTimetableForm?.elements.sectionName?.value || "").trim();
   if (!className || !sectionName) {
@@ -3165,10 +3167,12 @@ function renderTimetableBuilderSavedEntries() {
   const classSection = `${className} ${sectionName}`.trim();
   const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
   const dayOrder = new Map(days.map((day, index) => [day, index]));
+  const selectedDay = dayFilter?.value || activeTimetableDay || "Monday";
   const entries = classTimetableEntries
     .filter(entry => entry.classSection === classSection)
+    .filter(entry => entry.day === selectedDay)
     .sort((a, b) => (dayOrder.get(a.day) ?? 99) - (dayOrder.get(b.day) ?? 99) || Number(a.period || 0) - Number(b.period || 0));
-  if (summary) summary.textContent = `${entries.length} saved periods for ${classSection}`;
+  if (summary) summary.textContent = `${entries.length} saved periods for ${classSection} on ${selectedDay}`;
   container.innerHTML = entries.length ? `
     <div class="timetable-builder-saved-row header">
       <span>Day</span><span>Period</span><span>Subject</span><span>Teacher</span><span>Time</span><span>Action</span>
@@ -3190,7 +3194,7 @@ function renderTimetableBuilderSavedEntries() {
         </span>
       </div>
     `).join("")}
-  ` : `<div class="timetable-empty-card">No saved timetable found for ${escapeHtml(classSection)}.</div>`;
+  ` : `<div class="timetable-empty-card">No saved timetable found for ${escapeHtml(classSection)} on ${escapeHtml(selectedDay)}.</div>`;
 }
 
 function renderTimetableIntervalOptions() {
@@ -12980,10 +12984,20 @@ document.getElementById("classTimetableDayTabs").addEventListener("click", event
   if (!button) return;
   activeTimetableDay = button.dataset.timetableDay || "Monday";
   classTimetableForm.elements.day.value = activeTimetableDay;
+  const savedDayFilter = document.getElementById("classTimetableSavedDayFilter");
+  if (savedDayFilter) savedDayFilter.value = activeTimetableDay;
   document.querySelectorAll("[data-timetable-day]").forEach(dayButton => {
     dayButton.classList.toggle("active", dayButton === button);
   });
   loadTimetableBuilderForSelection();
+});
+document.getElementById("classTimetableSavedDayFilter")?.addEventListener("change", event => {
+  activeTimetableDay = event.target.value || activeTimetableDay || "Monday";
+  classTimetableForm.elements.day.value = activeTimetableDay;
+  document.querySelectorAll("[data-timetable-day]").forEach(dayButton => {
+    dayButton.classList.toggle("active", dayButton.dataset.timetableDay === activeTimetableDay);
+  });
+  renderTimetableBuilderSavedEntries();
 });
 document.getElementById("classTimetableBuilderRows").addEventListener("click", event => {
   const deleteButton = event.target.closest("[data-delete-timetable-row]");

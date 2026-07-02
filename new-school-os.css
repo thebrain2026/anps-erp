@@ -3120,6 +3120,7 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
 .timetable-builder-saved-head {
   display: flex;
   justify-content: space-between;
+  align-items: end;
   gap: 12px;
   margin-bottom: 10px;
 }
@@ -3127,6 +3128,26 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
 .timetable-builder-saved-head h3 {
   margin: 0 0 4px;
   font-size: .9rem;
+}
+
+.timetable-saved-day-filter {
+  display: grid;
+  gap: 5px;
+  min-width: 155px;
+  color: #314154;
+  font-size: .78rem;
+  font-weight: 950;
+}
+
+.timetable-saved-day-filter select {
+  min-height: 34px;
+  border: 1px solid #bfd4e8;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #173761;
+  padding: 7px 9px;
+  font: inherit;
+  font-weight: 900;
 }
 
 .timetable-builder-saved-list {
