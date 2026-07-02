@@ -3059,6 +3059,10 @@ function getTimeAfterMinutes(timeValue = "", minutesToAdd = 0) {
   return `${String(nextHour).padStart(2, "0")}:${String(nextMinute).padStart(2, "0")}`;
 }
 
+function normalizeText(value = "") {
+  return String(value || "").trim();
+}
+
 function createTimetableBuilderRow() {
   return {id: `tt-row-${Date.now()}-${Math.random().toString(16).slice(2)}`, subject: "", teacher: "", startTime: "", endTime: "", room: ""};
 }
