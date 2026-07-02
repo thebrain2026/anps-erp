@@ -3137,7 +3137,8 @@ function applySelectedTimetableInterval() {
   }
   timetableIntervalMap[period] = minutes;
   if (applyTimetableQuickParameters({forceOverwrite: true})) {
-    showToast(`After Period ${period}, ${minutes} minute interval applied.`);
+    applyTimetableTimingToAllBlankEntries({overwriteSavedTimes: true, silent: true});
+    showToast(`After Period ${period}, ${minutes} minute interval applied to all classes.`);
   }
 }
 
@@ -3183,8 +3184,9 @@ function getTimetableQuickTimingMap(maxPeriod = 0) {
   return timingMap;
 }
 
-function applyTimetableTimingToAllBlankEntries() {
+function applyTimetableTimingToAllBlankEntries(options = {}) {
   syncTimetableBuilderRowsFromDom();
+  const overwriteSavedTimes = Boolean(options.overwriteSavedTimes);
   const room = classTimetableForm.elements.quickRoom?.value || "";
   const maxSavedPeriod = classTimetableEntries.reduce((max, entry) => Math.max(max, Number(entry.period || 0)), 0);
   const maxPeriod = Math.max(maxSavedPeriod, timetableBuilderRows.length);
@@ -3203,11 +3205,11 @@ function applyTimetableTimingToAllBlankEntries() {
   });
   let savedUpdated = 0;
   classTimetableEntries.forEach(entry => {
-    if (entry.startTime && entry.endTime) return;
+    if (!overwriteSavedTimes && entry.startTime && entry.endTime) return;
     const timing = timingMap.get(Number(entry.period || 0));
     if (!timing) return;
-    entry.startTime = entry.startTime || timing.startTime;
-    entry.endTime = entry.endTime || timing.endTime;
+    entry.startTime = overwriteSavedTimes ? timing.startTime : entry.startTime || timing.startTime;
+    entry.endTime = overwriteSavedTimes ? timing.endTime : entry.endTime || timing.endTime;
     entry.duration = getTimetableDuration(entry.startTime, entry.endTime);
     if (!entry.room && room) entry.room = room;
     savedUpdated += 1;
@@ -3219,7 +3221,9 @@ function applyTimetableTimingToAllBlankEntries() {
     renderClassTimetable();
     renderTeacherTimetable();
   }
-  showToast(`Timing applied to ${savedUpdated} saved blank period(s)${builderUpdated ? ` and ${builderUpdated} open row(s)` : ""}.`);
+  if (!options.silent) {
+    showToast(`Timing applied to ${savedUpdated} saved ${overwriteSavedTimes ? "period" : "blank period"}(s)${builderUpdated ? ` and ${builderUpdated} open row(s)` : ""}.`);
+  }
 }
 
 function loadTimetableBuilderForSelection(options = {}) {
@@ -12837,6 +12841,7 @@ document.getElementById("timetableIntervalList").addEventListener("click", event
   const duration = Number(classTimetableForm.elements.periodDuration?.value || 0);
   if (startTime && duration > 0) {
     applyTimetableQuickParameters({forceOverwrite: true});
+    applyTimetableTimingToAllBlankEntries({overwriteSavedTimes: true, silent: true});
   } else {
     renderTimetableIntervalOptions();
   }
