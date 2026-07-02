@@ -3136,18 +3136,18 @@ function applySelectedTimetableInterval() {
     return;
   }
   timetableIntervalMap[period] = minutes;
-  if (applyTimetableQuickParameters()) {
+  if (applyTimetableQuickParameters({forceOverwrite: true})) {
     showToast(`After Period ${period}, ${minutes} minute interval applied.`);
   }
 }
 
-function applyTimetableQuickParameters() {
+function applyTimetableQuickParameters(options = {}) {
   syncTimetableBuilderRowsFromDom();
   const startTime = classTimetableForm.elements.periodStartTime?.value || "";
   const duration = Number(classTimetableForm.elements.periodDuration?.value || 0);
   const room = classTimetableForm.elements.quickRoom?.value || "";
   const fillMode = classTimetableForm.elements.timeFillMode?.value || "blank";
-  const fillBlankOnly = fillMode !== "overwrite";
+  const fillBlankOnly = !options.forceOverwrite && fillMode !== "overwrite";
   if (!startTime || duration <= 0) {
     showToast("Period start time and duration required.");
     renderTimetableIntervalOptions();
@@ -12778,7 +12778,7 @@ document.getElementById("timetableIntervalList").addEventListener("click", event
   const startTime = classTimetableForm.elements.periodStartTime?.value || "";
   const duration = Number(classTimetableForm.elements.periodDuration?.value || 0);
   if (startTime && duration > 0) {
-    applyTimetableQuickParameters();
+    applyTimetableQuickParameters({forceOverwrite: true});
   } else {
     renderTimetableIntervalOptions();
   }
