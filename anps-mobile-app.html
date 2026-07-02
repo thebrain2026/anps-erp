@@ -1383,6 +1383,11 @@
     let state = { role: null, user: null, workspace: null, attendanceClass: "", language: "en" };
     let activitySession = { startedAt: "", lastSavedAt: 0, timer: null };
     let lastRegisteredPushToken = "";
+    try {
+      localStorage.removeItem("anps_pending_teacher_timetable");
+    } catch (error) {
+      console.warn("Teacher timetable cache cleanup skipped.", error);
+    }
 
     async function getNativePushToken() {
       if (window.ANPS_PUSH_TOKEN) return String(window.ANPS_PUSH_TOKEN);
@@ -1962,6 +1967,15 @@
       );
     }
 
+    function isMainErpTimetableEntry(item = {}) {
+      const source = normalizeText(item.source || item.createdFrom || item.origin).toLowerCase();
+      const id = normalizeText(item.id || item.entryId).toLowerCase();
+      return isConfirmedTimetableEntry(item)
+        && !source.includes("teacher app")
+        && !source.includes("mobile")
+        && !id.startsWith("tt-teacher");
+    }
+
     function timetableTimeLabel(item = {}) {
       const start = item.startTime || item.timeFrom || item.from || "-";
       const end = item.endTime || item.timeTo || item.to || "-";
@@ -1972,7 +1986,7 @@
       const className = normalizeText(student.klass || student.className || student.class);
       const section = normalizeText(student.sectionName || student.section);
       return (erpState.classTimetableEntries || [])
-        .filter(isConfirmedTimetableEntry)
+        .filter(isMainErpTimetableEntry)
         .filter(item => !className || normalizeText(item.className || item.class) === className)
         .filter(item => !section || !item.sectionName || normalizeText(item.sectionName || item.section) === section)
         .map(item => ({
@@ -2080,6 +2094,7 @@
       const staffName = normalizeText(staff.name || staff.staffName);
       const staffId = normalizeText(staff.staffId || staff.id);
       const timetableAssignments = (erpState.classTimetableEntries || [])
+        .filter(isMainErpTimetableEntry)
         .filter(item => {
           const teacher = normalizeText(item.teacher || item.teacherName).toLowerCase();
           const cleanName = staffName.toLowerCase();
@@ -2131,7 +2146,7 @@
       };
       const subjectSet = new Set(subjects.map(item => `${item.className}|${item.subject}`));
       const timetable = (erpState.classTimetableEntries || [])
-        .filter(isConfirmedTimetableEntry)
+        .filter(isMainErpTimetableEntry)
         .filter(item => normalizeText(item.teacher || item.teacherName).toLowerCase().includes(normalizeText(state.user.name).toLowerCase()) || subjectSet.has(`${item.className || item.class}|${item.subject}`))
         .map(item => ({
           day: item.day || "Monday",
@@ -2749,7 +2764,9 @@
         : card({ title: "Result Not Published", meta: "ERP theke result publish hole ekhane dekhabe.", body: "Your marksheet will appear here after school publishes it.", badge: "Pending", status: "warn" });
       $("#resultList").innerHTML = ws.results.map(result => `<article class="card"><div class="card-head"><div><h3>${result.exam}</h3><p>${result.className} | ${result.percentage}</p></div><span class="status ok">${result.grade}</span></div>${resultSubjectList(result)}</article>`).join("");
       $("#timetableScope").textContent = "Own schedule";
-      $("#timetableList").innerHTML = ws.timetable.map(item => card({ title: `${item.day}, ${item.time}`, meta: `${item.subject} - ${item.room}`, badge: item.className })).join("");
+      $("#timetableList").innerHTML = ws.timetable.length
+        ? ws.timetable.map(item => card({ title: `${item.day}, ${item.time}`, meta: `${item.subject} - ${item.room}`, badge: item.className })).join("")
+        : card({ title: "No timetable published", meta: "Main ERP theke timetable entry korle ekhane show korbe.", badge: "Empty", status: "warn" });
       $("#syllabusTitle").textContent = "Syllabus";
       $("#syllabusFormHost").innerHTML = "";
       $("#syllabusTotal").textContent = `${ws.syllabus.length} topics`;
@@ -2847,7 +2864,9 @@
         card({ title: "Teacher Profile", meta: `${user.role} | ${user.department}`, body: `Assigned class: ${user.assignedClass}`, badge: "Staff" })
       ].join("");
       $("#timetableScope").textContent = "Own schedule";
-      $("#timetableList").innerHTML = ws.timetable.map(item => card({ title: `${item.day}, ${item.time}`, meta: `${item.className} - ${item.subject}`, badge: item.room })).join("");
+      $("#timetableList").innerHTML = ws.timetable.length
+        ? ws.timetable.map(item => card({ title: `${item.day}, ${item.time}`, meta: `${item.className} - ${item.subject}`, badge: item.room })).join("")
+        : card({ title: "No timetable published", meta: "Main ERP Class Timetable theke new entry korle ekhane show korbe.", badge: "Empty", status: "warn" });
       $("#subjectsList").innerHTML = ws.subjects.map(item => card({ title: item.className, meta: item.subject, badge: "Assigned" })).join("");
       renderDashboardLatestNotice(ws.notices);
       $("#resultTotal").textContent = `${ws.results.length} records`;
