@@ -3049,8 +3049,8 @@ function renderTimetableBuilderRows() {
     <div class="timetable-builder-row" data-row-id="${escapeHtml(row.id)}">
       <select name="rowSubject">${getTimetableSelectOptions(subjects, row.subject, "Select subject")}</select>
       <select name="rowTeacher">${getTimetableSelectOptions(teachers, row.teacher, "Select teacher")}</select>
-      <input name="rowStartTime" type="time" value="${escapeHtml(row.startTime)}" required />
-      <input name="rowEndTime" type="time" value="${escapeHtml(row.endTime)}" required />
+      <input name="rowStartTime" type="time" value="${escapeHtml(row.startTime)}" />
+      <input name="rowEndTime" type="time" value="${escapeHtml(row.endTime)}" />
       <input name="rowRoom" value="${escapeHtml(row.room)}" placeholder="Room" />
       <button class="icon-action delete" type="button" data-delete-timetable-row="${escapeHtml(row.id)}" ${timetableBuilderRows.length === 1 ? "disabled" : ""} title="Delete row" aria-label="Delete row ${index + 1}">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 21c-.6 0-1.1-.2-1.5-.6S5 19.5 5 19V8H4V6h5V4h6v2h5v2h-1v11c0 .6-.2 1.1-.6 1.5s-.9.6-1.5.6H7ZM17 8H7v11h10V8Zm-8 9h2v-7H9v7Zm4 0h2v-7h-2v7Z"/></svg>
@@ -3167,6 +3167,59 @@ function applyTimetableQuickParameters(options = {}) {
   });
   renderTimetableBuilderRows();
   return true;
+}
+
+function getTimetableQuickTimingMap(maxPeriod = 0) {
+  const startTime = classTimetableForm.elements.periodStartTime?.value || "";
+  const duration = Number(classTimetableForm.elements.periodDuration?.value || 0);
+  if (!startTime || duration <= 0 || maxPeriod <= 0) return null;
+  const timingMap = new Map();
+  let cursor = startTime;
+  for (let period = 1; period <= maxPeriod; period += 1) {
+    const endTime = getTimeAfterMinutes(cursor, duration);
+    timingMap.set(period, {startTime: cursor, endTime});
+    cursor = getTimeAfterMinutes(endTime, Number(timetableIntervalMap[period] || 0));
+  }
+  return timingMap;
+}
+
+function applyTimetableTimingToAllBlankEntries() {
+  syncTimetableBuilderRowsFromDom();
+  const room = classTimetableForm.elements.quickRoom?.value || "";
+  const maxSavedPeriod = classTimetableEntries.reduce((max, entry) => Math.max(max, Number(entry.period || 0)), 0);
+  const maxPeriod = Math.max(maxSavedPeriod, timetableBuilderRows.length);
+  const timingMap = getTimetableQuickTimingMap(maxPeriod);
+  if (!timingMap) {
+    showToast("Period start time and duration required.");
+    return;
+  }
+  let builderUpdated = 0;
+  timetableBuilderRows = timetableBuilderRows.map((row, index) => {
+    if (row.startTime && row.endTime) return {...row, room: row.room || room};
+    const timing = timingMap.get(index + 1);
+    if (!timing) return row;
+    builderUpdated += 1;
+    return {...row, startTime: row.startTime || timing.startTime, endTime: row.endTime || timing.endTime, room: row.room || room};
+  });
+  let savedUpdated = 0;
+  classTimetableEntries.forEach(entry => {
+    if (entry.startTime && entry.endTime) return;
+    const timing = timingMap.get(Number(entry.period || 0));
+    if (!timing) return;
+    entry.startTime = entry.startTime || timing.startTime;
+    entry.endTime = entry.endTime || timing.endTime;
+    entry.duration = getTimetableDuration(entry.startTime, entry.endTime);
+    if (!entry.room && room) entry.room = room;
+    savedUpdated += 1;
+  });
+  renderTimetableBuilderRows();
+  renderTimetableBuilderSavedEntries();
+  if (savedUpdated) {
+    saveAppState();
+    renderClassTimetable();
+    renderTeacherTimetable();
+  }
+  showToast(`Timing applied to ${savedUpdated} saved blank period(s)${builderUpdated ? ` and ${builderUpdated} open row(s)` : ""}.`);
 }
 
 function loadTimetableBuilderForSelection(options = {}) {
@@ -12717,8 +12770,12 @@ classTimetableForm.addEventListener("submit", event => {
     showToast("Class, section and day required.");
     return;
   }
-  if (!validRows.length || validRows.some(row => !row.subject || !row.startTime || !row.endTime)) {
-    showToast("Subject, time from and time to required in every filled row.");
+  if (!validRows.length || validRows.some(row => !row.subject)) {
+    showToast("Subject required in every filled row.");
+    return;
+  }
+  if (validRows.some(row => (row.startTime && !row.endTime) || (!row.startTime && row.endTime))) {
+    showToast("If timing is entered, both time from and time to are required.");
     return;
   }
   const classSection = `${className} ${sectionName}`.trim();
@@ -12769,6 +12826,7 @@ document.getElementById("addTimetableRow").addEventListener("click", () => {
   renderTimetableBuilderRows();
 });
 document.getElementById("applyTimetableQuick").addEventListener("click", applyTimetableQuickParameters);
+document.getElementById("applyTimetableAllClasses")?.addEventListener("click", applyTimetableTimingToAllBlankEntries);
 document.getElementById("applyTimetableInterval").addEventListener("click", applySelectedTimetableInterval);
 document.getElementById("timetableIntervalList").addEventListener("click", event => {
   const deleteButton = event.target.closest("[data-delete-timetable-interval]");
