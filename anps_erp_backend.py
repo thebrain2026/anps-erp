@@ -1195,12 +1195,6 @@ def merge_object_lists_by_key(server_items, incoming_items, key_fields):
     return merged
 
 
-def merge_dict_value(server_value, incoming_value):
-    server_dict = server_value if isinstance(server_value, dict) else {}
-    incoming_dict = incoming_value if isinstance(incoming_value, dict) else {}
-    return {**server_dict, **incoming_dict}
-
-
 def merge_state_without_losing_receipts(server_state, incoming_state):
     if not isinstance(server_state, dict):
         server_state = {}
@@ -1219,10 +1213,6 @@ def merge_state_without_losing_receipts(server_state, incoming_state):
         server_state.get("classTimetableEntries") or [],
         incoming_state.get("classTimetableEntries") or [],
         ["classSection", "day", "period", "subject", "teacher"],
-    )
-    merged["teacherTimetableEntryControl"] = merge_dict_value(
-        server_state.get("teacherTimetableEntryControl"),
-        incoming_state.get("teacherTimetableEntryControl"),
     )
     return merged
 
