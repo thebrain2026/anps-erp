@@ -1520,10 +1520,12 @@
         const cleanClassSection = normalizeText(record.classSection);
         const cleanDay = normalizeText(record.day);
         const cleanPeriod = String(record.period || "");
-        const index = list.findIndex(item =>
+        const sameTimetableSlot = item =>
           normalizeText(item.classSection) === cleanClassSection
           && normalizeText(item.day) === cleanDay
-          && String(item.period || "") === cleanPeriod
+          && String(item.period || "") === cleanPeriod;
+        const index = list.findIndex(item =>
+          sameTimetableSlot(item)
         );
         const entry = {
           id: index >= 0 ? list[index].id : (record.id || `tt-teacher-${Date.now()}`),
@@ -1535,6 +1537,7 @@
         if (index >= 0) list[index] = entry;
         else list.unshift(entry);
         erpState.classTimetableEntries = list;
+        rememberPendingTeacherTimetableEntry(entry);
         const postState = async (statePayload, baseUpdatedAt) => {
           const res = await fetch(`${AppConfig.apiBaseUrl}/state`, {
             method: "POST",
@@ -1546,22 +1549,31 @@
         };
         const applyEntry = targetState => {
           const targetList = Array.isArray(targetState.classTimetableEntries) ? [...targetState.classTimetableEntries] : [];
-          const targetIndex = targetList.findIndex(item =>
-            normalizeText(item.classSection) === cleanClassSection
-            && normalizeText(item.day) === cleanDay
-            && String(item.period || "") === cleanPeriod
-          );
+          const targetIndex = targetList.findIndex(item => sameTimetableSlot(item));
           if (targetIndex >= 0) targetList[targetIndex] = {...targetList[targetIndex], ...entry};
           else targetList.unshift(entry);
           targetState.classTimetableEntries = targetList;
           return targetState;
         };
+        const hasSavedEntry = statePayload => (statePayload?.classTimetableEntries || []).some(item =>
+          sameTimetableSlot(item)
+          && normalizeText(item.subject) === normalizeText(entry.subject)
+          && normalizeText(item.teacherId || item.teacherName || item.teacher).toLowerCase().includes(normalizeText(state.user.id || state.user.name).toLowerCase().split(" ")[0] || "")
+        );
         let response = await postState(erpState, latest.updated_at || "");
         if (response.res.status === 409 && response.payload?.state) {
           response = await postState(applyEntry(response.payload.state || {}), response.payload.updated_at || "");
         }
         if (!response.res.ok || response.payload?.ok === false) throw new Error(response.payload?.error || "Timetable save failed");
-        const saved = response.payload;
+        let saved = response.payload;
+        if (!hasSavedEntry(saved.state || {})) {
+          const fresh = await this.request("/state", { method: "GET" });
+          response = await postState(applyEntry(fresh.state || {}), fresh.updated_at || "");
+          if (!response.res.ok || response.payload?.ok === false) throw new Error(response.payload?.error || "Timetable verify save failed");
+          saved = response.payload;
+        }
+        if (!hasSavedEntry(saved.state || {})) throw new Error("Timetable save not confirmed in Main ERP.");
+        clearPendingTeacherTimetableEntry(entry);
         state.erpState = saved.state || erpState;
         state.erpUpdatedAt = saved.updated_at || "";
         return entry;
@@ -1802,6 +1814,32 @@
         upiPayments: "upiPaymentRequests"
       };
       return map[collection] || collection;
+    }
+
+    function pendingTeacherTimetableKey(entry = {}) {
+      return `teacher-tt:${normalizeText(entry.classSection)}:${normalizeText(entry.day)}:${entry.period || ""}`;
+    }
+
+    function rememberPendingTeacherTimetableEntry(entry = {}) {
+      try {
+        const raw = localStorage.getItem("anps_pending_teacher_timetable") || "{}";
+        const pending = JSON.parse(raw);
+        pending[pendingTeacherTimetableKey(entry)] = entry;
+        localStorage.setItem("anps_pending_teacher_timetable", JSON.stringify(pending));
+      } catch (error) {
+        console.warn("Could not keep pending timetable entry.", error);
+      }
+    }
+
+    function clearPendingTeacherTimetableEntry(entry = {}) {
+      try {
+        const raw = localStorage.getItem("anps_pending_teacher_timetable") || "{}";
+        const pending = JSON.parse(raw);
+        delete pending[pendingTeacherTimetableKey(entry)];
+        localStorage.setItem("anps_pending_teacher_timetable", JSON.stringify(pending));
+      } catch (error) {
+        console.warn("Could not clear pending timetable entry.", error);
+      }
     }
 
     function activeStudents(erpState = {}) {
