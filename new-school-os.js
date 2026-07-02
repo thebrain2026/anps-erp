@@ -416,6 +416,24 @@ let editingSyllabusIndex = -1;
 let editingHolidayIndex = -1;
 let editingSchoolIndex = -1;
 
+function isMobileOnlyTimetableEntry(entry = {}) {
+  const source = String(entry.source || entry.createdFrom || entry.origin || "").trim().toLowerCase();
+  const id = String(entry.id || entry.entryId || "").trim().toLowerCase();
+  return source.includes("teacher app") || source.includes("mobile") || id.startsWith("tt-teacher");
+}
+
+function normalizeMainErpTimetableEntry(entry = {}) {
+  if (isMobileOnlyTimetableEntry(entry)) return entry;
+  if (String(entry.source || "").trim()) return entry;
+  return {...entry, source: "Main ERP"};
+}
+
+function getPersistableTimetableEntries() {
+  return classTimetableEntries
+    .filter(entry => !isMobileOnlyTimetableEntry(entry))
+    .map(normalizeMainErpTimetableEntry);
+}
+
 function getAppStateSnapshot() {
   return {
     students,
@@ -443,7 +461,7 @@ function getAppStateSnapshot() {
     rolePermissions,
     rolePermissionAudit,
     staffAttendanceRecords,
-    classTimetableEntries,
+    classTimetableEntries: getPersistableTimetableEntries(),
     syllabusEntries,
     marksheetEntries,
     holidayReports,
@@ -1077,7 +1095,9 @@ function applySavedState(saved = {}) {
       classTimetableEntries.splice(
         0,
         classTimetableEntries.length,
-        ...saved.classTimetableEntries.filter(entry => String(entry.source || "").trim().toLowerCase() === "main erp")
+        ...saved.classTimetableEntries
+          .filter(entry => !isMobileOnlyTimetableEntry(entry))
+          .map(normalizeMainErpTimetableEntry)
       );
     }
     if (Array.isArray(saved.syllabusEntries)) {
