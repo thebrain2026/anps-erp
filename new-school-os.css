@@ -3018,7 +3018,7 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
 
 .class-timetable-builder input,
 .class-timetable-builder select {
-  min-height: 44px;
+  min-height: 38px;
   width: 100%;
   min-width: 0;
   box-sizing: border-box;
@@ -3026,7 +3026,7 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   border-radius: 7px;
   background: #fff;
   color: #123456;
-  padding: 10px 12px;
+  padding: 8px 10px;
   font: inherit;
   font-weight: 850;
 }
@@ -3069,27 +3069,27 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
 .timetable-builder-head,
 .timetable-builder-row {
   display: grid;
-  grid-template-columns: minmax(220px, 1.35fr) minmax(220px, 1.35fr) minmax(140px, .85fr) minmax(140px, .85fr) minmax(120px, .7fr) 72px;
-  gap: 12px;
+  grid-template-columns: minmax(190px, 1.35fr) minmax(190px, 1.35fr) minmax(112px, .8fr) minmax(112px, .8fr) minmax(105px, .7fr) 54px;
+  gap: 9px;
   align-items: center;
 }
 
 .timetable-builder-head {
   color: #ffffff;
-  font-size: .9rem;
+  font-size: .82rem;
   font-weight: 950;
-  padding: 12px 14px;
+  padding: 10px 11px;
   border-radius: 8px;
-  background: linear-gradient(90deg, #174f81 0%, #177e89 54%, #6d8f20 100%);
+  background: linear-gradient(90deg, #174f81 0%, #177e89 48%, #8f6a13 100%);
 }
 
 .timetable-builder-rows {
   display: grid;
-  gap: 12px;
+  gap: 9px;
 }
 
 .timetable-builder-row {
-  padding: 12px;
+  padding: 9px;
   border: 1px solid #cfe0f0;
   border-radius: 8px;
   background: linear-gradient(90deg, #ffffff 0%, #f7fbff 42%, #fffaf0 100%);
@@ -4622,63 +4622,79 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
 
 .class-timetable-week-board {
   display: grid;
-  grid-template-columns: repeat(7, minmax(175px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(7, minmax(155px, 1fr));
+  gap: 8px;
   align-items: start;
   overflow-x: auto;
   padding-bottom: 6px;
 }
 
 .timetable-day-column {
-  min-width: 175px;
+  min-width: 155px;
+  border: 1px solid #dce8f5;
+  border-radius: 8px;
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+  padding: 7px;
 }
 
 .timetable-day-column h3 {
-  margin: 0 0 8px;
-  padding: 10px 9px;
+  margin: 0 0 7px;
+  padding: 8px 8px;
   border-radius: 8px;
-  background: #edf6ff;
-  color: #173761;
-  font-size: .94rem;
+  background: linear-gradient(135deg, #174f81 0%, #177e89 100%);
+  color: #ffffff;
+  font-size: .86rem;
   font-weight: 950;
+  text-align: center;
 }
 
 .timetable-day-cards {
   display: grid;
-  gap: 8px;
+  gap: 7px;
+  grid-auto-rows: minmax(96px, auto);
 }
 
 .timetable-period-card,
 .timetable-empty-card {
   position: relative;
   display: grid;
-  gap: 7px;
-  min-height: 118px;
-  padding: 11px 34px 11px 11px;
-  border: 1px solid #d5e2ee;
+  gap: 5px;
+  min-height: 96px;
+  align-content: start;
+  padding: 9px 31px 9px 9px;
+  border: 1px solid #cfdff0;
   border-radius: 8px;
-  background: linear-gradient(180deg, #ffffff 0%, #f7fff7 100%);
-  box-shadow: 0 8px 18px rgba(31, 50, 72, .08);
+  background: linear-gradient(180deg, #ffffff 0%, #f3fbff 58%, #fbfff3 100%);
+  box-shadow: 0 8px 16px rgba(31, 50, 72, .07);
+  overflow: hidden;
 }
 
 .timetable-empty-card {
-  min-height: 56px;
+  min-height: 96px;
   align-content: center;
-  border-color: #ead2d2;
-  background: #fff7f7;
-  color: #9f1d1d;
+  justify-items: center;
+  border-color: #eadbd2;
+  background: linear-gradient(180deg, #fffaf5 0%, #fff5f5 100%);
+  color: #9f441d;
   font-weight: 950;
+  font-size: .78rem;
 }
 
 .timetable-card-line {
   color: #23613f;
-  font-size: .82rem;
+  font-size: .77rem;
   font-weight: 900;
-  line-height: 1.35;
+  line-height: 1.25;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .timetable-card-line.subject {
-  color: #187044;
+  color: #164e87;
+  font-size: .8rem;
+  font-weight: 950;
 }
 
 .timetable-card-line.time,
@@ -4689,10 +4705,10 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
 
 .timetable-card-delete {
   position: absolute;
-  top: 8px;
-  right: 8px;
-  width: 24px;
-  height: 24px;
+  top: 7px;
+  right: 7px;
+  width: 22px;
+  height: 22px;
   background: #b4232d;
   color: #fff;
 }

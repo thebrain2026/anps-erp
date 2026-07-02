@@ -1969,11 +1969,7 @@
 
     function isMainErpTimetableEntry(item = {}) {
       const source = normalizeText(item.source || item.createdFrom || item.origin).toLowerCase();
-      const id = normalizeText(item.id || item.entryId).toLowerCase();
-      return isConfirmedTimetableEntry(item)
-        && !source.includes("teacher app")
-        && !source.includes("mobile")
-        && !id.startsWith("tt-teacher");
+      return isConfirmedTimetableEntry(item) && source === "main erp";
     }
 
     function timetableTimeLabel(item = {}) {

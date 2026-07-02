@@ -708,7 +708,6 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
     admissionEnquiries: ["id", "mobile", "studentName"],
     complaintRecords: ["id", "complaintNo", "subject"],
     staffAttendanceRecords: ["id", "staffId", "date"],
-    classTimetableEntries: ["id"],
     syllabusEntries: ["id"],
     marksheetEntries: ["id", "studentAdmissionNo", "exam", "subject"],
     holidayReports: ["id", "date", "holidayName"],
@@ -728,6 +727,9 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
   merged.rolePermissions = {...(remoteState.rolePermissions || {}), ...(localState.rolePermissions || {})};
   merged.rolePermissionAudit = {...(remoteState.rolePermissionAudit || {}), ...(localState.rolePermissionAudit || {})};
   merged.classSubjectAssignments = {...(remoteState.classSubjectAssignments || {}), ...(localState.classSubjectAssignments || {})};
+  if (Array.isArray(localState.classTimetableEntries)) {
+    merged.classTimetableEntries = localState.classTimetableEntries;
+  }
   merged.collectedPayments = mergeCollectedPayments(remoteState.collectedPayments || {}, localState.collectedPayments || {});
   merged.financeSessions = {...(remoteState.financeSessions || {}), ...(localState.financeSessions || {})};
   return merged;
@@ -1072,7 +1074,11 @@ function applySavedState(saved = {}) {
       staffAttendanceRecords.splice(0, staffAttendanceRecords.length, ...saved.staffAttendanceRecords);
     }
     if (Array.isArray(saved.classTimetableEntries)) {
-      classTimetableEntries.splice(0, classTimetableEntries.length, ...saved.classTimetableEntries);
+      classTimetableEntries.splice(
+        0,
+        classTimetableEntries.length,
+        ...saved.classTimetableEntries.filter(entry => String(entry.source || "").trim().toLowerCase() === "main erp")
+      );
     }
     if (Array.isArray(saved.syllabusEntries)) {
       syllabusEntries.splice(0, syllabusEntries.length, ...saved.syllabusEntries);
@@ -12911,12 +12917,21 @@ classTimetableForm.addEventListener("submit", event => {
     endTime: row.endTime,
     duration: getTimetableDuration(row.startTime, row.endTime),
     room: row.room,
+    source: "Main ERP",
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
     note: ""
   }));
   classTimetableEntries.unshift(...entries);
-  saveAppState();
+  const saved = saveAppState();
   renderClassTimetable();
   renderClassTimetableOptions();
+  if (!saved) {
+    renderTimetableBuilderRows();
+    renderTimetableBuilderSavedEntries();
+    renderTeacherTimetable();
+    return;
+  }
   timetableBuilderRows = [createTimetableBuilderRow()];
   timetableIntervalMap = {};
   renderTimetableBuilderRows();
@@ -13899,11 +13914,11 @@ document.body.addEventListener("click", event => {
     const index = classTimetableEntries.findIndex(entry => entry.id === deleteTimetable.dataset.deleteTimetable);
     if (index >= 0 && confirm("Delete this timetable entry?")) {
       classTimetableEntries.splice(index, 1);
-      saveAppState();
+      const saved = saveAppState();
       renderClassTimetable();
       renderTimetableBuilderSavedEntries();
       renderTeacherTimetable();
-      showToast("Timetable entry deleted.");
+      if (saved) showToast("Timetable entry deleted.");
     }
   }
   if (editClassSetup) {
