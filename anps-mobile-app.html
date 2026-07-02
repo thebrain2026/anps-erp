@@ -1134,6 +1134,114 @@
       box-shadow: 0 12px 26px rgba(36,107,254,.18);
     }
 
+    .due-reminder-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 82;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      background: rgba(9, 18, 45, .46);
+      backdrop-filter: blur(10px);
+    }
+
+    .due-reminder-card {
+      width: min(100%, 400px);
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,.82);
+      border-radius: 28px;
+      background:
+        radial-gradient(circle at 16% 0%, rgba(248,189,69,.38), transparent 30%),
+        radial-gradient(circle at 86% 14%, rgba(246,91,91,.22), transparent 30%),
+        linear-gradient(145deg, rgba(255,255,255,.98), rgba(239,246,255,.94));
+      box-shadow: 0 28px 70px rgba(16,26,74,.3);
+    }
+
+    .due-reminder-top {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 18px 18px 12px;
+    }
+
+    .due-reminder-icon {
+      display: grid;
+      place-items: center;
+      width: 54px;
+      height: 54px;
+      border-radius: 20px;
+      color: #fff;
+      background: linear-gradient(135deg, #f43f5e, #f8bd45);
+      font-size: 1.4rem;
+      font-weight: 950;
+      box-shadow: 0 16px 30px rgba(244,63,94,.22);
+    }
+
+    .due-reminder-card h2 {
+      margin: 0;
+      color: var(--deep);
+      font-size: 1.2rem;
+      line-height: 1.15;
+    }
+
+    .due-reminder-card p {
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: .88rem;
+      font-weight: 800;
+      line-height: 1.45;
+    }
+
+    .due-reminder-amount {
+      margin: 4px 18px 12px;
+      padding: 16px;
+      border-radius: 22px;
+      color: #fff;
+      background: linear-gradient(135deg, #102a67, #1b75d0 58%, #19b69f);
+      box-shadow: 0 16px 34px rgba(27,117,208,.18);
+    }
+
+    .due-reminder-amount span {
+      display: block;
+      font-size: .78rem;
+      font-weight: 950;
+      opacity: .86;
+      text-transform: uppercase;
+    }
+
+    .due-reminder-amount strong {
+      display: block;
+      margin-top: 4px;
+      font-size: 2rem;
+      line-height: 1;
+    }
+
+    .due-reminder-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      padding: 0 18px 18px;
+    }
+
+    .due-reminder-actions button {
+      min-height: 44px;
+      border: 0;
+      border-radius: 16px;
+      font-weight: 950;
+    }
+
+    .due-reminder-later {
+      color: #102a67;
+      background: rgba(255,255,255,.82);
+      border: 1px solid rgba(16,42,103,.12);
+    }
+
+    .due-reminder-pay {
+      color: #fff;
+      background: linear-gradient(135deg, #f43f5e, #246bfe);
+      box-shadow: 0 12px 26px rgba(36,107,254,.2);
+    }
+
     @media (max-width: 380px) {
       .module-grid { grid-template-columns: repeat(3, 1fr); }
       .metrics { grid-template-columns: 1fr 1fr; }
@@ -1363,6 +1471,25 @@
       <button class="birthday-close" id="birthdayCloseBtn" type="button">Thank You</button>
     </article>
   </div>
+  <div class="due-reminder-modal hidden" id="dueReminderModal" role="dialog" aria-modal="true" aria-labelledby="dueReminderTitle">
+    <article class="due-reminder-card">
+      <div class="due-reminder-top">
+        <div class="due-reminder-icon">₹</div>
+        <div>
+          <h2 id="dueReminderTitle">Fees Due Reminder</h2>
+          <p id="dueReminderMessage">Please clear your school fees.</p>
+        </div>
+      </div>
+      <div class="due-reminder-amount">
+        <span>Outstanding Amount</span>
+        <strong id="dueReminderAmount">₹0</strong>
+      </div>
+      <div class="due-reminder-actions">
+        <button class="due-reminder-later" id="dueReminderLaterBtn" type="button">Later</button>
+        <button class="due-reminder-pay" id="dueReminderPayBtn" type="button">Pay Now</button>
+      </div>
+    </article>
+  </div>
 
   <script>
     const AppConfig = {
@@ -1383,6 +1510,8 @@
     let state = { role: null, user: null, workspace: null, attendanceClass: "", language: "en" };
     let activitySession = { startedAt: "", lastSavedAt: 0, timer: null };
     let lastRegisteredPushToken = "";
+    let dueReminderTimer = null;
+    let dueReminderOpenOnceShown = false;
     try {
       localStorage.removeItem("anps_pending_teacher_timetable");
     } catch (error) {
@@ -1840,6 +1969,124 @@
       return Math.max(0, expectedTillDate - paidTillDate);
     }
 
+    function admissionSerial(value = "") {
+      const clean = normalizeText(value);
+      const match = clean.match(/(\d+)\s*$/);
+      return match ? String(Number(match[1])) : normalizeAdmission(clean);
+    }
+
+    function sameAdmissionNo(left = "", right = "") {
+      const leftFull = normalizeAdmission(left);
+      const rightFull = normalizeAdmission(right);
+      if (leftFull && rightFull && leftFull === rightFull) return true;
+      const leftSerial = admissionSerial(left);
+      const rightSerial = admissionSerial(right);
+      return Boolean(leftSerial && rightSerial && leftSerial === rightSerial);
+    }
+
+    function dueReminderControlForStudent(erpState = {}, student = {}) {
+      const controls = Array.isArray(erpState.dueReminderControls) ? erpState.dueReminderControls : [];
+      return controls.find(control => sameAdmissionNo(control.admissionNo, student.admissionNo)) || {};
+    }
+
+    function activeDueReminderControl() {
+      return state.workspace?.dueReminderControl || {};
+    }
+
+    function dueReminderPaused(control = activeDueReminderControl()) {
+      const pauseUntil = normalizeText(control.pauseUntil);
+      if (!pauseUntil) return false;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const pauseDate = new Date(`${pauseUntil}T00:00:00`);
+      return !Number.isNaN(pauseDate.getTime()) && pauseDate >= today;
+    }
+
+    function dueReminderMode() {
+      if (dueReminderPaused()) return "paused";
+      const day = new Date().getDate();
+      if (day >= 14) return "repeat3";
+      if (day >= 10) return "repeat15";
+      if (day >= 5) return "openOnce";
+      return "none";
+    }
+
+    function dueReminderIntervalMs() {
+      const mode = dueReminderMode();
+      const customMinutes = Number(activeDueReminderControl().intervalMinutes || 0);
+      if ((mode === "repeat3" || mode === "repeat15") && customMinutes > 0) return customMinutes * 60 * 1000;
+      if (mode === "repeat3") return 3 * 60 * 1000;
+      if (mode === "repeat15") return 15 * 60 * 1000;
+      return 0;
+    }
+
+    function dueReminderIntervalLabel() {
+      const mode = dueReminderMode();
+      const customMinutes = Number(activeDueReminderControl().intervalMinutes || 0);
+      if ((mode === "repeat3" || mode === "repeat15") && customMinutes > 0) {
+        return `Reminder will repeat every ${customMinutes} minutes until fees are cleared.`;
+      }
+      if (mode === "repeat3") return "Reminder will repeat every 3 minutes until fees are cleared.";
+      if (mode === "repeat15") return "Reminder will repeat every 15 minutes until fees are cleared.";
+      if (mode === "openOnce") return "This reminder appears once when you open the app.";
+      return "";
+    }
+
+    function hideDueReminder() {
+      $("#dueReminderModal")?.classList.add("hidden");
+    }
+
+    function clearDueReminderTimer() {
+      clearInterval(dueReminderTimer);
+      dueReminderTimer = null;
+    }
+
+    function hasStudentDue() {
+      return state.role === "student" && Number(state.user?.feesDue || 0) > 0 && !dueReminderPaused();
+    }
+
+    function showDueReminder() {
+      if (!hasStudentDue()) {
+        hideDueReminder();
+        clearDueReminderTimer();
+        return;
+      }
+      const amount = Number(state.user.feesDue || 0);
+      const message = `${state.user.name || "Student"}, your school fees due is ₹${amount}. ${dueReminderIntervalLabel()}`;
+      $("#dueReminderAmount").textContent = `₹${amount}`;
+      $("#dueReminderMessage").textContent = message;
+      $("#dueReminderModal")?.classList.remove("hidden");
+    }
+
+    function scheduleDueReminder() {
+      clearDueReminderTimer();
+      const mode = dueReminderMode();
+      if (!hasStudentDue() || mode === "none" || mode === "paused") {
+        hideDueReminder();
+        if (!hasStudentDue()) dueReminderOpenOnceShown = false;
+        return;
+      }
+      if (mode === "openOnce") {
+        if (!dueReminderOpenOnceShown) {
+          showDueReminder();
+          dueReminderOpenOnceShown = true;
+        }
+        return;
+      }
+      showDueReminder();
+      const interval = dueReminderIntervalMs();
+      if (interval > 0) {
+        dueReminderTimer = setInterval(() => {
+          if (!hasStudentDue()) {
+            hideDueReminder();
+            clearDueReminderTimer();
+            return;
+          }
+          showDueReminder();
+        }, interval);
+      }
+    }
+
     function studentReceipts(erpState = {}, student = {}) {
       const admissionNo = normalizeAdmission(student.admissionNo);
       const fromReceipts = (erpState.feeReceipts || erpState.fees || [])
@@ -2069,6 +2316,7 @@
         ),
         ratings: [],
         complaints: (erpState.complaintRecords || []).filter(item => normalizeAdmission(item.studentId) === normalizeAdmission(student.admissionNo)),
+        dueReminderControl: dueReminderControlForStudent(erpState, student),
         subjects: []
       };
     }
@@ -2800,6 +3048,7 @@
       $("#leaveList").innerHTML = "";
       bindLanguageControls();
       bindStudentForms();
+      scheduleDueReminder();
     }
 
     function subjectOptions() {
@@ -3253,6 +3502,7 @@
       state.role = role;
       state.user = user;
       state.workspace = await AppApi.workspace(role, user.id);
+      dueReminderOpenOnceShown = false;
       document.body.classList.toggle("student-theme", role === "student");
       document.body.classList.toggle("teacher-theme", role === "teacher");
       localStorage.setItem(AppConfig.roleKey, role);
@@ -3265,6 +3515,7 @@
       if (role === "student") startStudentActivityTracking();
       await registerCurrentPushToken();
       showBirthdayGreeting();
+      if (role === "student") scheduleDueReminder();
     }
 
     document.querySelectorAll("[data-select-role]").forEach(btn => btn.addEventListener("click", () => setupLogin(btn.dataset.selectRole)));
@@ -3289,6 +3540,11 @@
       }
     });
     $("#birthdayCloseBtn")?.addEventListener("click", () => $("#birthdayModal")?.classList.add("hidden"));
+    $("#dueReminderLaterBtn")?.addEventListener("click", hideDueReminder);
+    $("#dueReminderPayBtn")?.addEventListener("click", () => {
+      hideDueReminder();
+      openView("fees");
+    });
     $("#menuBtn").addEventListener("click", () => document.body.classList.add("drawer-open"));
     $("#drawerBackdrop").addEventListener("click", () => document.body.classList.remove("drawer-open"));
     $("#syncBtn").addEventListener("click", async () => {
@@ -3296,10 +3552,14 @@
       state.workspace = await AppApi.workspace(state.role, state.user.id);
       renderDashboard();
       state.role === "student" ? renderStudentViews() : renderTeacherViews();
+      if (state.role === "student") scheduleDueReminder();
       toast("Synced");
     });
     $("#logoutBtn").addEventListener("click", async () => {
       await stopStudentActivityTracking();
+      clearDueReminderTimer();
+      hideDueReminder();
+      dueReminderOpenOnceShown = false;
       localStorage.removeItem(AppConfig.tokenKey);
       localStorage.removeItem(AppConfig.roleKey);
       localStorage.removeItem(AppConfig.userKey);

@@ -31,6 +31,7 @@ const userAccessAccounts = [];
 const studentUserAccounts = [];
 const mobileAppActivity = [];
 const upiPaymentRequests = [];
+const dueReminderControls = [];
 const rolePermissions = {};
 const rolePermissionAudit = {};
 const staffAttendanceRecords = [];
@@ -458,6 +459,7 @@ function getAppStateSnapshot() {
     studentUserAccounts,
     mobileAppActivity,
     upiPaymentRequests,
+    dueReminderControls,
     rolePermissions,
     rolePermissionAudit,
     staffAttendanceRecords,
@@ -1039,6 +1041,9 @@ function applySavedState(saved = {}) {
     if (Array.isArray(saved.upiPaymentRequests)) {
       upiPaymentRequests.splice(0, upiPaymentRequests.length, ...saved.upiPaymentRequests);
     }
+    if (Array.isArray(saved.dueReminderControls)) {
+      dueReminderControls.splice(0, dueReminderControls.length, ...saved.dueReminderControls);
+    }
     if (saved.rolePermissions && typeof saved.rolePermissions === "object") {
       Object.keys(rolePermissions).forEach(role => delete rolePermissions[role]);
       Object.assign(rolePermissions, saved.rolePermissions);
@@ -1612,6 +1617,7 @@ function renderActiveView(viewName = document.querySelector(".view.active")?.id 
   if (viewName === "upiPaymentVerification") renderUpiPaymentVerification();
   if (viewName === "feeMaster") renderFeeMaster();
   if (viewName === "feeGroup") renderFeeGroups();
+  if (viewName === "feeReminder") renderDueReminderControls();
   if (viewName === "addClassSection") renderClassSectionSetup();
   if (viewName === "tuitionFineSetup") renderTuitionFineSetup();
   if (viewName === "transportPickupPoint") renderTransportVillages();
@@ -2050,6 +2056,61 @@ function findActiveStudentByAdmissionOrName(value) {
     || getActiveStudents().find(student => getAdmissionSearchTokens(student.admissionNo || "").some(token => token === cleanLower || (compact && (token === compact || token.endsWith(compact)))))
     || getActiveStudents().find(student => String(student.name || "").trim().toLowerCase() === cleanLower)
     || null;
+}
+
+function getStudentDueReminderControl(admissionNo) {
+  const cleanAdmissionNo = normalizeAdmissionNo(admissionNo);
+  return dueReminderControls.find(item => normalizeAdmissionNo(item.admissionNo) === cleanAdmissionNo);
+}
+
+function getDueReminderControlStatus(control = {}) {
+  const pauseUntil = String(control.pauseUntil || "").trim();
+  if (!pauseUntil) return "Auto";
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const pauseDate = new Date(`${pauseUntil}T00:00:00`);
+  if (!Number.isNaN(pauseDate.getTime()) && pauseDate >= today) return `Paused until ${formatDateDDMMYYYY(pauseUntil)}`;
+  return "Auto";
+}
+
+function resetDueReminderControlForm() {
+  const form = document.getElementById("dueReminderControlForm");
+  if (!form) return;
+  form.reset();
+  form.elements.controlId.value = "";
+  form.elements.studentName.value = "";
+}
+
+function renderDueReminderControls() {
+  const form = document.getElementById("dueReminderControlForm");
+  const list = document.getElementById("dueReminderControlList");
+  if (!form || !list) return;
+  form.elements.admissionNo.innerHTML = `<option value="">Select student</option>${students.map(student => {
+    const label = `${student.admissionNo || "-"} - ${student.name || "Student"}`;
+    return `<option value="${escapeHtml(student.admissionNo || "")}">${escapeHtml(label)}</option>`;
+  }).join("")}`;
+  if (!dueReminderControls.length) {
+    list.innerHTML = `<article class="empty-state">No student popup setting saved yet.</article>`;
+    return;
+  }
+  list.innerHTML = dueReminderControls.map(control => {
+    const student = findStudentByAdmissionNo(control.admissionNo) || {};
+    const interval = Number(control.intervalMinutes || 0);
+    return `
+      <article class="due-reminder-control-row">
+        <div>
+          <strong>${escapeHtml(control.studentName || student.name || "Student")}</strong>
+          <p>${escapeHtml(control.admissionNo || "-")}</p>
+          <small>${escapeHtml(getDueReminderControlStatus(control))}${interval > 0 ? ` | Repeat every ${interval} min` : " | Auto timing"}</small>
+          ${control.note ? `<em>${escapeHtml(control.note)}</em>` : ""}
+        </div>
+        <div class="fee-card-actions">
+          <button class="mini" data-edit-due-reminder="${escapeHtml(control.id)}" type="button">Edit</button>
+          <button class="mini danger-mini" data-delete-due-reminder="${escapeHtml(control.id)}" type="button">Delete</button>
+        </div>
+      </article>
+    `;
+  }).join("");
 }
 
 function setSelectValue(select, value) {
@@ -13440,6 +13501,72 @@ document.getElementById("topbarLogout")?.addEventListener("click", () => {
 
 document.getElementById("sendFeeReminder").addEventListener("click", () => {
   showToast("Fee reminder campaign queued.");
+});
+
+document.getElementById("dueReminderControlForm")?.addEventListener("change", event => {
+  if (event.target.name !== "admissionNo") return;
+  const student = findStudentByAdmissionNo(event.target.value) || {};
+  event.currentTarget.elements.studentName.value = student.name || "";
+});
+
+document.getElementById("dueReminderControlForm")?.addEventListener("submit", event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const student = findStudentByAdmissionNo(form.elements.admissionNo.value);
+  if (!student) {
+    showToast("Please select a valid student.");
+    return;
+  }
+  const existingId = form.elements.controlId.value || "";
+  const existing = existingId ? dueReminderControls.find(item => item.id === existingId) : getStudentDueReminderControl(student.admissionNo);
+  const intervalMinutes = Math.max(0, Number(form.elements.intervalMinutes.value || 0));
+  const record = {
+    id: existing?.id || `due-reminder-${Date.now()}`,
+    admissionNo: student.admissionNo || form.elements.admissionNo.value,
+    studentName: student.name || form.elements.studentName.value || "",
+    pauseUntil: form.elements.pauseUntil.value || "",
+    intervalMinutes,
+    note: form.elements.note.value.trim(),
+    updatedAt: new Date().toISOString(),
+    updatedBy: getCurrentTopbarRole()
+  };
+  if (existing) {
+    Object.assign(existing, record);
+  } else {
+    dueReminderControls.push(record);
+  }
+  saveAppState();
+  resetDueReminderControlForm();
+  renderDueReminderControls();
+  showToast("Student due popup setting saved.");
+});
+
+document.getElementById("clearDueReminderControl")?.addEventListener("click", resetDueReminderControlForm);
+
+document.getElementById("dueReminderControlList")?.addEventListener("click", event => {
+  const editId = event.target.closest("[data-edit-due-reminder]")?.dataset.editDueReminder;
+  const deleteId = event.target.closest("[data-delete-due-reminder]")?.dataset.deleteDueReminder;
+  if (editId) {
+    const control = dueReminderControls.find(item => item.id === editId);
+    const form = document.getElementById("dueReminderControlForm");
+    if (!control || !form) return;
+    form.elements.controlId.value = control.id || "";
+    setSelectValue(form.elements.admissionNo, control.admissionNo || "");
+    form.elements.studentName.value = control.studentName || findStudentByAdmissionNo(control.admissionNo)?.name || "";
+    form.elements.pauseUntil.value = control.pauseUntil || "";
+    form.elements.intervalMinutes.value = Number(control.intervalMinutes || 0) || "";
+    form.elements.note.value = control.note || "";
+    return;
+  }
+  if (deleteId) {
+    const index = dueReminderControls.findIndex(item => item.id === deleteId);
+    if (index < 0) return;
+    dueReminderControls.splice(index, 1);
+    saveAppState();
+    resetDueReminderControlForm();
+    renderDueReminderControls();
+    showToast("Student due popup setting removed.");
+  }
 });
 
 document.getElementById("disableSelectedStudent").addEventListener("click", () => {

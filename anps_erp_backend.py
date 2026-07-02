@@ -206,6 +206,7 @@ def ensure_state_school(value):
         "transportRoutePickupPoints",
         "userAccessAccounts",
         "studentUserAccounts",
+        "dueReminderControls",
         "notices",
         "complaintRecords",
         "classTimetableEntries",
@@ -1174,6 +1175,25 @@ def merge_collected_payments(server_collected, incoming_collected):
     return merged
 
 
+def merge_due_reminder_controls(server_controls, incoming_controls):
+    if not isinstance(server_controls, list):
+        server_controls = []
+    if not isinstance(incoming_controls, list):
+        incoming_controls = []
+    merged = []
+    index_by_key = {}
+    for item in [*server_controls, *incoming_controls]:
+        if not isinstance(item, dict):
+            continue
+        key = str(item.get("id") or normalize_admission_no(item.get("admissionNo")) or len(merged))
+        if key in index_by_key:
+            merged[index_by_key[key]].update(item)
+        else:
+            index_by_key[key] = len(merged)
+            merged.append(dict(item))
+    return merged
+
+
 def merge_state_without_losing_receipts(server_state, incoming_state):
     if not isinstance(server_state, dict):
         server_state = {}
@@ -1187,6 +1207,10 @@ def merge_state_without_losing_receipts(server_state, incoming_state):
     merged["collectedPayments"] = merge_collected_payments(
         server_state.get("collectedPayments") or {},
         incoming_state.get("collectedPayments") or {},
+    )
+    merged["dueReminderControls"] = merge_due_reminder_controls(
+        server_state.get("dueReminderControls") or [],
+        incoming_state.get("dueReminderControls") or [],
     )
     return merged
 
@@ -2682,6 +2706,7 @@ def fresh_state():
         "admissionForms": [],
         "studentPromotions": [],
         "studentFeeStructures": [],
+        "dueReminderControls": [],
         "feeStructures": [],
         "transportFees": [],
         "transportMonthlyFees": [],
