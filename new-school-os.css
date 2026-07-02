@@ -149,34 +149,8 @@ body {
   font-weight: 700;
 }
 
-button, input, select, textarea { font: inherit; }
+button, input, select { font: inherit; }
 button { cursor: pointer; }
-
-input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
-select,
-textarea {
-  min-height: 38px;
-  border-radius: 8px;
-  line-height: 1.35;
-  vertical-align: middle;
-}
-
-input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
-select {
-  height: auto;
-  padding-top: 8px;
-  padding-bottom: 8px;
-}
-
-select:not([multiple]) {
-  appearance: none;
-  -webkit-appearance: none;
-  background-image: linear-gradient(45deg, transparent 50%, #64748b 50%), linear-gradient(135deg, #64748b 50%, transparent 50%);
-  background-position: calc(100% - 17px) 50%, calc(100% - 12px) 50%;
-  background-size: 5px 5px, 5px 5px;
-  background-repeat: no-repeat;
-  padding-right: 32px;
-}
 
 .shell {
   display: grid;
@@ -6464,84 +6438,6 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-.fee-reminder-control-panel {
-  border-color: #d6e7f7;
-  background: linear-gradient(135deg, #ffffff 0%, #f5fbff 50%, #fff9ed 100%);
-}
-
-.due-reminder-control-form {
-  display: grid;
-  grid-template-columns: minmax(220px, 1.25fr) minmax(180px, 1fr) minmax(150px, .8fr) minmax(150px, .8fr);
-  gap: 10px;
-  align-items: end;
-}
-
-.due-reminder-control-form label {
-  display: grid;
-  gap: 6px;
-  color: #263d55;
-  font-size: .8rem;
-  font-weight: 950;
-}
-
-.due-reminder-control-form .wide-field {
-  grid-column: 1 / 4;
-}
-
-.due-reminder-control-actions {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  justify-content: flex-end;
-}
-
-.due-reminder-help {
-  margin-top: 12px;
-  padding: 10px 12px;
-  border: 1px solid #cfe1f7;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, .8);
-  color: #475569;
-  font-size: .82rem;
-  font-weight: 800;
-}
-
-.due-reminder-control-list {
-  display: grid;
-  gap: 10px;
-}
-
-.due-reminder-control-row {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 10px;
-  align-items: center;
-  padding: 12px;
-  border: 1px solid #dce8f4;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #f8fbff 0%, #fff 64%, #fff7e8 100%);
-}
-
-.due-reminder-control-row strong {
-  display: block;
-  color: #10233d;
-  font-size: .94rem;
-}
-
-.due-reminder-control-row p,
-.due-reminder-control-row small,
-.due-reminder-control-row em {
-  display: block;
-  margin: 3px 0 0;
-  color: #64748b;
-  font-weight: 850;
-}
-
-.due-reminder-control-row em {
-  color: #8a4b00;
-  font-style: normal;
-}
-
 .receipt {
   margin-top: 14px;
   min-height: 86px;
@@ -8467,9 +8363,7 @@ body.modal-open {
   .hero-panel { padding: 18px; }
   .signal-board, .metrics, .control-strip, .kpi-grid, .module-status, .cards, .route-map { grid-template-columns: 1fr; }
   .notice-board-layout, .notice-form { grid-template-columns: 1fr; }
-  .fee-form, .fee-filter-bar, .collection-history-filter, .payment-quick-total, .reminder-form, .due-reminder-control-form, .staff-details-form, .hr-setup-form, .staff-attendance-tools, .student-user-form { grid-template-columns: 1fr; }
-  .due-reminder-control-form .wide-field { grid-column: auto; }
-  .due-reminder-control-actions { justify-content: flex-start; flex-wrap: wrap; }
+  .fee-form, .fee-filter-bar, .collection-history-filter, .payment-quick-total, .reminder-form, .staff-details-form, .hr-setup-form, .staff-attendance-tools, .student-user-form { grid-template-columns: 1fr; }
   .student-user-form > label:first-child,
   .student-user-form > label:nth-child(2) { grid-column: auto; }
   .id-card-tools { grid-template-columns: 1fr; }

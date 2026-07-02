@@ -1005,51 +1005,15 @@
             </div>
             <div class="receipt">Draft: Dear Parent, school fee is pending. Please clear dues before the due date to avoid late fee.</div>
           </section>
-          <section class="panel fee-reminder-control-panel">
-            <div class="panel-head">
-              <div>
-                <p class="eyebrow">Mobile app control</p>
-                <h2>Student Due Popup Settings</h2>
-                <small>Admission number wise popup pause korte ba timing change korte parben.</small>
-              </div>
-            </div>
-            <form id="dueReminderControlForm" class="due-reminder-control-form">
-              <input name="controlId" type="hidden" />
-              <label>Admission No / Student
-                <select name="admissionNo" required>
-                  <option value="">Select student</option>
-                </select>
-              </label>
-              <label>Student Name
-                <input name="studentName" placeholder="Auto fill" readonly />
-              </label>
-              <label>Popup Pause Until
-                <input name="pauseUntil" type="date" />
-              </label>
-              <label>Repeat Every Minutes
-                <input name="intervalMinutes" type="number" min="0" step="1" placeholder="Auto" />
-              </label>
-              <label class="wide-field">Note
-                <input name="note" placeholder="Reason / instruction" />
-              </label>
-              <div class="due-reminder-control-actions">
-                <button class="primary-action" type="submit">Save Popup Setting</button>
-                <button class="secondary-action" id="clearDueReminderControl" type="button">Clear</button>
-              </div>
-            </form>
-            <div class="due-reminder-help">
-              <strong>Auto rule:</strong> 5 tarik theke app open korle once, 10 tarik theke repeat, 14 tarik theke fast repeat. Ekhane minute dile oi student-er repeat timing override hobe.
-            </div>
-          </section>
           <section class="panel">
             <div class="panel-head">
               <div>
                 <p class="eyebrow">Reminder status</p>
-                <h2>Student popup controls</h2>
+                <h2>Recent campaigns</h2>
               </div>
             </div>
-            <div class="due-reminder-control-list" id="dueReminderControlList">
-              <article class="empty-state">No student popup setting saved yet.</article>
+            <div class="task-list">
+              <article><b>0</b><div><strong>No campaigns</strong><p>No reminder campaigns entered yet.</p><small>Empty</small></div><em>Empty</em></article>
             </div>
           </section>
         </div>
