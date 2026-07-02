@@ -3021,6 +3021,51 @@ function createTimetableBuilderRow() {
   return {id: `tt-row-${Date.now()}-${Math.random().toString(16).slice(2)}`, subject: "", teacher: "", startTime: "", endTime: "", room: ""};
 }
 
+function getParallelLanguageGroup(row = {}) {
+  const subject = normalizeText(row.subject || row.entryType || "").toLowerCase();
+  const isLanguage = subject.includes("language") || subject.includes("laguage");
+  const isHindiOrBengali = subject.includes("hindi") || subject.includes("bengali");
+  if (!isLanguage || !isHindiOrBengali) return "";
+  if (/\b2\s*nd\b/.test(subject) || subject.includes("second")) return "second-language";
+  if (/\b3\s*rd\b/.test(subject) || subject.includes("third")) return "third-language";
+  return "";
+}
+
+function getTimetableLogicalPeriods(rows = []) {
+  let period = 0;
+  let previousGroup = "";
+  return rows.map(row => {
+    const group = getParallelLanguageGroup(row);
+    if (group && group === previousGroup) {
+      return period || 1;
+    }
+    period += 1;
+    previousGroup = group;
+    return period;
+  });
+}
+
+function getMaxTimetableLogicalPeriod(rows = []) {
+  const periods = getTimetableLogicalPeriods(rows);
+  return periods.reduce((max, period) => Math.max(max, Number(period || 0)), 0);
+}
+
+function refreshSavedTimetableLogicalPeriods() {
+  const groups = new Map();
+  classTimetableEntries.forEach((entry, index) => {
+    const key = `${entry.classSection || ""}__${entry.day || ""}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key).push({entry, index});
+  });
+  groups.forEach(items => {
+    items.sort((a, b) => Number(a.entry.period || 0) - Number(b.entry.period || 0) || a.index - b.index);
+    const periods = getTimetableLogicalPeriods(items.map(item => item.entry));
+    items.forEach((item, index) => {
+      item.entry.period = periods[index];
+    });
+  });
+}
+
 function getTimetableSelectOptions(options, selectedValue = "", placeholder = "Select") {
   return `<option value="">${placeholder}</option>${options.map(option => `<option value="${escapeHtml(option)}" ${option === selectedValue ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}`;
 }
@@ -3107,12 +3152,13 @@ function renderTimetableIntervalOptions() {
   const list = document.getElementById("timetableIntervalList");
   if (!select) return;
   const selected = select.value;
-  select.innerHTML = `<option value="">No interval</option>${timetableBuilderRows.map((row, index) => `<option value="${index + 1}">After Period ${index + 1}</option>`).join("")}`;
+  const maxPeriod = getMaxTimetableLogicalPeriod(timetableBuilderRows);
+  select.innerHTML = `<option value="">No interval</option>${Array.from({length: maxPeriod}, (_, index) => `<option value="${index + 1}">After Period ${index + 1}</option>`).join("")}`;
   if (selected && [...select.options].some(option => option.value === selected)) {
     select.value = selected;
   }
   Object.keys(timetableIntervalMap).forEach(period => {
-    if (Number(period) > timetableBuilderRows.length) delete timetableIntervalMap[period];
+    if (Number(period) > maxPeriod) delete timetableIntervalMap[period];
   });
   if (list) {
     const entries = Object.entries(timetableIntervalMap)
@@ -3164,17 +3210,16 @@ function applyTimetableQuickParameters(options = {}) {
     renderTimetableIntervalOptions();
     return false;
   }
-  let cursor = startTime;
+  const logicalPeriods = getTimetableLogicalPeriods(timetableBuilderRows);
+  const timingMap = getTimetableQuickTimingMap(Math.max(...logicalPeriods, 0));
   timetableBuilderRows = timetableBuilderRows.map((row, index) => {
+    const logicalPeriod = logicalPeriods[index] || index + 1;
+    const timing = timingMap?.get(logicalPeriod);
+    if (!timing) return row;
     if (fillBlankOnly && row.startTime && row.endTime) {
-      const nextCursor = getTimeAfterMinutes(row.endTime, Number(timetableIntervalMap[index + 1] || 0));
-      cursor = nextCursor || cursor;
       return {...row, room: row.room || room};
     }
-    const endTime = getTimeAfterMinutes(cursor, duration);
-    const updated = {...row, startTime: cursor, endTime, room: room || row.room};
-    cursor = getTimeAfterMinutes(endTime, Number(timetableIntervalMap[index + 1] || 0));
-    return updated;
+    return {...row, startTime: timing.startTime, endTime: timing.endTime, room: room || row.room};
   });
   renderTimetableBuilderRows();
   return true;
@@ -3198,8 +3243,11 @@ function applyTimetableTimingToAllBlankEntries(options = {}) {
   syncTimetableBuilderRowsFromDom();
   const overwriteSavedTimes = Boolean(options.overwriteSavedTimes);
   const room = classTimetableForm.elements.quickRoom?.value || "";
+  refreshSavedTimetableLogicalPeriods();
   const maxSavedPeriod = classTimetableEntries.reduce((max, entry) => Math.max(max, Number(entry.period || 0)), 0);
-  const maxPeriod = Math.max(maxSavedPeriod, timetableBuilderRows.length);
+  const builderLogicalPeriods = getTimetableLogicalPeriods(timetableBuilderRows);
+  const maxBuilderPeriod = builderLogicalPeriods.reduce((max, period) => Math.max(max, Number(period || 0)), 0);
+  const maxPeriod = Math.max(maxSavedPeriod, maxBuilderPeriod);
   const timingMap = getTimetableQuickTimingMap(maxPeriod);
   if (!timingMap) {
     showToast("Period start time and duration required.");
@@ -3209,9 +3257,9 @@ function applyTimetableTimingToAllBlankEntries(options = {}) {
   }
   let builderUpdated = 0;
   timetableBuilderRows = timetableBuilderRows.map((row, index) => {
-    if (row.startTime && row.endTime) return {...row, room: row.room || room};
-    const timing = timingMap.get(index + 1);
+    const timing = timingMap.get(builderLogicalPeriods[index] || index + 1);
     if (!timing) return row;
+    if (row.startTime && row.endTime) return {...row, room: row.room || room};
     builderUpdated += 1;
     return {...row, startTime: row.startTime || timing.startTime, endTime: row.endTime || timing.endTime, room: row.room || room};
   });
@@ -12801,13 +12849,14 @@ classTimetableForm.addEventListener("submit", event => {
       classTimetableEntries.splice(index, 1);
     }
   }
+  const logicalPeriods = getTimetableLogicalPeriods(validRows);
   const entries = validRows.map((row, index) => ({
     id: `tt-${Date.now()}-${index}-${Math.random().toString(16).slice(2)}`,
     className,
     sectionName,
     classSection,
     day,
-    period: index + 1,
+    period: logicalPeriods[index] || index + 1,
     entryType: "Class",
     subject: row.subject,
     teacher: row.teacher,
