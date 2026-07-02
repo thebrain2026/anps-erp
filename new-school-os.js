@@ -745,9 +745,9 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
   merged.rolePermissions = {...(remoteState.rolePermissions || {}), ...(localState.rolePermissions || {})};
   merged.rolePermissionAudit = {...(remoteState.rolePermissionAudit || {}), ...(localState.rolePermissionAudit || {})};
   merged.classSubjectAssignments = {...(remoteState.classSubjectAssignments || {}), ...(localState.classSubjectAssignments || {})};
-  if (Array.isArray(localState.classTimetableEntries)) {
-    merged.classTimetableEntries = localState.classTimetableEntries;
-  }
+  merged.classTimetableEntries = Array.isArray(remoteState.classTimetableEntries)
+    ? remoteState.classTimetableEntries
+    : [];
   merged.collectedPayments = mergeCollectedPayments(remoteState.collectedPayments || {}, localState.collectedPayments || {});
   merged.financeSessions = {...(remoteState.financeSessions || {}), ...(localState.financeSessions || {})};
   return merged;
@@ -799,28 +799,6 @@ function storePendingBackendSnapshot(snapshot = getAppStateSnapshot()) {
   } catch (error) {
     console.warn("Could not keep pending backend snapshot.", error);
   }
-}
-
-function getStoredAppStateSnapshot() {
-  try {
-    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-  } catch (error) {
-    console.warn("Could not read local app state snapshot.", error);
-    return {};
-  }
-}
-
-function protectLocalTimetableFromEmptyBackend(backendState = {}) {
-  const localState = getStoredAppStateSnapshot();
-  const localTimetable = Array.isArray(localState.classTimetableEntries) ? localState.classTimetableEntries : [];
-  const backendTimetable = Array.isArray(backendState.classTimetableEntries) ? backendState.classTimetableEntries : [];
-  if (!localTimetable.length || backendTimetable.length) {
-    return {state: backendState, protected: false};
-  }
-  return {
-    state: {...backendState, classTimetableEntries: localTimetable},
-    protected: true
-  };
 }
 
 async function flushPendingBackendSnapshot() {
@@ -1189,7 +1167,11 @@ function applySavedState(saved = {}) {
 
 function loadAppState() {
   try {
-    applySavedState(JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}"));
+    const savedState = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+    if (savedState && typeof savedState === "object") {
+      savedState.classTimetableEntries = [];
+    }
+    applySavedState(savedState);
   } catch (error) {
     console.warn("Could not load saved school data.", error);
   }
@@ -10835,8 +10817,7 @@ async function pullBackendStateIfChanged(showMessage = false) {
     });
     if (!stateResponse.ok) return;
     const payload = await stateResponse.json();
-    const protectedSnapshot = protectLocalTimetableFromEmptyBackend(payload?.state || {});
-    const backendState = protectedSnapshot.state;
+    const backendState = payload?.state || {};
     if (!backendState || !Object.keys(backendState).length) return;
     backendHydrating = true;
     backendLastUpdatedAt = payload?.updated_at || serverUpdatedAt || backendLastUpdatedAt;
@@ -10844,10 +10825,6 @@ async function pullBackendStateIfChanged(showMessage = false) {
     applySavedState(backendState);
     refreshAllAfterSecurityClean();
     backendHydrating = false;
-    if (protectedSnapshot.protected) {
-      queueBackendSave(backendState);
-      showToast("Local timetable recovered and queued for backend save.");
-    }
     if (showMessage) showToast("Latest database data synced.");
   } catch (error) {
     markBackendConnectionIssue();
@@ -10879,8 +10856,7 @@ async function initializeBackendSync() {
     });
     if (!stateResponse.ok) return;
     const payload = await stateResponse.json();
-    const protectedSnapshot = protectLocalTimetableFromEmptyBackend(payload?.state || {});
-    const backendState = protectedSnapshot.state;
+    const backendState = payload?.state || {};
     backendLastUpdatedAt = payload?.updated_at || "";
     if (!flushedPending && backendState && Object.keys(backendState).length) {
       backendHydrating = true;
@@ -10888,10 +10864,6 @@ async function initializeBackendSync() {
       applySavedState(backendState);
       refreshAllAfterSecurityClean();
       backendHydrating = false;
-      if (protectedSnapshot.protected) {
-        queueBackendSave(backendState);
-        showToast("Local timetable recovered and queued for backend save.");
-      }
       showToast("Backend database connected.");
     } else if (!backendState || !Object.keys(backendState).length) {
       queueBackendSave(getAppStateSnapshot());
