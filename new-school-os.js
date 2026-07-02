@@ -3128,17 +3128,27 @@ function renderTimetableIntervalOptions() {
   }
 }
 
+function setTimetableIntervalStatus(message = "", tone = "ok") {
+  const list = document.getElementById("timetableIntervalList");
+  if (!list || !message) return;
+  list.insertAdjacentHTML("beforeend", `<strong class="timetable-interval-status ${tone === "error" ? "error" : "ok"}">${escapeHtml(message)}</strong>`);
+}
+
 function applySelectedTimetableInterval() {
   const period = Number(classTimetableForm.elements.intervalAfterPeriod?.value || 0);
   const minutes = Number(classTimetableForm.elements.periodInterval?.value || 0);
   if (!period || minutes <= 0) {
     showToast("Interval period and time required.");
+    renderTimetableIntervalOptions();
+    setTimetableIntervalStatus("Interval period and time required.", "error");
     return;
   }
   timetableIntervalMap[period] = minutes;
   if (applyTimetableQuickParameters({forceOverwrite: true})) {
-    applyTimetableTimingToAllBlankEntries({overwriteSavedTimes: true, silent: true});
-    showToast(`After Period ${period}, ${minutes} minute interval applied to all classes.`);
+    const result = applyTimetableTimingToAllBlankEntries({overwriteSavedTimes: true, silent: true});
+    const message = `Applied to all classes: ${result.savedUpdated} saved period(s) updated.`;
+    setTimetableIntervalStatus(message);
+    showToast(message);
   }
 }
 
@@ -3193,7 +3203,9 @@ function applyTimetableTimingToAllBlankEntries(options = {}) {
   const timingMap = getTimetableQuickTimingMap(maxPeriod);
   if (!timingMap) {
     showToast("Period start time and duration required.");
-    return;
+    renderTimetableIntervalOptions();
+    setTimetableIntervalStatus("Period start time and duration required.", "error");
+    return {savedUpdated: 0, builderUpdated: 0};
   }
   let builderUpdated = 0;
   timetableBuilderRows = timetableBuilderRows.map((row, index) => {
@@ -3224,6 +3236,7 @@ function applyTimetableTimingToAllBlankEntries(options = {}) {
   if (!options.silent) {
     showToast(`Timing applied to ${savedUpdated} saved ${overwriteSavedTimes ? "period" : "blank period"}(s)${builderUpdated ? ` and ${builderUpdated} open row(s)` : ""}.`);
   }
+  return {savedUpdated, builderUpdated};
 }
 
 function loadTimetableBuilderForSelection(options = {}) {
