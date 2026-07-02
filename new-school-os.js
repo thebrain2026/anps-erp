@@ -3146,6 +3146,8 @@ function applyTimetableQuickParameters() {
   const startTime = classTimetableForm.elements.periodStartTime?.value || "";
   const duration = Number(classTimetableForm.elements.periodDuration?.value || 0);
   const room = classTimetableForm.elements.quickRoom?.value || "";
+  const fillMode = classTimetableForm.elements.timeFillMode?.value || "blank";
+  const fillBlankOnly = fillMode !== "overwrite";
   if (!startTime || duration <= 0) {
     showToast("Period start time and duration required.");
     renderTimetableIntervalOptions();
@@ -3153,6 +3155,11 @@ function applyTimetableQuickParameters() {
   }
   let cursor = startTime;
   timetableBuilderRows = timetableBuilderRows.map((row, index) => {
+    if (fillBlankOnly && row.startTime && row.endTime) {
+      const nextCursor = getTimeAfterMinutes(row.endTime, Number(timetableIntervalMap[index + 1] || 0));
+      cursor = nextCursor || cursor;
+      return {...row, room: row.room || room};
+    }
     const endTime = getTimeAfterMinutes(cursor, duration);
     const updated = {...row, startTime: cursor, endTime, room: room || row.room};
     cursor = getTimeAfterMinutes(endTime, Number(timetableIntervalMap[index + 1] || 0));
@@ -3162,11 +3169,19 @@ function applyTimetableQuickParameters() {
   return true;
 }
 
-function loadTimetableBuilderForSelection() {
+function loadTimetableBuilderForSelection(options = {}) {
+  const shouldLoadExisting = Boolean(options.loadExisting);
   const className = String(classTimetableForm.elements.className?.value || "").trim();
   const sectionName = String(classTimetableForm.elements.sectionName?.value || "").trim();
   const day = String(classTimetableForm.elements.day?.value || activeTimetableDay || "Monday");
   if (!className || !sectionName || !day) {
+    timetableBuilderRows = [createTimetableBuilderRow()];
+    timetableIntervalMap = {};
+    renderTimetableBuilderRows();
+    renderTimetableBuilderSavedEntries();
+    return;
+  }
+  if (!shouldLoadExisting) {
     timetableBuilderRows = [createTimetableBuilderRow()];
     timetableIntervalMap = {};
     renderTimetableBuilderRows();
@@ -12732,6 +12747,9 @@ classTimetableForm.addEventListener("submit", event => {
   saveAppState();
   renderClassTimetable();
   renderClassTimetableOptions();
+  timetableBuilderRows = [createTimetableBuilderRow()];
+  timetableIntervalMap = {};
+  renderTimetableBuilderRows();
   renderTimetableBuilderSavedEntries();
   renderTeacherTimetable();
   showToast(`${classSection} ${day} timetable saved.`);
@@ -12792,7 +12810,7 @@ document.getElementById("classTimetableBuilderSavedRows")?.addEventListener("cli
   document.querySelectorAll("[data-timetable-day]").forEach(dayButton => {
     dayButton.classList.toggle("active", dayButton.dataset.timetableDay === activeTimetableDay);
   });
-  loadTimetableBuilderForSelection();
+  loadTimetableBuilderForSelection({loadExisting: true});
   document.getElementById("classTimetableBuilderRows")?.scrollIntoView({behavior: "smooth", block: "center"});
   showToast(`${activeTimetableDay} timetable loaded for edit.`);
 });
