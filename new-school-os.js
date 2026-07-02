@@ -35,6 +35,12 @@ const rolePermissions = {};
 const rolePermissionAudit = {};
 const staffAttendanceRecords = [];
 const classTimetableEntries = [];
+const teacherTimetableEntryControl = {
+  locked: false,
+  allowedTeachers: [],
+  updatedAt: "",
+  updatedBy: ""
+};
 const syllabusEntries = [];
 const marksheetEntries = [];
 const holidayReports = [];
@@ -444,6 +450,7 @@ function getAppStateSnapshot() {
     rolePermissionAudit,
     staffAttendanceRecords,
     classTimetableEntries,
+    teacherTimetableEntryControl,
     syllabusEntries,
     marksheetEntries,
     holidayReports,
@@ -781,11 +788,47 @@ function storePendingBackendSnapshot(snapshot = getAppStateSnapshot()) {
   }
 }
 
+function getStoredAppStateSnapshot() {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+  } catch (error) {
+    console.warn("Could not read local app state snapshot.", error);
+    return {};
+  }
+}
+
+function protectLocalTimetableFromEmptyBackend(backendState = {}) {
+  const localState = getStoredAppStateSnapshot();
+  const localTimetable = Array.isArray(localState.classTimetableEntries) ? localState.classTimetableEntries : [];
+  const backendTimetable = Array.isArray(backendState.classTimetableEntries) ? backendState.classTimetableEntries : [];
+  if (!localTimetable.length || backendTimetable.length) {
+    return {state: backendState, protected: false};
+  }
+  return {
+    state: {...backendState, classTimetableEntries: localTimetable},
+    protected: true
+  };
+}
+
 async function flushPendingBackendSnapshot() {
   const rawPending = localStorage.getItem(BACKEND_PENDING_STATE_KEY);
   if (!rawPending) return false;
+  let pendingSnapshot = null;
+  try {
+    pendingSnapshot = JSON.parse(rawPending);
+  } catch (error) {
+    console.warn("Invalid pending backend snapshot removed.", error);
+    localStorage.removeItem(BACKEND_PENDING_STATE_KEY);
+    return false;
+  }
+  if (!pendingSnapshot || typeof pendingSnapshot !== "object") {
+    localStorage.removeItem(BACKEND_PENDING_STATE_KEY);
+    return false;
+  }
+  const result = await putBackendState(pendingSnapshot);
+  backendLastUpdatedAt = result?.updated_at || backendLastUpdatedAt;
   localStorage.removeItem(BACKEND_PENDING_STATE_KEY);
-  return false;
+  return true;
 }
 
 async function ensureBackendToken() {
@@ -1037,6 +1080,14 @@ function applySavedState(saved = {}) {
     }
     if (Array.isArray(saved.classTimetableEntries)) {
       classTimetableEntries.splice(0, classTimetableEntries.length, ...saved.classTimetableEntries);
+    }
+    if (saved.teacherTimetableEntryControl && typeof saved.teacherTimetableEntryControl === "object") {
+      teacherTimetableEntryControl.locked = Boolean(saved.teacherTimetableEntryControl.locked);
+      teacherTimetableEntryControl.allowedTeachers = Array.isArray(saved.teacherTimetableEntryControl.allowedTeachers)
+        ? saved.teacherTimetableEntryControl.allowedTeachers
+        : [];
+      teacherTimetableEntryControl.updatedAt = saved.teacherTimetableEntryControl.updatedAt || "";
+      teacherTimetableEntryControl.updatedBy = saved.teacherTimetableEntryControl.updatedBy || "";
     }
     if (Array.isArray(saved.syllabusEntries)) {
       syllabusEntries.splice(0, syllabusEntries.length, ...saved.syllabusEntries);
@@ -3007,6 +3058,57 @@ function getTimetableTeacherOptions() {
     .filter(Boolean);
 }
 
+function getTeacherTimetablePassOptions() {
+  return staffMembers
+    .filter(staff => staff.status !== "Disabled")
+    .map(staff => ({
+      id: String(staff.staffId || staff.id || staff.email || staff.name || "").trim(),
+      label: staff.staffId ? `${staff.name || ""} (${staff.staffId})` : (staff.name || staff.staffName || "")
+    }))
+    .filter(item => item.id && item.label);
+}
+
+function renderTeacherTimetableEntryControl() {
+  const panel = document.getElementById("teacherTimetableLockPanel");
+  const status = document.getElementById("teacherTimetableLockStatus");
+  const toggle = document.getElementById("toggleTeacherTimetableLock");
+  const select = document.getElementById("teacherTimetableAllowTeacher");
+  const allowedList = document.getElementById("teacherTimetableAllowedList");
+  if (!panel || !status || !toggle || !select || !allowedList) return;
+  const locked = Boolean(teacherTimetableEntryControl.locked);
+  panel.classList.toggle("locked", locked);
+  status.textContent = locked
+    ? "Teacher app entry locked. Pass দেওয়া teacher ছাড়া কেউ timetable change করতে পারবে না."
+    : "Entry open. Teachers can save timetable from mobile app.";
+  toggle.textContent = locked ? "Unlock Teacher Entry" : "Lock Teacher Entry";
+  const options = getTeacherTimetablePassOptions();
+  const selected = select.value;
+  select.innerHTML = `<option value="">Select teacher to pass</option>` + options
+    .map(item => `<option value="${escapeHtml(item.id)}" ${item.id === selected ? "selected" : ""}>${escapeHtml(item.label)}</option>`)
+    .join("");
+  const allowed = Array.isArray(teacherTimetableEntryControl.allowedTeachers) ? teacherTimetableEntryControl.allowedTeachers : [];
+  allowedList.innerHTML = allowed.length
+    ? allowed.map(item => `<span class="teacher-timetable-pass-chip">${escapeHtml(item.label || item.id)}<button type="button" data-remove-teacher-timetable-pass="${escapeHtml(item.id)}" title="Remove pass">x</button></span>`).join("")
+    : `<small>No teacher pass selected.</small>`;
+}
+
+function getCurrentUserLabel() {
+  try {
+    const backendUser = JSON.parse(localStorage.getItem(BACKEND_USER_KEY) || "{}");
+    return backendUser.name || backendUser.username || backendUser.role || "Main ERP";
+  } catch (error) {
+    return "Main ERP";
+  }
+}
+
+function saveTeacherTimetableEntryControl(message = "Teacher timetable entry control updated.") {
+  teacherTimetableEntryControl.updatedAt = new Date().toISOString();
+  teacherTimetableEntryControl.updatedBy = getCurrentUserLabel();
+  saveAppState();
+  renderTeacherTimetableEntryControl();
+  showToast(message);
+}
+
 function getTimeAfterMinutes(timeValue = "", minutesToAdd = 0) {
   if (!timeValue) return "";
   const [hour, minute] = timeValue.split(":").map(Number);
@@ -3379,6 +3481,7 @@ function renderClassTimetable() {
   const board = document.getElementById("classTimetableRows");
   if (!board) return;
   renderClassTimetableOptions();
+  renderTeacherTimetableEntryControl();
   const classFilter = document.getElementById("classTimetableClassFilter")?.value || "";
   const sectionFilter = document.getElementById("classTimetableSectionFilter")?.value || "";
   const visibleEntries = classTimetableEntries
@@ -10765,13 +10868,19 @@ async function pullBackendStateIfChanged(showMessage = false) {
     });
     if (!stateResponse.ok) return;
     const payload = await stateResponse.json();
-    const backendState = payload?.state || {};
+    const protectedSnapshot = protectLocalTimetableFromEmptyBackend(payload?.state || {});
+    const backendState = protectedSnapshot.state;
     if (!backendState || !Object.keys(backendState).length) return;
     backendHydrating = true;
     backendLastUpdatedAt = payload?.updated_at || serverUpdatedAt || backendLastUpdatedAt;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(backendState));
     applySavedState(backendState);
     refreshAllAfterSecurityClean();
+    backendHydrating = false;
+    if (protectedSnapshot.protected) {
+      queueBackendSave(backendState);
+      showToast("Local timetable recovered and queued for backend save.");
+    }
     if (showMessage) showToast("Latest database data synced.");
   } catch (error) {
     markBackendConnectionIssue();
@@ -10803,7 +10912,8 @@ async function initializeBackendSync() {
     });
     if (!stateResponse.ok) return;
     const payload = await stateResponse.json();
-    const backendState = payload?.state || {};
+    const protectedSnapshot = protectLocalTimetableFromEmptyBackend(payload?.state || {});
+    const backendState = protectedSnapshot.state;
     backendLastUpdatedAt = payload?.updated_at || "";
     if (!flushedPending && backendState && Object.keys(backendState).length) {
       backendHydrating = true;
@@ -10811,6 +10921,10 @@ async function initializeBackendSync() {
       applySavedState(backendState);
       refreshAllAfterSecurityClean();
       backendHydrating = false;
+      if (protectedSnapshot.protected) {
+        queueBackendSave(backendState);
+        showToast("Local timetable recovered and queued for backend save.");
+      }
       showToast("Backend database connected.");
     } else if (!backendState || !Object.keys(backendState).length) {
       queueBackendSave(getAppStateSnapshot());
@@ -12942,6 +13056,33 @@ document.getElementById("classTimetableBuilderSavedRows")?.addEventListener("cli
 document.getElementById("classTimetableClassFilter").addEventListener("change", renderClassTimetable);
 document.getElementById("classTimetableSectionFilter").addEventListener("change", renderClassTimetable);
 document.getElementById("searchClassTimetable").addEventListener("click", renderClassTimetable);
+document.getElementById("toggleTeacherTimetableLock")?.addEventListener("click", () => {
+  teacherTimetableEntryControl.locked = !teacherTimetableEntryControl.locked;
+  saveTeacherTimetableEntryControl(teacherTimetableEntryControl.locked ? "Teacher timetable entry locked." : "Teacher timetable entry unlocked.");
+});
+document.getElementById("allowTeacherTimetableEntry")?.addEventListener("click", () => {
+  const select = document.getElementById("teacherTimetableAllowTeacher");
+  const teacherId = String(select?.value || "").trim();
+  if (!teacherId) {
+    showToast("Select teacher first.");
+    return;
+  }
+  const option = getTeacherTimetablePassOptions().find(item => item.id === teacherId);
+  teacherTimetableEntryControl.allowedTeachers = Array.isArray(teacherTimetableEntryControl.allowedTeachers)
+    ? teacherTimetableEntryControl.allowedTeachers
+    : [];
+  if (!teacherTimetableEntryControl.allowedTeachers.some(item => item.id === teacherId)) {
+    teacherTimetableEntryControl.allowedTeachers.push({id: teacherId, label: option?.label || teacherId, allowedAt: new Date().toISOString()});
+  }
+  saveTeacherTimetableEntryControl("Teacher pass added for timetable entry.");
+});
+document.getElementById("teacherTimetableAllowedList")?.addEventListener("click", event => {
+  const removeButton = event.target.closest("[data-remove-teacher-timetable-pass]");
+  if (!removeButton) return;
+  const teacherId = removeButton.dataset.removeTeacherTimetablePass;
+  teacherTimetableEntryControl.allowedTeachers = (teacherTimetableEntryControl.allowedTeachers || []).filter(item => item.id !== teacherId);
+  saveTeacherTimetableEntryControl("Teacher timetable pass removed.");
+});
 document.getElementById("teacherTimetableSelect")?.addEventListener("change", renderTeacherTimetable);
 
 document.getElementById("openAdmissionFromPage").addEventListener("click", () => {

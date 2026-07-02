@@ -1287,7 +1287,8 @@
         </section>
 
         <section class="view" id="timetableView">
-          <div class="section-title"><h2>Timetable</h2><span>Own schedule</span></div>
+          <div class="section-title"><h2>Timetable</h2><span id="timetableScope">Own schedule</span></div>
+          <div class="stack" id="timetableFormHost"></div>
           <div class="stack" id="timetableList"></div>
         </section>
 
@@ -1507,6 +1508,59 @@
             body: JSON.stringify({state: freshState, base_updated_at: fresh.updated_at || ""})
           });
         }
+        state.erpState = saved.state || erpState;
+        state.erpUpdatedAt = saved.updated_at || "";
+        return entry;
+      },
+      async upsertTimetableEntry(record) {
+        const latest = await this.request("/state", { method: "GET" });
+        const erpState = latest.state || {};
+        const list = Array.isArray(erpState.classTimetableEntries) ? [...erpState.classTimetableEntries] : [];
+        const cleanClassSection = normalizeText(record.classSection);
+        const cleanDay = normalizeText(record.day);
+        const cleanPeriod = String(record.period || "");
+        const index = list.findIndex(item =>
+          normalizeText(item.classSection) === cleanClassSection
+          && normalizeText(item.day) === cleanDay
+          && String(item.period || "") === cleanPeriod
+        );
+        const entry = {
+          id: index >= 0 ? list[index].id : (record.id || `tt-teacher-${Date.now()}`),
+          ...(index >= 0 ? list[index] : {}),
+          ...record,
+          updatedAt: new Date().toISOString(),
+          source: "Teacher App"
+        };
+        if (index >= 0) list[index] = entry;
+        else list.unshift(entry);
+        erpState.classTimetableEntries = list;
+        const postState = async (statePayload, baseUpdatedAt) => {
+          const res = await fetch(`${AppConfig.apiBaseUrl}/state`, {
+            method: "POST",
+            headers: {"Content-Type": "application/json", Authorization: `Bearer ${this.token()}`},
+            body: JSON.stringify({state: statePayload, base_updated_at: baseUpdatedAt || ""})
+          });
+          const payload = await res.json().catch(() => ({}));
+          return {res, payload};
+        };
+        const applyEntry = targetState => {
+          const targetList = Array.isArray(targetState.classTimetableEntries) ? [...targetState.classTimetableEntries] : [];
+          const targetIndex = targetList.findIndex(item =>
+            normalizeText(item.classSection) === cleanClassSection
+            && normalizeText(item.day) === cleanDay
+            && String(item.period || "") === cleanPeriod
+          );
+          if (targetIndex >= 0) targetList[targetIndex] = {...targetList[targetIndex], ...entry};
+          else targetList.unshift(entry);
+          targetState.classTimetableEntries = targetList;
+          return targetState;
+        };
+        let response = await postState(erpState, latest.updated_at || "");
+        if (response.res.status === 409 && response.payload?.state) {
+          response = await postState(applyEntry(response.payload.state || {}), response.payload.updated_at || "");
+        }
+        if (!response.res.ok || response.payload?.ok === false) throw new Error(response.payload?.error || "Timetable save failed");
+        const saved = response.payload;
         state.erpState = saved.state || erpState;
         state.erpUpdatedAt = saved.updated_at || "";
         return entry;
@@ -1743,6 +1797,7 @@
         results: "marksheetEntries",
         ratings: "teacherRatings",
         leaves: "teacherLeaves",
+        timetable: "classTimetableEntries",
         upiPayments: "upiPaymentRequests"
       };
       return map[collection] || collection;
@@ -2165,7 +2220,7 @@
 
     const teacherModules = [
       { id: "dashboard", label: "Today Classes", icon: "TC" },
-      { id: "timetable", label: "My Timetable", icon: "TT" },
+      { id: "timetable", label: "Timetable Entry", icon: "TT" },
       { id: "subjects", label: "Assigned", icon: "AS" },
       { id: "result", label: "Result Entry", icon: "RS" },
       { id: "syllabus", label: "Syllabus Entry", icon: "SY" },
@@ -2726,6 +2781,8 @@
         ? ws.results.map(result => card({ title: `${result.exam} | ${result.grade}`, meta: `${result.total}/${result.maxTotal} | ${result.percentage}`, body: `Status: ${result.status}`, badge: "Published" })).join("")
         : card({ title: "Result Not Published", meta: "ERP theke result publish hole ekhane dekhabe.", body: "Your marksheet will appear here after school publishes it.", badge: "Pending", status: "warn" });
       $("#resultList").innerHTML = ws.results.map(result => `<article class="card"><div class="card-head"><div><h3>${result.exam}</h3><p>${result.className} | ${result.percentage}</p></div><span class="status ok">${result.grade}</span></div>${resultSubjectList(result)}</article>`).join("");
+      $("#timetableScope").textContent = "Own schedule";
+      $("#timetableFormHost").innerHTML = "";
       $("#timetableList").innerHTML = ws.timetable.map(item => card({ title: `${item.day}, ${item.time}`, meta: `${item.subject} - ${item.room}`, badge: item.className })).join("");
       $("#syllabusTitle").textContent = "Syllabus";
       $("#syllabusFormHost").innerHTML = "";
@@ -2800,6 +2857,19 @@
       return (state.user.subjects || []).some(item => item.className === className && item.subject === subject);
     }
 
+    function teacherTimetableEntryAllowed() {
+      const control = state.erpState.teacherTimetableEntryControl || {};
+      if (!control.locked) return true;
+      const allowed = Array.isArray(control.allowedTeachers) ? control.allowedTeachers : [];
+      const userId = normalizeText(state.user?.id || "").toLowerCase();
+      const userName = normalizeText(state.user?.name || "").toLowerCase();
+      return allowed.some(item =>
+        normalizeText(item.id).toLowerCase() === userId
+        || normalizeText(item.label).toLowerCase().includes(userId)
+        || (userName && normalizeText(item.label).toLowerCase().includes(userName))
+      );
+    }
+
     function bindTeacherSubjectDropdowns(classSelector, subjectSelector) {
       const classEl = $(classSelector);
       const subjectEl = $(subjectSelector);
@@ -2809,6 +2879,83 @@
       };
       syncSubjects();
       classEl.addEventListener("change", syncSubjects);
+    }
+
+    const timetableDays = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+    function splitClassSectionLabel(label = "") {
+      const clean = normalizeText(label);
+      const sections = ["A", "B", "C", "D", "E"];
+      const parts = clean.split(/\s+/).filter(Boolean);
+      const last = parts[parts.length - 1] || "";
+      if (sections.includes(last.toUpperCase()) && parts.length > 1) {
+        return {className: parts.slice(0, -1).join(" "), sectionName: last};
+      }
+      return {className: clean, sectionName: ""};
+    }
+
+    function teacherTimetableClasses() {
+      return [...new Set((state.user.subjects || []).map(item => item.className).filter(Boolean))];
+    }
+
+    function teacherTimetableClassOptions(selected = "") {
+      return teacherTimetableClasses()
+        .map(className => `<option value="${escapeHtml(className)}" ${className === selected ? "selected" : ""}>${escapeHtml(className)}</option>`)
+        .join("");
+    }
+
+    function teacherTimetableDayOptions(selected = todayName) {
+      return timetableDays
+        .map(day => `<option value="${day}" ${day === selected ? "selected" : ""}>${day}</option>`)
+        .join("");
+    }
+
+    function timetableFullClassLabel(entry = {}) {
+      return normalizeText(entry.classSection || [entry.className || entry.class, entry.sectionName || entry.section].filter(Boolean).join(" "));
+    }
+
+    function teacherTimetableSourceRows(classLabel = "", day = "") {
+      const cleanClass = normalizeText(classLabel).toLowerCase();
+      const cleanDay = normalizeText(day).toLowerCase();
+      return (state.erpState.classTimetableEntries || [])
+        .filter(item => !cleanClass || timetableFullClassLabel(item).toLowerCase() === cleanClass)
+        .filter(item => !cleanDay || normalizeText(item.day).toLowerCase() === cleanDay);
+    }
+
+    function teacherTimetablePeriodRows(classLabel = "", day = "") {
+      const classRows = teacherTimetableSourceRows(classLabel, day);
+      const fallbackRows = teacherTimetableSourceRows("", day).length ? teacherTimetableSourceRows("", day) : (state.erpState.classTimetableEntries || []);
+      const rows = classRows.length ? classRows : fallbackRows;
+      const periodMap = new Map();
+      rows.forEach(item => {
+        const period = Number(item.period || 0);
+        if (!period || periodMap.has(period)) return;
+        periodMap.set(period, item);
+      });
+      if (!periodMap.size) {
+        for (let period = 1; period <= 8; period += 1) periodMap.set(period, {period});
+      }
+      return [...periodMap.values()].sort((a, b) => Number(a.period || 0) - Number(b.period || 0));
+    }
+
+    function teacherTimetablePeriodOptions(classLabel = "", day = "", selected = "") {
+      return teacherTimetablePeriodRows(classLabel, day)
+        .map(item => {
+          const period = Number(item.period || 0);
+          const time = [item.startTime || item.timeFrom || item.from, item.endTime || item.timeTo || item.to].filter(Boolean).join(" - ");
+          const label = time ? `Period ${period} (${time})` : `Period ${period}`;
+          return `<option value="${period}" ${String(period) === String(selected) ? "selected" : ""}>${escapeHtml(label)}</option>`;
+        })
+        .join("");
+    }
+
+    function teacherTimetableTiming(classLabel = "", day = "", period = "") {
+      const rows = [
+        ...teacherTimetableSourceRows(classLabel, day),
+        ...teacherTimetableSourceRows("", day),
+        ...(state.erpState.classTimetableEntries || [])
+      ];
+      return rows.find(item => String(item.period || "") === String(period) && (item.startTime || item.endTime || item.timeFrom || item.timeTo || item.from || item.to)) || {};
     }
 
     function renderTeacherViews() {
@@ -2821,6 +2968,15 @@
         `<article class="card quick-row"><span class="quick-icon">${photoMarkup(user)}</span><div><b>${user.name}</b><span>${user.id} | ${user.department}</span></div><span class="badge">Photo</span></article>`,
         card({ title: "Teacher Profile", meta: `${user.role} | ${user.department}`, body: `Assigned class: ${user.assignedClass}`, badge: "Staff" })
       ].join("");
+      const initialTimetableClass = firstTeacherClass();
+      const initialTimetableDay = timetableDays.includes(todayName) ? todayName : "Monday";
+      const initialTimetableSubject = teacherSubjectOptionsForClass(initialTimetableClass);
+      const canEditTimetable = teacherTimetableEntryAllowed();
+      const lockNotice = canEditTimetable
+        ? ""
+        : `<article class="card"><div class="card-head"><div><h3>Timetable Entry Locked</h3><p>Main ERP theke pass dile abar entry/edit korte parben.</p></div><span class="status bad">Locked</span></div></article>`;
+      $("#timetableScope").textContent = "Main ERP format";
+      $("#timetableFormHost").innerHTML = `${lockNotice}<article class="card homework-card"><form class="form-grid" id="teacherTimetableForm"><label>Class<select id="teacherTimetableClass" required ${canEditTimetable ? "" : "disabled"}>${teacherTimetableClassOptions(initialTimetableClass)}</select></label><label>Day<select id="teacherTimetableDay" required ${canEditTimetable ? "" : "disabled"}>${teacherTimetableDayOptions(initialTimetableDay)}</select></label><label>Period<select id="teacherTimetablePeriod" required ${canEditTimetable ? "" : "disabled"}>${teacherTimetablePeriodOptions(initialTimetableClass, initialTimetableDay)}</select></label><label>Subject<select id="teacherTimetableSubject" required ${canEditTimetable ? "" : "disabled"}>${initialTimetableSubject}</select></label><label>Timing<input id="teacherTimetableTiming" value="" readonly placeholder="Main ERP timing auto" /></label><label>Room<input id="teacherTimetableRoom" placeholder="Room optional" ${canEditTimetable ? "" : "disabled"} /></label><button class="primary" type="submit" ${canEditTimetable ? "" : "disabled"}>Save To Main ERP Timetable</button></form></article>`;
       $("#timetableList").innerHTML = ws.timetable.map(item => card({ title: `${item.day}, ${item.time}`, meta: `${item.className} - ${item.subject}`, badge: item.room })).join("");
       $("#subjectsList").innerHTML = ws.subjects.map(item => card({ title: item.className, meta: item.subject, badge: "Assigned" })).join("");
       renderDashboardLatestNotice(ws.notices);
@@ -2893,6 +3049,66 @@
         btn.classList.add("active");
       }));
       $("#saveAttendanceBtn")?.addEventListener("click", () => toast(`${state.attendanceClass} attendance saved`));
+      const syncTeacherTimetableForm = () => {
+        const classEl = $("#teacherTimetableClass");
+        const dayEl = $("#teacherTimetableDay");
+        const periodEl = $("#teacherTimetablePeriod");
+        const subjectEl = $("#teacherTimetableSubject");
+        const timingEl = $("#teacherTimetableTiming");
+        if (!classEl || !dayEl || !periodEl) return;
+        const previousPeriod = periodEl.value;
+        periodEl.innerHTML = teacherTimetablePeriodOptions(classEl.value, dayEl.value, previousPeriod);
+        if (previousPeriod && [...periodEl.options].some(option => option.value === previousPeriod)) periodEl.value = previousPeriod;
+        if (subjectEl) subjectEl.innerHTML = teacherSubjectOptionsForClass(classEl.value, subjectEl.value);
+        const timing = teacherTimetableTiming(classEl.value, dayEl.value, periodEl.value);
+        const start = timing.startTime || timing.timeFrom || timing.from || "";
+        const end = timing.endTime || timing.timeTo || timing.to || "";
+        if (timingEl) timingEl.value = start || end ? `${start || "-"} - ${end || "-"}` : "Timing not set in ERP";
+      };
+      $("#teacherTimetableClass")?.addEventListener("change", syncTeacherTimetableForm);
+      $("#teacherTimetableDay")?.addEventListener("change", syncTeacherTimetableForm);
+      $("#teacherTimetablePeriod")?.addEventListener("change", syncTeacherTimetableForm);
+      syncTeacherTimetableForm();
+      $("#teacherTimetableForm")?.addEventListener("submit", async event => {
+        event.preventDefault();
+        if (!teacherTimetableEntryAllowed()) {
+          toast("Timetable entry locked by Main ERP.");
+          return;
+        }
+        const classLabel = $("#teacherTimetableClass").value;
+        const subject = $("#teacherTimetableSubject").value;
+        const day = $("#teacherTimetableDay").value;
+        const period = Number($("#teacherTimetablePeriod").value || 0);
+        if (!teacherAssignmentAllowed(classLabel, subject)) {
+          toast("This class and subject is not assigned to this teacher.");
+          return;
+        }
+        const split = splitClassSectionLabel(classLabel);
+        const timing = teacherTimetableTiming(classLabel, day, period);
+        const startTime = timing.startTime || timing.timeFrom || timing.from || "";
+        const endTime = timing.endTime || timing.timeTo || timing.to || "";
+        await AppApi.upsertTimetableEntry({
+          className: split.className || classLabel,
+          sectionName: split.sectionName || "",
+          section: split.sectionName || "",
+          classSection: classLabel,
+          day,
+          period,
+          entryType: "Class",
+          subject,
+          teacher: `${state.user.name} (${state.user.id})`,
+          teacherId: state.user.id,
+          teacherName: state.user.name,
+          startTime,
+          endTime,
+          duration: startTime && endTime ? `${Math.max(0, ((Number(endTime.slice(0, 2)) * 60 + Number(endTime.slice(3, 5))) - (Number(startTime.slice(0, 2)) * 60 + Number(startTime.slice(3, 5)))))} min` : "",
+          room: $("#teacherTimetableRoom").value.trim(),
+          note: ""
+        });
+        state.workspace = await AppApi.workspace("teacher", state.user.id);
+        renderTeacherViews();
+        toast("Timetable saved to Main ERP");
+      });
       bindTeacherSubjectDropdowns("#resultClass", "#resultSubject");
       $("#resultClass")?.addEventListener("change", () => {
         const selectedClass = $("#resultClass").value;

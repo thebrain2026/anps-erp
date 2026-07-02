@@ -4620,6 +4620,83 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   font-weight: 850;
 }
 
+.teacher-timetable-lock {
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(360px, auto);
+  gap: 12px;
+  align-items: center;
+  padding: 12px 14px;
+  margin-bottom: 14px;
+  border: 1px solid #d9e5f1;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #f7fbff 0%, #ffffff 60%, #eefaf5 100%);
+}
+
+.teacher-timetable-lock.locked {
+  border-color: #f1c9c9;
+  background: linear-gradient(135deg, #fff7f7 0%, #ffffff 58%, #fff1e8 100%);
+}
+
+.teacher-timetable-lock strong {
+  display: block;
+  color: #152d46;
+  font-size: .94rem;
+}
+
+.teacher-timetable-lock small {
+  display: block;
+  margin-top: 3px;
+  color: #5c6d80;
+  font-weight: 800;
+}
+
+.teacher-timetable-lock-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.teacher-timetable-lock-actions select {
+  min-height: 36px;
+  max-width: 230px;
+  border: 1px solid #c8d9ee;
+  border-radius: 7px;
+  background: #fff;
+  color: #123456;
+  padding: 7px 10px;
+  font: inherit;
+  font-weight: 850;
+}
+
+.teacher-timetable-allowed {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.teacher-timetable-pass-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 8px;
+  border-radius: 999px;
+  background: #eaf5ff;
+  color: #18436a;
+  font-size: .78rem;
+  font-weight: 900;
+}
+
+.teacher-timetable-pass-chip button {
+  border: 0;
+  background: #ffffff;
+  color: #a21f1f;
+  border-radius: 999px;
+  cursor: pointer;
+  font-weight: 950;
+}
+
 .class-timetable-week-board {
   display: grid;
   grid-template-columns: repeat(7, minmax(175px, 1fr));
