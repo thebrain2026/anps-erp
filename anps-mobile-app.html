@@ -964,49 +964,6 @@
       font-weight: 900;
     }
 
-    .upi-pay-card {
-      border: 1px solid rgba(31,142,109,.24);
-      background: linear-gradient(145deg, #ffffff, #eefbf6);
-    }
-
-    .upi-pay-grid {
-      display: grid;
-      grid-template-columns: 126px minmax(0, 1fr);
-      gap: 12px;
-      align-items: center;
-    }
-
-    .upi-qr {
-      display: grid;
-      place-items: center;
-      width: 126px;
-      min-height: 126px;
-      border-radius: 14px;
-      background: #fff;
-      border: 1px solid rgba(19,116,92,.22);
-      overflow: hidden;
-    }
-
-    .upi-qr img { width: 116px; height: 116px; object-fit: contain; }
-    .upi-qr-fallback { padding: 10px; font-weight: 950; color: #13745c; text-align: center; }
-    .upi-request-list { display: grid; gap: 8px; margin-top: 10px; }
-
-    .upi-request-item {
-      border-radius: 12px;
-      background: rgba(255,255,255,.72);
-      border: 1px solid rgba(15,23,42,.08);
-      padding: 9px 10px;
-      display: flex;
-      justify-content: space-between;
-      gap: 8px;
-      font-size: .82rem;
-    }
-
-    @media (max-width: 420px) {
-      .upi-pay-grid { grid-template-columns: 1fr; }
-      .upi-qr { width: 100%; }
-    }
-
     .quick-row { display: grid; grid-template-columns: 46px 1fr auto; gap: 11px; align-items: center; }
     .quick-icon { width: 46px; height: 46px; border-radius: 16px; background: linear-gradient(135deg, #246bfe, #22c8a6); overflow: hidden; }
     .quick-icon img { width: 100%; height: 100%; object-fit: cover; }
@@ -1472,10 +1429,6 @@
           <b>The Brain School App</b>
           <span>Innovation by Samrat Hazra</span>
         </div>
-        <div class="policy-links" aria-label="Payment policy links">
-          <a href="./anps-payment-policies.html" target="_blank" rel="noopener">Payment Policies</a>
-          <a href="./anps-payment-policies.html#contact" target="_blank" rel="noopener">Contact</a>
-        </div>
       </article>
     </section>
 
@@ -1705,7 +1658,7 @@
       </div>
       <div class="due-access-actions" id="dueAccessActions">
         <button class="due-access-later" id="dueAccessLaterBtn" type="button">Later</button>
-        <button class="due-access-pay" id="dueAccessPayBtn" type="button">Pay Now</button>
+        <button class="due-access-pay" id="dueAccessPayBtn" type="button">View Fees</button>
       </div>
     </article>
   </div>
@@ -1831,12 +1784,6 @@
             userId: state.user.id,
             name: state.user.name
           })
-        });
-      },
-      async createIciciPayment(record) {
-        return this.request("/payments/icici/create", {
-          method: "POST",
-          body: JSON.stringify(record)
         });
       },
       async create(collection, record) {
@@ -2099,8 +2046,7 @@
         results: "marksheetEntries",
         ratings: "teacherRatings",
         leaves: "teacherLeaves",
-        timetable: "classTimetableEntries",
-        upiPayments: "upiPaymentRequests"
+        timetable: "classTimetableEntries"
       };
       return map[collection] || collection;
     }
@@ -2268,101 +2214,15 @@
       return [...fromReceipts, ...fromPayments].filter(item => item.receiptNo !== "-" || item.amount);
     }
 
-    const defaultSchoolUpiId = "eazypay.VY218IFNCWLF7RZ@icici";
-    const defaultSchoolUpiQrImage = "./assets/anps-icici-upi-qr-compact.png";
-    const upiScreenshotMaxBytes = 2 * 1024 * 1024;
-
-    function schoolUpiSettings(erpState = {}) {
-      const settings = erpState.upiPaymentSettings || {};
-      return {
-        upiId: normalizeText(settings.upiId || settings.vpa || defaultSchoolUpiId),
-        payeeName: normalizeText(settings.payeeName || "Alfred Nobel Public School"),
-        qrImage: normalizeText(settings.qrImage || defaultSchoolUpiQrImage)
-      };
-    }
-
-    function upiPaymentUri(erpState = {}, amount = 0, admissionNo = "") {
-      const settings = schoolUpiSettings(erpState);
-      const params = new URLSearchParams({
-        pa: settings.upiId,
-        pn: settings.payeeName,
-        cu: "INR",
-        tn: `ANPS Fees ${admissionNo || ""}`.trim()
-      });
-      return `upi://pay?${params.toString()}`;
-    }
-
-    function upiQrImageUrl(erpState = {}, amount = 0, admissionNo = "") {
-      const settings = schoolUpiSettings(erpState);
-      if (settings.qrImage) return settings.qrImage;
-      const upi = upiPaymentUri(erpState, amount, admissionNo);
-      return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(upi)}`;
-    }
-
-    function studentUpiRequests(erpState = {}, admissionNo = "") {
-      const admission = normalizeAdmission(admissionNo);
-      return (erpState.upiPaymentRequests || [])
-        .filter(item => normalizeAdmission(item.admissionNo) === admission)
-        .sort((a, b) => Date.parse(b.createdAt || b.date || 0) - Date.parse(a.createdAt || a.date || 0));
-    }
-
-    function readUpiScreenshotInput(input) {
-      const file = input?.files?.[0];
-      return new Promise((resolve, reject) => {
-        if (!file) {
-          resolve(null);
-          return;
-        }
-        if (!String(file.type || "").startsWith("image/")) {
-          reject(new Error("Payment screenshot image file din."));
-          return;
-        }
-        if (file.size > upiScreenshotMaxBytes) {
-          reject(new Error("Screenshot 2 MB er moddhe rakhun."));
-          return;
-        }
-        const reader = new FileReader();
-        reader.onload = () => resolve({
-          name: file.name,
-          type: file.type || "image/jpeg",
-          size: file.size,
-          url: String(reader.result || ""),
-          createdAt: new Date().toISOString()
-        });
-        reader.onerror = () => reject(new Error("Screenshot read kora gelo na."));
-        reader.readAsDataURL(file);
-      });
-    }
-
-    function upiPaymentCard(user = {}, ws = {}) {
+    function feeStatusCard(user = {}) {
       const amount = Number(user.feesDue || 0);
-      const requests = studentUpiRequests(state.erpState || {}, user.id);
-      const latestRequests = requests.slice(0, 3).map(item => `
-        <div class="upi-request-item">
-          <span><b>${escapeHtml(item.status || "Pending")}</b><br>${escapeHtml(item.utr || "-")}</span>
-          <span>₹${Number(item.amount || 0)}</span>
-        </div>
-      `).join("");
-      if (!amount) {
-        return card({ title: "Pay by UPI QR", meta: "No due amount", body: "Fees clear ache. Due ashlei ekhane Pay by UPI option show korbe.", badge: "Clear", status: "ok" });
-      }
-      const qr = upiQrImageUrl(state.erpState || {}, amount, user.id);
-      return `<article class="card upi-pay-card">
-        <div class="card-head"><div><h3>Pay Fees</h3><p>School QR scan kore amount manually diye payment korun. ICICI gateway configure hole online gateway payment-o ekhanei chalu hobe.</p></div><span class="status warn">Manual Verify</span></div>
-        <div class="upi-pay-grid">
-          <div class="upi-qr"><img src="${escapeHtml(qr)}" alt="UPI QR" onerror="this.replaceWith(Object.assign(document.createElement('div'),{className:'upi-qr-fallback',textContent:'School UPI QR'}))"></div>
-          <form class="form-grid" id="upiPaymentForm">
-            <label>Amount<input id="upiPaymentAmount" type="number" min="1" value="${amount}" required /></label>
-            <label>UTR / Transaction ID<input id="upiPaymentUtr" placeholder="UPI transaction id" required /></label>
-            <label>Payment Screenshot<input id="upiPaymentScreenshot" type="file" accept="image/*" /></label>
-            <a class="ghost" href="${escapeHtml(qr)}" download="anps-upi-qr.png">Download QR</a>
-            <a class="ghost" href="./anps-payment-policies.html" target="_blank" rel="noopener">Payment Terms</a>
-            <button class="ghost" id="iciciGatewayPayBtn" type="button">Pay via ICICI Gateway</button>
-            <button class="primary" type="submit">Submit for Verification</button>
-          </form>
-        </div>
-        <div class="upi-request-list">${latestRequests || `<div class="upi-request-item"><span>No request submitted yet</span><span>Pending</span></div>`}</div>
-      </article>`;
+      return card({
+        title: "Current Fees Status",
+        meta: amount ? "Outstanding amount" : "No due amount",
+        body: amount ? `Outstanding amount: ₹${amount}` : "Fees clear ache.",
+        badge: amount ? "Due" : "Clear",
+        status: amount ? "warn" : "ok"
+      });
     }
 
     function isConfirmedTimetableEntry(item = {}) {
@@ -3420,7 +3280,7 @@
         : `<div class="metric"><b>-</b><span>Students</span></div>`;
       $("#metricGrid").innerHTML = isTeacher
         ? `<div class="metric"><b>${todays.length}</b><span>Today</span></div><div class="metric"><b>${ws.subjects.length}</b><span>Subjects</span></div>${teacherStudentMetric}`
-        : `<div class="metric"><b>${user.attendance}</b><span>Attendance</span></div><button class="metric" type="button" data-nav="fees" aria-label="Open fees payment page"><b>₹${user.feesDue}</b><span>Due</span></button><div class="metric"><b>${ws.classwork.length}</b><span>Classwork</span></div>`;
+        : `<div class="metric"><b>${user.attendance}</b><span>Attendance</span></div><button class="metric" type="button" data-nav="fees" aria-label="Open fees status page"><b>₹${user.feesDue}</b><span>Due</span></button><div class="metric"><b>${ws.classwork.length}</b><span>Classwork</span></div>`;
 
       $("#moduleGrid").innerHTML = modules.map(item => `<button class="module" data-nav="${item.id}"><span class="module-icon">${item.icon}</span><b>${item.label}</b></button>`).join("");
       $("#quickList").innerHTML = todays.length
@@ -3439,10 +3299,7 @@
       ].join("");
       renderDashboardLatestNotice(ws.notices);
       $("#feesTotal").textContent = user.feesDue ? `₹${user.feesDue} due` : "Clear";
-      $("#feesList").innerHTML = [
-        card({ title: "Current Fees Status", meta: user.feesDue ? "Payment pending" : "No due amount", body: `Outstanding amount: ₹${user.feesDue}`, badge: user.feesDue ? "Due" : "Paid", status: user.feesDue ? "warn" : "ok" }),
-        upiPaymentCard(user, ws)
-      ].join("");
+      $("#feesList").innerHTML = feeStatusCard(user);
       $("#receiptList").innerHTML = ws.receipts.map(item => card({ title: item.receiptNo, meta: `${item.date} | ${item.mode}`, body: `Amount paid: ₹${item.amount}`, badge: "Paid" })).join("");
       $("#resultTotal").textContent = ws.results.length ? `${ws.results.length} published` : "Not published";
       $("#resultSummary").innerHTML = ws.results.length
@@ -3839,71 +3696,6 @@
             toast(error.message || "Status update hoyni.");
           }
         });
-      });
-      $("#upiPaymentForm")?.addEventListener("submit", async event => {
-        event.preventDefault();
-        const submitButton = event.submitter || event.currentTarget.querySelector("button[type='submit']");
-        const originalText = submitButton?.textContent || "Submit for Verification";
-        if (submitButton) {
-          submitButton.disabled = true;
-          submitButton.textContent = "Submitting...";
-        }
-        try {
-          const amount = Number($("#upiPaymentAmount").value || 0);
-          const utr = normalizeText($("#upiPaymentUtr").value);
-          if (amount <= 0) throw new Error("Amount thik kore din.");
-          if (!utr) throw new Error("UTR / Transaction ID din.");
-          const screenshot = await readUpiScreenshotInput($("#upiPaymentScreenshot"));
-          await AppApi.create("upiPayments", {
-            admissionNo: state.user.id,
-            studentId: state.user.id,
-            studentName: state.user.name,
-            className: state.user.className,
-            amount,
-            utr,
-            screenshot,
-            date: todayIso,
-            source: "Student App",
-            status: "Pending"
-          });
-          state.workspace = await AppApi.workspace("student", state.user.id);
-          renderStudentViews();
-          toast("UPI payment sent for school verification");
-        } catch (error) {
-          if (submitButton) {
-            submitButton.disabled = false;
-            submitButton.textContent = originalText;
-          }
-          toast(error.message || "UPI request submit hoyni.");
-        }
-      });
-      $("#iciciGatewayPayBtn")?.addEventListener("click", async () => {
-        const button = $("#iciciGatewayPayBtn");
-        const originalText = button?.textContent || "Pay via ICICI Gateway";
-        if (button) {
-          button.disabled = true;
-          button.textContent = "Checking...";
-        }
-        try {
-          const amount = Number($("#upiPaymentAmount")?.value || state.user.feesDue || 0);
-          if (amount <= 0) throw new Error("Amount thik kore din.");
-          const payload = await AppApi.createIciciPayment({
-            admissionNo: state.user.id,
-            studentId: state.user.id,
-            studentName: state.user.name,
-            className: state.user.className,
-            amount,
-            source: "Student App"
-          });
-          toast(payload.message || "ICICI gateway ready.");
-        } catch (error) {
-          toast(error.message || "ICICI gateway credentials configure korte hobe.");
-        } finally {
-          if (button) {
-            button.disabled = false;
-            button.textContent = originalText;
-          }
-        }
       });
       $("#studentRatingForm")?.addEventListener("submit", async event => {
         event.preventDefault();
