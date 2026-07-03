@@ -102,6 +102,7 @@ SENSITIVE_STATIC_NAMES = {
 ALLOWED_STATIC_FILES = {
     "/anps-erp.html",
     "/anps-mobile-app.html",
+    "/anps-payment-policies.html",
     "/new-school-os.js",
     "/new-school-os.css",
     "/assets/anps-logo.png",
@@ -1188,6 +1189,10 @@ def merge_state_without_losing_receipts(server_state, incoming_state):
         server_state.get("collectedPayments") or {},
         incoming_state.get("collectedPayments") or {},
     )
+    merged["mobileAppSettings"] = {
+        **(server_state.get("mobileAppSettings") if isinstance(server_state.get("mobileAppSettings"), dict) else {}),
+        **(incoming_state.get("mobileAppSettings") if isinstance(incoming_state.get("mobileAppSettings"), dict) else {}),
+    }
     return merged
 
 
@@ -2682,6 +2687,11 @@ def fresh_state():
         "admissionForms": [],
         "studentPromotions": [],
         "studentFeeStructures": [],
+        "mobileAppSettings": {
+            "duePopupEnabled": True,
+            "dueLockEnabled": True,
+            "dueLockDays": 75,
+        },
         "feeStructures": [],
         "transportFees": [],
         "transportMonthlyFees": [],

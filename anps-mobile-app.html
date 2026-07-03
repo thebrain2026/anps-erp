@@ -195,6 +195,28 @@
       font-size: .72rem;
       font-weight: 850;
     }
+
+    .policy-links {
+      display: flex;
+      justify-content: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 12px;
+    }
+
+    .policy-links a {
+      display: inline-flex;
+      align-items: center;
+      min-height: 34px;
+      padding: 8px 11px;
+      border-radius: 999px;
+      color: var(--deep);
+      background: rgba(255,255,255,.76);
+      border: 1px solid rgba(36,107,254,.16);
+      text-decoration: none;
+      font-size: .76rem;
+      font-weight: 950;
+    }
     .eyebrow {
       margin: 0 0 8px;
       color: var(--blue);
@@ -716,6 +738,24 @@
       font-size: .94rem;
       text-shadow: 0 2px 8px rgba(16,26,74,.22);
     }
+    .module[data-nav="calendar"] .module-icon {
+      background: linear-gradient(135deg, #185ca8, #22c8a6 54%, #f8bd45);
+      color: #fff;
+      font-size: .94rem;
+      text-shadow: 0 2px 8px rgba(16,26,74,.22);
+    }
+    .module[data-nav="holidayReport"] .module-icon {
+      background: linear-gradient(135deg, #f8bd45, #20a064 54%, #185ca8);
+      color: #fff;
+      font-size: .94rem;
+      text-shadow: 0 2px 8px rgba(16,26,74,.22);
+    }
+    .module[data-nav="reminder"] .module-icon {
+      background: linear-gradient(135deg, #f8bd45, #e25050 52%, #7659ff);
+      color: #fff;
+      font-size: .94rem;
+      text-shadow: 0 2px 8px rgba(16,26,74,.22);
+    }
     .module[data-nav="result"] .module-icon {
       background: linear-gradient(135deg, #20a064, #1bb6d9 54%, #246bfe);
       color: #fff;
@@ -743,6 +783,132 @@
     .card-head { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
     .card h3 { margin-bottom: 4px; font-size: 1rem; }
     .card p { margin-bottom: 0; color: var(--muted); font-weight: 650; }
+
+    .academic-calendar-hero {
+      margin: 0 12px 12px;
+      padding: 16px;
+      border: 1px solid rgba(255,255,255,.82);
+      border-radius: 22px;
+      background:
+        radial-gradient(circle at 90% 10%, rgba(248,189,69,.28), transparent 30%),
+        linear-gradient(135deg, #101a4a, #185ca8 58%, #0f766e);
+      color: #fff;
+      box-shadow: 0 18px 38px rgba(16,26,74,.18);
+    }
+
+    .academic-calendar-hero span {
+      display: inline-flex;
+      padding: 5px 10px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.14);
+      font-size: .7rem;
+      font-weight: 950;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+
+    .academic-calendar-hero strong {
+      display: block;
+      margin-top: 10px;
+      font-size: 1.15rem;
+      line-height: 1.16;
+    }
+
+    .academic-calendar-hero p {
+      margin: 7px 0 0;
+      color: #dbeafe;
+      font-weight: 820;
+    }
+
+    .academic-calendar-card {
+      display: grid;
+      grid-template-columns: 68px 1fr;
+      gap: 12px;
+      align-items: center;
+      background:
+        radial-gradient(circle at 100% 0%, rgba(34,200,166,.14), transparent 28%),
+        rgba(255,255,255,.82);
+    }
+
+    .calendar-date-badge {
+      display: grid;
+      place-items: center;
+      min-height: 68px;
+      border-radius: 20px;
+      background: linear-gradient(135deg, #246bfe, #22c8a6);
+      color: #fff;
+      text-align: center;
+      box-shadow: 0 12px 24px rgba(36,107,254,.16);
+    }
+
+    .calendar-date-badge b {
+      font-size: 1.18rem;
+      line-height: 1;
+    }
+
+    .calendar-date-badge span {
+      max-width: 56px;
+      font-size: .62rem;
+      font-weight: 900;
+      line-height: 1.15;
+    }
+
+    .academic-calendar-card small {
+      display: block;
+      margin-top: 6px;
+      color: #4b6078;
+      font-weight: 820;
+      line-height: 1.35;
+    }
+
+    .holiday-report-hero {
+      background:
+        radial-gradient(circle at 92% 10%, rgba(34,200,166,.28), transparent 30%),
+        linear-gradient(135deg, #10233f, #0f766e 58%, #f59e0b);
+    }
+
+    .holiday-report-card {
+      display: grid;
+      grid-template-columns: 86px 1fr;
+      gap: 12px;
+      align-items: center;
+      border-left: 5px solid #20a064;
+      background: rgba(255,255,255,.86);
+    }
+
+    .holiday-report-card > div {
+      display: grid;
+      gap: 4px;
+      justify-items: center;
+      padding: 10px 8px;
+      border-radius: 16px;
+      background: #eefbf7;
+      color: #0f766e;
+      text-align: center;
+    }
+
+    .holiday-report-card > div strong {
+      font-size: .84rem;
+      line-height: 1.15;
+    }
+
+    .holiday-report-card > div span {
+      color: #547067;
+      font-size: .68rem;
+      font-weight: 900;
+    }
+
+    .holiday-report-card section h3 {
+      margin: 0 0 5px;
+    }
+
+    .holiday-report-card section p {
+      margin: 0;
+      color: var(--muted);
+      font-size: .84rem;
+      font-weight: 720;
+    }
+
     .badge, .status {
       display: inline-flex;
       align-items: center;
@@ -1061,6 +1227,35 @@
 
     .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
+    .reminder-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 90;
+      display: grid;
+      place-items: center;
+      padding: 22px;
+      background: rgba(16, 26, 74, .48);
+      backdrop-filter: blur(6px);
+    }
+
+    .reminder-dialog {
+      width: min(360px, 100%);
+      border: 1px solid rgba(255,255,255,.72);
+      border-radius: 22px;
+      background: linear-gradient(145deg, #ffffff 0%, #fff8e8 48%, #eef7ff 100%);
+      box-shadow: 0 28px 70px rgba(16, 26, 74, .26);
+      padding: 20px;
+    }
+
+    .reminder-dialog h2 { margin: 0 0 8px; color: #101a4a; font-size: 1.25rem; }
+    .reminder-dialog p { margin: 0 0 14px; color: #44546a; line-height: 1.45; }
+    .reminder-time { display: inline-flex; margin-bottom: 14px; padding: 7px 10px; border-radius: 999px; background: #fff; color: #7659ff; font-weight: 950; font-size: .78rem; }
+    .reminder-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .reminder-list-card { border-left: 5px solid #f8bd45; }
+    .reminder-list-card.done { opacity: .72; border-left-color: #20a064; }
+    .reminder-inline-actions { display: flex; gap: 8px; margin: -6px 0 12px; padding: 0 2px; }
+    .reminder-inline-actions button { min-height: 34px; padding: 8px 10px; }
+
     .birthday-modal {
       position: fixed;
       inset: 0;
@@ -1134,6 +1329,109 @@
       box-shadow: 0 12px 26px rgba(36,107,254,.18);
     }
 
+    .due-access-modal {
+      position: fixed;
+      inset: 0;
+      z-index: 82;
+      display: grid;
+      place-items: center;
+      padding: 20px;
+      background: rgba(15, 23, 42, .48);
+      backdrop-filter: blur(12px);
+    }
+
+    .due-access-card {
+      width: min(100%, 410px);
+      padding: 20px;
+      border: 1px solid rgba(255,255,255,.76);
+      border-radius: 26px;
+      background:
+        radial-gradient(circle at 12% 0%, rgba(248,189,69,.36), transparent 30%),
+        radial-gradient(circle at 86% 10%, rgba(226,80,80,.22), transparent 28%),
+        linear-gradient(145deg, rgba(255,255,255,.98), rgba(239,246,255,.94));
+      box-shadow: 0 30px 78px rgba(16,26,74,.3);
+    }
+
+    .due-access-icon {
+      width: 58px;
+      height: 58px;
+      display: grid;
+      place-items: center;
+      border-radius: 20px;
+      color: #fff;
+      background: linear-gradient(135deg, #e25050, #f8bd45);
+      font-size: 1.45rem;
+      font-weight: 950;
+      box-shadow: 0 16px 32px rgba(226,80,80,.22);
+    }
+
+    .due-access-card h2 {
+      margin: 12px 0 8px;
+      color: var(--deep);
+      font-size: 1.34rem;
+      line-height: 1.18;
+    }
+
+    .due-access-card p {
+      margin: 0;
+      color: #45536b;
+      font-size: .92rem;
+      font-weight: 820;
+    }
+
+    .due-access-amount {
+      display: grid;
+      gap: 4px;
+      margin: 14px 0;
+      padding: 13px;
+      border: 1px solid rgba(226,80,80,.18);
+      border-radius: 18px;
+      background: rgba(255,255,255,.76);
+    }
+
+    .due-access-amount span {
+      color: var(--muted);
+      font-size: .78rem;
+      font-weight: 900;
+      text-transform: uppercase;
+      letter-spacing: .04em;
+    }
+
+    .due-access-amount strong {
+      color: #9f1d1d;
+      font-size: 1.35rem;
+      line-height: 1;
+    }
+
+    .due-access-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 14px;
+    }
+
+    .due-access-actions.single {
+      grid-template-columns: 1fr;
+    }
+
+    .due-access-actions button {
+      min-height: 44px;
+      border: 0;
+      border-radius: 16px;
+      font-weight: 950;
+    }
+
+    .due-access-later {
+      color: #263247;
+      background: #eef4ff;
+    }
+
+    .due-access-pay {
+      color: #fff;
+      background: linear-gradient(135deg, #246bfe, #22c8a6);
+      box-shadow: 0 12px 26px rgba(36,107,254,.2);
+    }
+
     @media (max-width: 380px) {
       .module-grid { grid-template-columns: repeat(3, 1fr); }
       .metrics { grid-template-columns: 1fr 1fr; }
@@ -1173,6 +1471,10 @@
         <div class="maker-signature" aria-label="Software developer branding">
           <b>The Brain School App</b>
           <span>Innovation by Samrat Hazra</span>
+        </div>
+        <div class="policy-links" aria-label="Payment policy links">
+          <a href="./anps-payment-policies.html" target="_blank" rel="noopener">Payment Policies</a>
+          <a href="./anps-payment-policies.html#contact" target="_blank" rel="noopener">Contact</a>
         </div>
       </article>
     </section>
@@ -1315,6 +1617,24 @@
           <div class="stack" id="noticeList"></div>
         </section>
 
+        <section class="view" id="reminderView">
+          <div class="section-title"><h2>Reminder</h2><span id="reminderTotal"></span></div>
+          <div class="stack" id="reminderFormHost"></div>
+          <div class="stack" id="reminderList"></div>
+        </section>
+
+        <section class="view" id="calendarView">
+          <div class="section-title"><h2>Academic Calendar</h2><span id="calendarTotal"></span></div>
+          <div class="academic-calendar-hero" id="calendarHero"></div>
+          <div class="stack" id="calendarList"></div>
+        </section>
+
+        <section class="view" id="holidayReportView">
+          <div class="section-title"><h2>Holiday Report</h2><span id="holidayReportTotal"></span></div>
+          <div class="academic-calendar-hero holiday-report-hero" id="holidayReportHero"></div>
+          <div class="stack" id="holidayReportList"></div>
+        </section>
+
         <section class="view" id="attendanceView">
           <div class="section-title"><h2>Attendance</h2><span id="attendanceScope"></span></div>
           <div class="stack" id="attendanceHost"></div>
@@ -1354,6 +1674,17 @@
   </div>
 
   <div class="toast" id="toast"></div>
+  <div class="reminder-modal hidden" id="reminderModal" role="dialog" aria-modal="true" aria-labelledby="reminderPopupTitle">
+    <article class="reminder-dialog">
+      <span class="reminder-time" id="reminderPopupTime">Reminder</span>
+      <h2 id="reminderPopupTitle">Reminder</h2>
+      <p id="reminderPopupMessage"></p>
+      <div class="reminder-actions">
+        <button class="secondary" id="reminderLaterBtn" type="button">Remind Later</button>
+        <button class="primary" id="reminderDoneBtn" type="button">Done</button>
+      </div>
+    </article>
+  </div>
   <div class="birthday-modal hidden" id="birthdayModal" role="dialog" aria-modal="true" aria-labelledby="birthdayTitle">
     <article class="birthday-card">
       <div class="birthday-ribbon">BD</div>
@@ -1361,6 +1692,21 @@
       <p id="birthdayMessage">Alfred Nobel Public School wishes you a bright, joyful and successful year ahead.</p>
       <small>From Alfred Nobel Public School</small>
       <button class="birthday-close" id="birthdayCloseBtn" type="button">Thank You</button>
+    </article>
+  </div>
+  <div class="due-access-modal hidden" id="dueAccessModal" role="dialog" aria-modal="true" aria-labelledby="dueAccessTitle">
+    <article class="due-access-card">
+      <div class="due-access-icon" id="dueAccessIcon">₹</div>
+      <h2 id="dueAccessTitle">Fees Due Reminder</h2>
+      <p id="dueAccessMessage">Please clear your school fees.</p>
+      <div class="due-access-amount">
+        <span>Outstanding Amount</span>
+        <strong id="dueAccessAmount">₹0</strong>
+      </div>
+      <div class="due-access-actions" id="dueAccessActions">
+        <button class="due-access-later" id="dueAccessLaterBtn" type="button">Later</button>
+        <button class="due-access-pay" id="dueAccessPayBtn" type="button">Pay Now</button>
+      </div>
     </article>
   </div>
 
@@ -1383,6 +1729,10 @@
     let state = { role: null, user: null, workspace: null, attendanceClass: "", language: "en" };
     let activitySession = { startedAt: "", lastSavedAt: 0, timer: null };
     let lastRegisteredPushToken = "";
+    let dueAccessTimer = null;
+    let duePopupOpenOnceShown = false;
+    let reminderTimer = null;
+    let activeReminderId = "";
     try {
       localStorage.removeItem("anps_pending_teacher_timetable");
     } catch (error) {
@@ -1840,6 +2190,65 @@
       return Math.max(0, expectedTillDate - paidTillDate);
     }
 
+    function studentDueAccessSettings(erpState = {}) {
+      const settings = erpState.mobileAppSettings || {};
+      return {
+        duePopupEnabled: settings.duePopupEnabled !== false,
+        dueLockEnabled: settings.dueLockEnabled !== false,
+        dueLockDays: Math.max(1, Number(settings.dueLockDays || 75))
+      };
+    }
+
+    function daysBetweenToday(date) {
+      if (!(date instanceof Date) || Number.isNaN(date.getTime())) return 0;
+      const today = new Date();
+      const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const dueOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      return Math.max(0, Math.floor((todayOnly - dueOnly) / 86400000));
+    }
+
+    function oldestUnpaidDueDate(erpState = {}, student = {}) {
+      const payments = sessionPaymentsForStudent(erpState, student.admissionNo);
+      const monthlyItems = [
+        {amount: Number(student.tuitionFee || 0), months: student.feeMonths, heads: ["Tuition Fee"]},
+        {amount: Number(student.transportFee || 0), months: student.transportMonths, heads: ["Transport Fees"]},
+        {amount: Number(student.dayBoardingFee || 0) + Number(student.dayBoardingTransportFee || 0), months: student.dayBoardingMonths, heads: ["Day Boarding Fees"]},
+        {amount: Number(student.roboticsFee || 0), months: student.roboticsMonths, heads: ["Robotics Fees"]},
+        {amount: Number(student.othersFee || 0), months: student.othersMonths, heads: ["Tiffin Fees"]}
+      ].filter(item => item.amount > 0);
+      let oldest = null;
+      monthlyItems.forEach(item => {
+        const months = selectedMonthsToDate(erpState, item.months);
+        const paid = allocationPaidTotal(payments, item.heads);
+        months.some((month, index) => {
+          const expectedThroughMonth = item.amount * (index + 1);
+          if (paid + 0.01 < expectedThroughMonth) {
+            const dueDate = academicMonthDate(erpState, month, 1);
+            if (!oldest || dueDate < oldest) oldest = dueDate;
+            return true;
+          }
+          return false;
+        });
+      });
+      return oldest;
+    }
+
+    function studentDueSummary(erpState = {}, student = {}) {
+      const amount = studentDueAmount(erpState, student);
+      const settings = studentDueAccessSettings(erpState);
+      const oldestDueDate = amount > 0 ? oldestUnpaidDueDate(erpState, student) : null;
+      const dueAgeDays = oldestDueDate ? daysBetweenToday(oldestDueDate) : 0;
+      return {
+        amount,
+        oldestDueDate: oldestDueDate ? oldestDueDate.toISOString().slice(0, 10) : "",
+        dueAgeDays,
+        popupEnabled: settings.duePopupEnabled,
+        lockEnabled: settings.dueLockEnabled,
+        lockDays: settings.dueLockDays,
+        locked: settings.duePopupEnabled && settings.dueLockEnabled && amount > 0 && dueAgeDays >= settings.dueLockDays
+      };
+    }
+
     function studentReceipts(erpState = {}, student = {}) {
       const admissionNo = normalizeAdmission(student.admissionNo);
       const fromReceipts = (erpState.feeReceipts || erpState.fees || [])
@@ -1947,6 +2356,7 @@
             <label>UTR / Transaction ID<input id="upiPaymentUtr" placeholder="UPI transaction id" required /></label>
             <label>Payment Screenshot<input id="upiPaymentScreenshot" type="file" accept="image/*" /></label>
             <a class="ghost" href="${escapeHtml(qr)}" download="anps-upi-qr.png">Download QR</a>
+            <a class="ghost" href="./anps-payment-policies.html" target="_blank" rel="noopener">Payment Terms</a>
             <button class="ghost" id="iciciGatewayPayBtn" type="button">Pay via ICICI Gateway</button>
             <button class="primary" type="submit">Submit for Verification</button>
           </form>
@@ -2038,6 +2448,7 @@
     function buildStudentWorkspace(erpState = {}, userId = "") {
       const student = findStudentByLogin(erpState, userId);
       const className = getClassName(student);
+      const dueSummary = studentDueSummary(erpState, student);
       state.user = {
         ...state.user,
         id: student.admissionNo || state.user.id,
@@ -2046,7 +2457,10 @@
         roll: student.roll || student.rollNo || "-",
         guardian: student.guardianName || student.fatherName || student.motherName || "-",
         attendance: student.attendance || "0%",
-        feesDue: studentDueAmount(erpState, student),
+        feesDue: dueSummary.amount,
+        dueAgeDays: dueSummary.dueAgeDays,
+        dueOldestDate: dueSummary.oldestDueDate,
+        dueAppLocked: dueSummary.locked,
         dob: student.dob || student.dateOfBirth || student.birthDate || "",
         initials: initials(student.name || state.user.name),
         photo: student.photo || student.studentPhoto || ""
@@ -2063,12 +2477,14 @@
         homework: (erpState.homework || []).filter(item => !item.className || className.includes(item.className)),
         classwork: (erpState.classworkEntries || []).filter(item => !item.className || className.includes(item.className)),
         notices: visibleNotices(erpState, className),
+        calendar: (erpState.holidayReports || []).slice().sort((a, b) => parseCalendarDate(a.date) - parseCalendarDate(b.date)),
         teacherComplaints: (erpState.complaintRecords || []).filter(item =>
           normalizeAdmission(item.studentId) === normalizeAdmission(student.admissionNo)
           && normalizeText(item.source).toLowerCase().includes("teacher")
         ),
         ratings: [],
         complaints: (erpState.complaintRecords || []).filter(item => normalizeAdmission(item.studentId) === normalizeAdmission(student.admissionNo)),
+        dueSummary,
         subjects: []
       };
     }
@@ -2190,6 +2606,9 @@
       { id: "homework", label: "Homework", icon: "HW" },
       { id: "classwork", label: "Classwork", icon: "CW" },
       { id: "notice", label: "Notice", icon: "NT" },
+      { id: "reminder", label: "Reminder", icon: "RM" },
+      { id: "calendar", label: "Academic Calendar", icon: "AC" },
+      { id: "holidayReport", label: "Holiday Report", icon: "HR" },
       { id: "attendance", label: "Attendance", icon: "AT" },
       { id: "rating", label: "Teacher Rating", icon: "★" },
       { id: "complaints", label: "Academic Complaint", icon: "!" },
@@ -2205,6 +2624,8 @@
       { id: "homework", label: "Homework Entry", icon: "HW" },
       { id: "classwork", label: "Classwork Entry", icon: "CW" },
       { id: "notice", label: "Notice", icon: "NT" },
+      { id: "reminder", label: "Reminder", icon: "RM" },
+      { id: "calendar", label: "Academic Calendar", icon: "AC" },
       { id: "complaints", label: "Complaints", icon: "CP" },
       { id: "attendance", label: "Attendance", icon: attendanceLogo },
       { id: "rating", label: "Ratings", icon: "★" },
@@ -2220,6 +2641,130 @@
 
     function card({ title, meta, body, badge, status = "ok", className = "" }) {
       return `<article class="card ${className}"><div class="card-head"><div><h3>${title}</h3><p>${meta}</p></div>${badge ? `<span class="status ${status}">${badge}</span>` : ""}</div>${body ? `<p>${body}</p>` : ""}</article>`;
+    }
+
+    function reminderStorageKey() {
+      const userId = normalizeText(state.user?.id || localStorage.getItem(AppConfig.userKey) || "guest");
+      return `anps_mobile_reminders_${state.role || "user"}_${userId}`;
+    }
+
+    function loadReminders() {
+      try {
+        return JSON.parse(localStorage.getItem(reminderStorageKey()) || "[]").filter(item => item && item.id);
+      } catch {
+        return [];
+      }
+    }
+
+    function saveReminders(items = []) {
+      localStorage.setItem(reminderStorageKey(), JSON.stringify(items));
+    }
+
+    function reminderDateTime(item = {}) {
+      const date = normalizeText(item.date);
+      const time = normalizeText(item.time);
+      if (!date) return null;
+      const parsed = new Date(time ? `${date}T${time}` : `${date}T00:00`);
+      return Number.isNaN(parsed.getTime()) ? null : parsed;
+    }
+
+    function reminderDue(item = {}, now = new Date()) {
+      if (item.done) return false;
+      if (item.snoozedUntil && new Date(item.snoozedUntil) > now) return false;
+      const target = reminderDateTime(item);
+      if (!target) return false;
+      if (!item.time) return target.toISOString().slice(0, 10) <= now.toISOString().slice(0, 10);
+      return target <= now;
+    }
+
+    function reminderDateLabel(item = {}) {
+      return `${item.date || "-"}${item.time ? ` at ${item.time}` : ""}`;
+    }
+
+    function renderReminderCard(item = {}) {
+      return `${card({
+        title: escapeHtml(item.message || "Reminder"),
+        meta: escapeHtml(reminderDateLabel(item)),
+        body: item.done ? "Completed" : "Pending reminder",
+        badge: item.done ? "Done" : "Pending",
+        status: item.done ? "ok" : "warn",
+        className: `reminder-list-card ${item.done ? "done" : ""}`
+      })}
+      <div class="reminder-inline-actions">
+        <button class="secondary" type="button" data-reminder-done="${escapeHtml(item.id)}">${item.done ? "Undo" : "Done"}</button>
+        <button class="secondary" type="button" data-reminder-delete="${escapeHtml(item.id)}">Delete</button>
+      </div>`;
+    }
+
+    function renderReminderView() {
+      const reminders = loadReminders().sort((a, b) => (reminderDateTime(a)?.getTime() || 0) - (reminderDateTime(b)?.getTime() || 0));
+      const pending = reminders.filter(item => !item.done).length;
+      $("#reminderTotal").textContent = `${pending} pending`;
+      $("#reminderFormHost").innerHTML = `<article class="card reminder-list-card"><form class="form-grid" id="reminderForm">
+        <label>Reminder Message<textarea id="reminderMessage" placeholder="Write what you want to remember" required></textarea></label>
+        <label>Date<input id="reminderDate" type="date" value="${todayIso}" required /></label>
+        <label>Time Optional<input id="reminderTime" type="time" /></label>
+        <button class="primary" type="submit">Save Reminder</button>
+      </form></article>`;
+      $("#reminderList").innerHTML = reminders.length
+        ? reminders.map(item => renderReminderCard(item)).join("")
+        : card({ title: "No Reminder Saved", meta: "Write a reminder with date and optional time.", body: "The popup will appear when the reminder becomes due.", badge: "Empty", status: "warn" });
+      bindReminderForms();
+    }
+
+    function showReminderPopup(item = {}) {
+      activeReminderId = item.id || "";
+      $("#reminderPopupTitle").textContent = "Reminder";
+      $("#reminderPopupMessage").textContent = item.message || "Reminder";
+      $("#reminderPopupTime").textContent = reminderDateLabel(item);
+      $("#reminderModal").classList.remove("hidden");
+    }
+
+    function hideReminderPopup() {
+      $("#reminderModal")?.classList.add("hidden");
+      activeReminderId = "";
+    }
+
+    function checkReminderPopup() {
+      if (!state.user || !state.role) return;
+      if (!$("#reminderModal")?.classList.contains("hidden")) return;
+      const due = loadReminders().find(item => reminderDue(item));
+      if (due) showReminderPopup(due);
+    }
+
+    function scheduleReminderCheck() {
+      clearInterval(reminderTimer);
+      checkReminderPopup();
+      reminderTimer = setInterval(checkReminderPopup, 60000);
+    }
+
+    function bindReminderForms() {
+      $("#reminderForm")?.addEventListener("submit", event => {
+        event.preventDefault();
+        const message = $("#reminderMessage").value.trim();
+        const date = $("#reminderDate").value;
+        const time = $("#reminderTime").value;
+        if (!message || !date) {
+          toast("Reminder message and date required.");
+          return;
+        }
+        const reminders = loadReminders();
+        reminders.unshift({ id: `REM-${Date.now()}`, message, date, time, done: false, createdAt: new Date().toISOString() });
+        saveReminders(reminders);
+        renderReminderView();
+        toast("Reminder saved.");
+        checkReminderPopup();
+      });
+      document.querySelectorAll("[data-reminder-done]").forEach(button => button.addEventListener("click", () => {
+        const reminders = loadReminders().map(item => item.id === button.dataset.reminderDone ? { ...item, done: !item.done, snoozedUntil: "" } : item);
+        saveReminders(reminders);
+        renderReminderView();
+      }));
+      document.querySelectorAll("[data-reminder-delete]").forEach(button => button.addEventListener("click", () => {
+        saveReminders(loadReminders().filter(item => item.id !== button.dataset.reminderDelete));
+        renderReminderView();
+        toast("Reminder deleted.");
+      }));
     }
 
     function isJuniorClass(className = "") {
@@ -2497,6 +3042,54 @@
       return item.noticeDate || item.publishDate || item.date || item.createdAt?.slice?.(0, 10) || "-";
     }
 
+    function parseCalendarDate(value = "") {
+      const text = normalizeText(value);
+      if (!text) return new Date(8640000000000000);
+      let match = text.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/);
+      if (match) return new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1]));
+      match = text.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/);
+      if (match) return new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+      const parsed = new Date(text);
+      return Number.isNaN(parsed.getTime()) ? new Date(8640000000000000) : parsed;
+    }
+
+    function calendarDateLabel(value = "") {
+      const date = parseCalendarDate(value);
+      if (date.getTime() === 8640000000000000) return value || "-";
+      return new Intl.DateTimeFormat("en-IN", { day: "2-digit", month: "short", year: "numeric" }).format(date);
+    }
+
+    function calendarMonthLabel(value = "") {
+      const date = parseCalendarDate(value);
+      if (date.getTime() === 8640000000000000) return "-";
+      return new Intl.DateTimeFormat("en-IN", { weekday: "short", month: "short" }).format(date);
+    }
+
+    function studentCalendarCard(item = {}) {
+      const type = item.type || "Holiday";
+      return `<article class="card academic-calendar-card">
+        <div class="calendar-date-badge"><b>${calendarDateLabel(item.date).split(" ")[0] || "-"}</b><span>${calendarMonthLabel(item.date)}</span></div>
+        <div>
+          <h3>${escapeHtml(item.name || "School Event")}</h3>
+          <p>${escapeHtml(calendarDateLabel(item.date))} | ${escapeHtml(type)}</p>
+          ${item.details ? `<small>${escapeHtml(item.details)}</small>` : ""}
+        </div>
+      </article>`;
+    }
+
+    function studentHolidayReportCard(item = {}) {
+      return `<article class="card holiday-report-card">
+        <div>
+          <strong>${escapeHtml(calendarDateLabel(item.date))}</strong>
+          <span>${escapeHtml(calendarMonthLabel(item.date))}</span>
+        </div>
+        <section>
+          <h3>${escapeHtml(item.name || "Holiday")}</h3>
+          <p>${escapeHtml(item.type || "Holiday")}${item.details ? ` | ${escapeHtml(item.details)}` : ""}</p>
+        </section>
+      </article>`;
+    }
+
     function parseNoticeDateValue(value = "") {
       const text = normalizeText(value);
       if (!text || text === "-") return null;
@@ -2680,7 +3273,104 @@
       await saveStudentActivity("Closed");
     }
 
+    function dueAccessMode() {
+      const summary = state.workspace?.dueSummary || {};
+      if (state.role !== "student" || !summary.popupEnabled || Number(state.user?.feesDue || 0) <= 0) return "none";
+      if (summary.locked) return "locked";
+      const day = new Date().getDate();
+      if (day >= 14) return "repeat3";
+      if (day >= 10) return "repeat15";
+      if (day >= 5) return "openOnce";
+      return "none";
+    }
+
+    function dueAccessIntervalMs() {
+      const mode = dueAccessMode();
+      if (mode === "repeat3") return 3 * 60 * 1000;
+      if (mode === "repeat15") return 15 * 60 * 1000;
+      return 0;
+    }
+
+    function dueAccessIntervalLabel() {
+      const mode = dueAccessMode();
+      if (mode === "locked") return `Your app services are paused because fees have been due for ${state.user?.dueAgeDays || 0} days.`;
+      if (mode === "repeat3") return "Reminder will repeat every 3 minutes until fees are cleared.";
+      if (mode === "repeat15") return "Reminder will repeat every 15 minutes until fees are cleared.";
+      if (mode === "openOnce") return "This reminder appears once when you open the app.";
+      return "";
+    }
+
+    function clearDueAccessTimer() {
+      clearInterval(dueAccessTimer);
+      dueAccessTimer = null;
+    }
+
+    function hideDueAccessPopup() {
+      $("#dueAccessModal")?.classList.add("hidden");
+    }
+
+    function showDueAccessPopup(forceLocked = false) {
+      const mode = forceLocked ? "locked" : dueAccessMode();
+      if (mode === "none" || Number(state.user?.feesDue || 0) <= 0) {
+        hideDueAccessPopup();
+        clearDueAccessTimer();
+        return;
+      }
+      const locked = mode === "locked";
+      $("#dueAccessIcon").textContent = locked ? "!" : "₹";
+      $("#dueAccessTitle").textContent = locked ? "Fees Due - App Service Paused" : "Fees Due Reminder";
+      $("#dueAccessMessage").textContent = locked
+        ? `${state.user.name || "Student"}, fees are pending for ${state.user.dueAgeDays || 0} days. Please pay to continue homework, notice, complaint and other app services.`
+        : `${state.user.name || "Student"}, your school fees due is ₹${Number(state.user.feesDue || 0)}. ${dueAccessIntervalLabel()}`;
+      $("#dueAccessAmount").textContent = `₹${Number(state.user.feesDue || 0)}`;
+      $("#dueAccessLaterBtn").classList.toggle("hidden", locked);
+      $("#dueAccessActions").classList.toggle("single", locked);
+      $("#dueAccessModal")?.classList.remove("hidden");
+    }
+
+    function dueAccessLocked() {
+      return dueAccessMode() === "locked";
+    }
+
+    function scheduleDueAccessPopup() {
+      clearDueAccessTimer();
+      const mode = dueAccessMode();
+      if (mode === "none") {
+        hideDueAccessPopup();
+        duePopupOpenOnceShown = false;
+        return;
+      }
+      if (mode === "locked") {
+        showDueAccessPopup(true);
+        return;
+      }
+      if (mode === "openOnce") {
+        if (!duePopupOpenOnceShown) {
+          showDueAccessPopup();
+          duePopupOpenOnceShown = true;
+        }
+        return;
+      }
+      showDueAccessPopup();
+      const interval = dueAccessIntervalMs();
+      if (interval > 0) {
+        dueAccessTimer = setInterval(() => {
+          if (dueAccessMode() === "none") {
+            hideDueAccessPopup();
+            clearDueAccessTimer();
+            return;
+          }
+          showDueAccessPopup();
+        }, interval);
+      }
+    }
+
     function openView(id) {
+      if (dueAccessLocked() && id !== "fees") {
+        toast("Fees clear korle app services abar chalu hobe.");
+        showDueAccessPopup(true);
+        id = "fees";
+      }
       document.querySelectorAll(".view").forEach(view => view.classList.toggle("active", view.id === `${id}View`));
       document.querySelectorAll("[data-nav]").forEach(btn => btn.classList.toggle("active", btn.dataset.nav === id));
       document.body.classList.remove("drawer-open");
@@ -2778,6 +3468,24 @@
       $("#noticeFormHost").innerHTML = languageControl();
       $("#noticeTotal").textContent = `${ws.notices.length} notices`;
       $("#noticeList").innerHTML = ws.notices.map(item => studentNoticeCard(item)).join("");
+      renderReminderView();
+      const today = new Date();
+      const nextCalendar = (ws.calendar || []).find(item => parseCalendarDate(item.date) >= new Date(today.getFullYear(), today.getMonth(), today.getDate()));
+      $("#calendarTotal").textContent = `${(ws.calendar || []).length} entries`;
+      $("#calendarHero").innerHTML = nextCalendar
+        ? `<span>Next Event</span><strong>${escapeHtml(nextCalendar.name || "School Event")}</strong><p>${escapeHtml(calendarDateLabel(nextCalendar.date))} | ${escapeHtml(nextCalendar.type || "Holiday")}</p>`
+        : `<span>Academic Year</span><strong>No upcoming event</strong><p>School calendar entries will appear here after ERP update.</p>`;
+      $("#calendarList").innerHTML = (ws.calendar || []).length
+        ? ws.calendar.map(item => studentCalendarCard(item)).join("")
+        : card({ title: "No Academic Calendar Published", meta: "The calendar will appear here after it is updated in the ERP.", body: "Holiday and school event entries will appear here.", badge: "Empty", status: "warn" });
+      const holidayItems = (ws.calendar || []).filter(item => normalizeText(item.type || "Holiday").toLowerCase().includes("holiday") || item.name);
+      $("#holidayReportTotal").textContent = `${holidayItems.length} holidays`;
+      $("#holidayReportHero").innerHTML = holidayItems.length
+        ? `<span>Holiday Report</span><strong>${holidayItems.length} holidays published</strong><p>All school holidays from the ERP annual calendar.</p>`
+        : `<span>Holiday Report</span><strong>No holiday published</strong><p>Holiday entries will appear here after ERP update.</p>`;
+      $("#holidayReportList").innerHTML = holidayItems.length
+        ? holidayItems.map(item => studentHolidayReportCard(item)).join("")
+        : card({ title: "No Holiday Report Published", meta: "The holiday list will appear here after it is updated in the ERP.", body: "Holiday dates and details will be visible here.", badge: "Empty", status: "warn" });
       $("#attendanceScope").textContent = user.attendance;
       $("#attendanceHost").innerHTML = card({ title: "Attendance Summary", meta: `${user.attendance} attendance`, body: "Month-wise attendance API can be connected here.", badge: "Student" });
       $("#ratingTitle").textContent = "Teacher Rating";
@@ -2800,6 +3508,7 @@
       $("#leaveList").innerHTML = "";
       bindLanguageControls();
       bindStudentForms();
+      scheduleDueAccessPopup();
     }
 
     function subjectOptions() {
@@ -2902,6 +3611,16 @@
         `<div class="section-title"><h2>My Notice Requests</h2><span>${(ws.teacherNoticeRequests || []).length}</span></div>`,
         requestCards || card({ title: "No Request Sent", meta: "Class notice request ekhane dekhabe.", body: "Request ERP approval er age student app-e publish hobe na.", badge: "Draft", status: "warn" })
       ].join("");
+      renderReminderView();
+      const today = new Date();
+      const nextCalendar = (ws.calendar || []).find(item => parseCalendarDate(item.date) >= new Date(today.getFullYear(), today.getMonth(), today.getDate()));
+      $("#calendarTotal").textContent = `${(ws.calendar || []).length} entries`;
+      $("#calendarHero").innerHTML = nextCalendar
+        ? `<span>Next Event</span><strong>${escapeHtml(nextCalendar.name || "School Event")}</strong><p>${escapeHtml(calendarDateLabel(nextCalendar.date))} | ${escapeHtml(nextCalendar.type || "Holiday")}</p>`
+        : `<span>Academic Year</span><strong>No upcoming event</strong><p>School calendar entries will appear here after ERP update.</p>`;
+      $("#calendarList").innerHTML = (ws.calendar || []).length
+        ? ws.calendar.map(item => studentCalendarCard(item)).join("")
+        : card({ title: "No Academic Calendar Published", meta: "The calendar will appear here after it is updated in the ERP.", body: "Holiday and school event entries will appear here.", badge: "Empty", status: "warn" });
       $("#attendanceScope").textContent = "Teacher tools";
       const attendanceStudents = ws.students.filter(item => item.className === state.attendanceClass);
       $("#attendanceHost").innerHTML = `<article class="card"><div class="segmented">${classes.map(name => `<button class="seg-btn ${name === state.attendanceClass ? "active" : ""}" data-class-tab="${name}">${name}</button>`).join("")}</div>${attendanceStudents.map(item => `<div class="student-row"><div><b>${item.name}</b><span>${item.className} - Roll ${item.roll}</span></div><div class="toggle" data-student="${item.id}"><button class="active" data-mark="present">P</button><button data-mark="absent">A</button><button data-mark="late">L</button></div></div>`).join("")}<button class="primary" id="saveAttendanceBtn" type="button">Save Attendance</button></article>`;
@@ -3252,6 +3971,7 @@
     async function enterApp(role, user) {
       state.role = role;
       state.user = user;
+      duePopupOpenOnceShown = false;
       state.workspace = await AppApi.workspace(role, user.id);
       document.body.classList.toggle("student-theme", role === "student");
       document.body.classList.toggle("teacher-theme", role === "teacher");
@@ -3262,6 +3982,7 @@
       if (role === "student") renderStudentViews();
       if (role === "teacher") renderTeacherViews();
       openView("dashboard");
+      scheduleReminderCheck();
       if (role === "student") startStudentActivityTracking();
       await registerCurrentPushToken();
       showBirthdayGreeting();
@@ -3289,6 +4010,17 @@
       }
     });
     $("#birthdayCloseBtn")?.addEventListener("click", () => $("#birthdayModal")?.classList.add("hidden"));
+    $("#dueAccessLaterBtn")?.addEventListener("click", () => {
+      if (dueAccessLocked()) {
+        showDueAccessPopup(true);
+        return;
+      }
+      hideDueAccessPopup();
+    });
+    $("#dueAccessPayBtn")?.addEventListener("click", () => {
+      hideDueAccessPopup();
+      openView("fees");
+    });
     $("#menuBtn").addEventListener("click", () => document.body.classList.add("drawer-open"));
     $("#drawerBackdrop").addEventListener("click", () => document.body.classList.remove("drawer-open"));
     $("#syncBtn").addEventListener("click", async () => {
@@ -3296,10 +4028,17 @@
       state.workspace = await AppApi.workspace(state.role, state.user.id);
       renderDashboard();
       state.role === "student" ? renderStudentViews() : renderTeacherViews();
+      scheduleReminderCheck();
+      if (state.role === "student" && !dueAccessLocked()) hideDueAccessPopup();
       toast("Synced");
     });
     $("#logoutBtn").addEventListener("click", async () => {
       await stopStudentActivityTracking();
+      clearDueAccessTimer();
+      hideDueAccessPopup();
+      clearInterval(reminderTimer);
+      hideReminderPopup();
+      duePopupOpenOnceShown = false;
       localStorage.removeItem(AppConfig.tokenKey);
       localStorage.removeItem(AppConfig.roleKey);
       localStorage.removeItem(AppConfig.userKey);
@@ -3318,6 +4057,25 @@
     });
     document.addEventListener("keydown", event => {
       if (event.key === "Escape") document.body.classList.remove("drawer-open");
+    });
+    $("#reminderLaterBtn")?.addEventListener("click", () => {
+      if (activeReminderId) {
+        const reminders = loadReminders().map(item => item.id === activeReminderId ? { ...item, snoozedUntil: new Date(Date.now() + 10 * 60 * 1000).toISOString() } : item);
+        saveReminders(reminders);
+      }
+      hideReminderPopup();
+    });
+    $("#reminderDoneBtn")?.addEventListener("click", () => {
+      if (activeReminderId) {
+        const reminders = loadReminders().map(item => item.id === activeReminderId ? { ...item, done: true, completedAt: new Date().toISOString() } : item);
+        saveReminders(reminders);
+        renderReminderView();
+      }
+      hideReminderPopup();
+    });
+    window.addEventListener("focus", checkReminderPopup);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) checkReminderPopup();
     });
   </script>
 </body>

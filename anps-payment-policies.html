@@ -1,0 +1,224 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ANPS Payment Policies</title>
+  <meta name="description" content="Payment, refund, cancellation, privacy and contact policies for Alfred Nobel Public School online fee payments." />
+  <style>
+    :root {
+      --ink: #14213d;
+      --muted: #5d6b82;
+      --line: #dce7f3;
+      --brand: #164a91;
+      --teal: #0fa3b1;
+      --gold: #f4b942;
+      --soft: #f5f9ff;
+      --white: #fff;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: linear-gradient(135deg, #f7fbff 0%, #eef7f7 100%);
+      line-height: 1.55;
+    }
+    .wrap { width: min(1080px, calc(100% - 32px)); margin: 0 auto; }
+    header {
+      padding: 34px 0 22px;
+      background: radial-gradient(circle at top left, rgba(15,163,177,.24), transparent 34%),
+        linear-gradient(135deg, #103c78, #166b93);
+      color: #fff;
+      border-bottom: 5px solid var(--gold);
+    }
+    .brand { display: flex; align-items: center; gap: 14px; }
+    .brand img { width: 58px; height: 58px; object-fit: contain; border-radius: 16px; background: #fff; padding: 4px; }
+    .brand h1 { margin: 0; font-size: clamp(1.55rem, 4vw, 2.5rem); line-height: 1.08; }
+    .brand p { margin: 6px 0 0; color: rgba(255,255,255,.86); font-weight: 700; }
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin: 22px 0;
+    }
+    .pill {
+      background: rgba(255,255,255,.16);
+      border: 1px solid rgba(255,255,255,.25);
+      border-radius: 16px;
+      padding: 12px;
+      font-weight: 900;
+    }
+    main { padding: 26px 0 42px; }
+    .notice {
+      padding: 16px;
+      border-radius: 18px;
+      background: #fff7df;
+      border: 1px solid #f4dc98;
+      font-weight: 800;
+      margin-bottom: 18px;
+    }
+    .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 16px; }
+    section {
+      background: var(--white);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 18px;
+      box-shadow: 0 16px 40px rgba(20,33,61,.08);
+    }
+    section.full { grid-column: 1 / -1; }
+    h2 { margin: 0 0 8px; font-size: 1.08rem; color: var(--brand); }
+    p { margin: 0 0 10px; color: var(--muted); }
+    ul { margin: 0; padding-left: 18px; color: var(--muted); }
+    li + li { margin-top: 6px; }
+    table { width: 100%; border-collapse: collapse; overflow: hidden; border-radius: 14px; background: var(--soft); }
+    th, td { padding: 12px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    th { color: var(--brand); width: 34%; }
+    tr:last-child th, tr:last-child td { border-bottom: 0; }
+    .cards { display: flex; gap: 8px; flex-wrap: wrap; }
+    .card-brand { padding: 8px 11px; border-radius: 999px; background: #eaf4ff; color: #143f70; font-weight: 900; }
+    footer { padding: 18px 0 32px; color: var(--muted); text-align: center; }
+    a { color: var(--brand); font-weight: 900; }
+    @media (max-width: 760px) {
+      .summary, .grid { grid-template-columns: 1fr; }
+      .brand { align-items: flex-start; }
+      th, td { display: block; width: 100%; }
+      th { padding-bottom: 2px; }
+      td { padding-top: 2px; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <img src="./assets/anps-logo.png" alt="Alfred Nobel Public School logo" />
+        <div>
+          <h1>Alfred Nobel Public School</h1>
+          <p>Online Fee Payment Policies and Customer Information</p>
+        </div>
+      </div>
+      <div class="summary" aria-label="Payment policy summary">
+        <div class="pill">HTTPS secure website</div>
+        <div class="pill">School fee payment only</div>
+        <div class="pill">No physical shipping</div>
+        <div class="pill">Manual and gateway verification</div>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <div class="notice">
+      This page is provided for online school fee payment transparency, payment gateway verification, and parent information.
+    </div>
+
+    <div class="grid">
+      <section class="full">
+        <h2>Business and Website Details</h2>
+        <table>
+          <tr><th>Entity Name</th><td>Alfred Nobel Public School</td></tr>
+          <tr><th>Service Description</th><td>School ERP, student app, teacher app, online school fee payment, academic notices, homework, attendance and parent communication services.</td></tr>
+          <tr><th>Live Website</th><td><a href="https://anps.thebrainerp.com">https://anps.thebrainerp.com</a></td></tr>
+          <tr><th>UAT / Testing Domain</th><td><a href="https://anps-erp.onrender.com">https://anps-erp.onrender.com</a></td></tr>
+          <tr><th>Sub-domain</th><td>anps.thebrainerp.com</td></tr>
+          <tr><th>Website Security</th><td>The live website starts with HTTPS and uses encrypted browser communication.</td></tr>
+        </table>
+      </section>
+
+      <section>
+        <h2>Transparent Terms and Conditions</h2>
+        <ul>
+          <li>Online payment is provided for school fees, transport fees and approved school charges only.</li>
+          <li>Parents must verify the student name, admission number and payable amount before payment.</li>
+          <li>Payment confirmation is subject to successful bank/payment gateway response and school account verification.</li>
+          <li>Fee receipts are issued from the school ERP after successful verification.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Customer Rights and Responsibilities</h2>
+        <ul>
+          <li>Parents may request payment clarification from the school office with transaction reference details.</li>
+          <li>Parents are responsible for entering the correct admission number and amount.</li>
+          <li>Duplicate or wrong payments must be reported to the school office as soon as possible.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Privacy Policy</h2>
+        <p>Student, parent, staff and payment information is used only for school administration, fee accounting, communication and service delivery. The school does not sell personal data to third parties.</p>
+        <p>Payment credentials such as card, UPI PIN or banking passwords are not stored by the school ERP.</p>
+      </section>
+
+      <section>
+        <h2>Refund Policy</h2>
+        <ul>
+          <li>Refunds are applicable only for duplicate payment, excess payment, or payment made against an incorrect student account after school verification.</li>
+          <li>Approved refunds are processed to the original payment mode or parent-provided bank account as per school and bank process.</li>
+          <li>Refund processing time depends on bank/payment gateway settlement timelines.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Pricing and Payment Breakdowns</h2>
+        <p>Fees are calculated according to the student class, fee master, transport selection, due amount and applicable fine rules configured in the school ERP.</p>
+        <ul>
+          <li>Tuition Fee</li>
+          <li>Transport Fee, where applicable</li>
+          <li>Annual or yearly fee, where applicable</li>
+          <li>Other Dues, where applicable</li>
+          <li>Fine or previous dues, where applicable</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Cancellation Policy</h2>
+        <p>School fee payments cannot normally be cancelled after successful bank authorization. For accidental or duplicate payments, parents must contact the school office for refund or adjustment.</p>
+      </section>
+
+      <section>
+        <h2>Shipping Policy</h2>
+        <p>No physical product is shipped. The service is digital school fee payment and school ERP access.</p>
+        <ul>
+          <li>Shipping charges: Not applicable</li>
+          <li>Shipping methods: Not applicable</li>
+          <li>Domestic/international shipping: Not applicable</li>
+          <li>Estimated delivery time: Not applicable</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>Accepted Payment Methods</h2>
+        <p>Payment gateway and UPI options may be enabled by the school after bank approval.</p>
+        <div class="cards">
+          <span class="card-brand">UPI</span>
+          <span class="card-brand">Net Banking</span>
+          <span class="card-brand">Debit Card</span>
+          <span class="card-brand">Credit Card</span>
+          <span class="card-brand">ICICI Gateway</span>
+        </div>
+      </section>
+
+      <section>
+        <h2>Recurring Charges</h2>
+        <p>There is no automatic recurring debit enabled by default. Parents pay fees manually unless the school separately enables and communicates an approved recurring payment facility.</p>
+      </section>
+
+      <section class="full" id="contact">
+        <h2>Contact Details</h2>
+        <table>
+          <tr><th>Contact Number</th><td>To be updated by Alfred Nobel Public School office</td></tr>
+          <tr><th>Email Address</th><td>manager@alfrednobelschool.com</td></tr>
+          <tr><th>Physical Address</th><td>To be updated by Alfred Nobel Public School office</td></tr>
+          <tr><th>Social Media Links</th><td>To be updated by Alfred Nobel Public School office, if applicable</td></tr>
+          <tr><th>Developer Contact</th><td>Samrat Hazra, The Brain ERP support<br>Email: samrathazra088@gmail.com<br>Mobile: 6295633131</td></tr>
+        </table>
+      </section>
+    </div>
+  </main>
+
+  <footer class="wrap">
+    Last updated: July 3, 2026. For fee queries, please contact the Alfred Nobel Public School office.
+  </footer>
+</body>
+</html>
