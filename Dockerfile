@@ -11,7 +11,7 @@ ENV ANPS_ERP_UPLOAD_DIR=/data/uploads
 
 WORKDIR /app
 
-COPY anps-erp.html anps-mobile-app.html new-school-os.css new-school-os.js anps_erp_backend.py ./
+COPY anps-erp.html anps-mobile-app.html anps-payment-policies.html new-school-os.css new-school-os.js anps_erp_backend.py ./
 COPY assets ./assets
 
 RUN useradd --system --create-home --home-dir /home/anps anps \
