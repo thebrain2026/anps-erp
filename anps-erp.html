@@ -103,6 +103,7 @@
           <div class="nav-sub">
             <button data-view="classTimetable" type="button">Class Timetable</button>
             <button data-view="teacherTimetable" type="button">Teachers Time Table</button>
+            <button data-view="classTeacherAssignment" type="button">Class Teacher Assignment</button>
             <button data-view="syllabus" type="button">Syllabus</button>
             <button data-view="marksheet" type="button">Marksheet</button>
             <button data-view="academicProfile" type="button">Academic Profile</button>
@@ -1005,16 +1006,39 @@
             </div>
             <div class="receipt">Draft: Dear Parent, school fee is pending. Please clear dues before the due date to avoid late fee.</div>
           </section>
-          <section class="panel">
+          <section class="panel student-due-control-panel">
             <div class="panel-head">
               <div>
-                <p class="eyebrow">Reminder status</p>
-                <h2>Recent campaigns</h2>
+                <p class="eyebrow">Mobile app policy</p>
+                <h2>Student App Popup Control</h2>
+                <small>Centrally manage due reminders and overdue service locks from the ERP.</small>
               </div>
             </div>
-            <div class="task-list">
-              <article><b>0</b><div><strong>No campaigns</strong><p>No reminder campaigns entered yet.</p><small>Empty</small></div><em>Empty</em></article>
-            </div>
+            <form id="studentDueAccessForm" class="student-due-access-form">
+              <div class="student-due-access-preview" id="studentDueAccessPreview"></div>
+              <label class="switch-line">
+                <i>01</i>
+                <span>
+                  <strong>Due Popup</strong>
+                  <small>Enable or disable due reminder popups in the student app.</small>
+                </span>
+                <input name="duePopupEnabled" type="checkbox" />
+              </label>
+              <label class="switch-line">
+                <i>02</i>
+                <span>
+                  <strong id="dueLockTitle">75-Day App Lock</strong>
+                  <small>Lock all student app services except fees/payment after long overdue fees.</small>
+                </span>
+                <input name="dueLockEnabled" type="checkbox" />
+              </label>
+              <div class="student-due-access-bottom">
+                <label>Lock After Days
+                  <input name="dueLockDays" type="number" min="1" step="1" />
+                </label>
+                <button class="primary-action" type="submit">Save Control</button>
+              </div>
+            </form>
           </section>
         </div>
       </section>
@@ -1463,7 +1487,7 @@
 
       <section class="view" id="addHomework">
         <div class="panel homework-panel">
-          <div class="panel-head"><div><p class="eyebrow">Homework</p><h2>Add Homework</h2><small>Class-wise, subject-wise homework publish korun. Student app-e automatic dekhabe.</small></div></div>
+          <div class="panel-head"><div><p class="eyebrow">Homework</p><h2>Add Homework</h2><small>Publish homework by class and subject. It will appear automatically in the student app.</small></div></div>
           <form class="homework-form" id="homeworkEntryForm">
             <label>Class
               <select name="className" id="homeworkClassSelect" required></select>
@@ -1475,15 +1499,15 @@
               <input name="due" type="date" required />
             </label>
             <label class="wide">Homework
-              <textarea name="text" rows="4" placeholder="Homework details likhun..." required></textarea>
+              <textarea name="text" rows="4" placeholder="Write homework details..." required></textarea>
             </label>
             <label class="wide">Attachment
               <input name="attachment" type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
-              <small>PDF, DOC, DOCX attach kora jabe. Student app-e open/download hobe.</small>
+              <small>PDF, DOC and DOCX files can be attached. Students can open or download them in the app.</small>
             </label>
             <button class="primary-action" id="saveHomeworkButton" type="submit">Publish Homework</button>
           </form>
-          <div class="homework-preview" id="homeworkPreviewBox">Class and subject select korle homework student app-e class-wise show korbe.</div>
+          <div class="homework-preview" id="homeworkPreviewBox">After selecting a class and subject, the homework will appear class-wise in the student app.</div>
         </div>
       </section>
 
@@ -1793,6 +1817,56 @@
               <article><div><strong>Days</strong><small>Working days</small></div><span class="status-pill stable" id="teacherTimetableDayCount">0</span></article>
             </div>
             <div class="class-timetable-week-board teacher-timetable-board" id="teacherTimetableRows"></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="classTeacherAssignment">
+        <div class="class-teacher-layout">
+          <section class="panel class-teacher-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Academic control</p>
+                <h2>Class Teacher Assignment</h2>
+                <small>Assign one class teacher for each class and section. Teacher app access will follow this setup.</small>
+              </div>
+              <span class="status-pill stable" id="classTeacherAssignmentCount">0 assigned</span>
+            </div>
+            <form id="classTeacherAssignmentForm" class="class-teacher-form">
+              <label>Class
+                <select name="className" required>
+                  <option value="">Select Class</option>
+                </select>
+              </label>
+              <label>Section
+                <select name="sectionName">
+                  <option value="">All / No Section</option>
+                </select>
+              </label>
+              <label>Teacher
+                <select name="staffId" required>
+                  <option value="">Select Teacher</option>
+                </select>
+              </label>
+              <button class="primary-action" type="submit">Save Assignment</button>
+            </form>
+          </section>
+          <section class="panel class-teacher-list-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Assigned teachers</p>
+                <h2>Saved Class Teachers</h2>
+                <small>Use edit to change teacher, or delete to remove class teacher access.</small>
+              </div>
+            </div>
+            <div class="table-wrap class-teacher-table">
+              <table>
+                <thead><tr><th>Class</th><th>Section</th><th>Teacher</th><th>Subject</th><th>Phone</th><th>Action</th></tr></thead>
+                <tbody id="classTeacherAssignmentRows">
+                  <tr><td colspan="6">No class teacher assigned yet.</td></tr>
+                </tbody>
+              </table>
+            </div>
           </section>
         </div>
       </section>
@@ -2816,8 +2890,8 @@
       </section>
 
       <section class="view" id="smartBusTracking">
-        <div class="panel">
-          <div class="panel-head">
+        <div class="panel smart-bus-panel">
+          <div class="panel-head smart-bus-hero">
             <div>
               <p class="eyebrow">Transport</p>
               <h2>Smart Bus Tracking</h2>
@@ -2828,15 +2902,22 @@
               <button class="primary-action" id="smartBusSyncButton" type="button">Sync Bus Master Data</button>
             </div>
           </div>
-          <div class="report-cards">
-            <article><div><strong id="smartBusSyncStudents">0</strong><small>Transport students ready to sync</small></div><span class="status-pill stable">Master Data</span></article>
-            <article><div><strong id="smartBusSyncRoutes">0</strong><small>Mapped routes</small></div><span class="status-pill pending" id="smartBusConfigStatus">Checking</span></article>
-            <article><div><strong id="smartBusSyncVehicles">0</strong><small>Vehicles assigned</small></div><span class="status-pill stable">Separate GPS</span></article>
+          <div class="smart-bus-flow">
+            <span>ERP master data</span>
+            <i></i>
+            <span>Secure sync</span>
+            <i></i>
+            <span>Separate live GPS</span>
           </div>
-          <div class="security-health-summary" id="smartBusSyncStatus">
+          <div class="report-cards smart-bus-cards">
+            <article><span class="smart-bus-card-icon">ST</span><div><strong id="smartBusSyncStudents">0</strong><small>Transport students ready to sync</small></div><em>Master Data</em></article>
+            <article><span class="smart-bus-card-icon route">RT</span><div><strong id="smartBusSyncRoutes">0</strong><small>Mapped routes</small></div><em id="smartBusConfigStatus">Checking</em></article>
+            <article><span class="smart-bus-card-icon gps">GPS</span><div><strong id="smartBusSyncVehicles">0</strong><small>Vehicles assigned</small></div><em>Separate GPS</em></article>
+          </div>
+          <div class="smart-bus-status" id="smartBusSyncStatus">
             Smart Bus Tracking service configuration check pending.
           </div>
-          <div class="table-wrap">
+          <div class="table-wrap smart-bus-table-wrap">
             <table>
               <thead><tr><th>Admission No.</th><th>Student</th><th>Route</th><th>Pickup Point</th><th>Vehicle</th><th>Driver</th><th>Trip</th></tr></thead>
               <tbody id="smartBusSyncRows"><tr><td colspan="7">No transport student ready for sync.</td></tr></tbody>

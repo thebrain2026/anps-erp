@@ -31,6 +31,11 @@ const userAccessAccounts = [];
 const studentUserAccounts = [];
 const mobileAppActivity = [];
 const upiPaymentRequests = [];
+const mobileAppSettings = {
+  duePopupEnabled: true,
+  dueLockEnabled: true,
+  dueLockDays: 75
+};
 const rolePermissions = {};
 const rolePermissionAudit = {};
 const staffAttendanceRecords = [];
@@ -290,6 +295,7 @@ const titleMap = {
   entireSchoolFeesReport: "Entire School Fees",
   classTimetable: "Class Timetable",
   teacherTimetable: "Teachers Time Table",
+  classTeacherAssignment: "Class Teacher Assignment",
   syllabus: "Syllabus",
   marksheet: "Marksheet",
   academicProfile: "Academic Profile",
@@ -332,7 +338,7 @@ const ACCESS_PERMISSION_GROUPS = [
   {name: "Communication", modules: ["noticeBoard", "teacherNoticeRequests", "sendSms"]},
   {name: "Homework", modules: ["addHomework", "dailyAssignment"]},
   {name: "Reports", modules: ["reportStudentInformation", "dailyCollectionReport", "entireSchoolFeesReport"]},
-  {name: "Academic", modules: ["classTimetable", "teacherTimetable", "syllabus", "marksheet", "academicProfile", "teacherComplaint", "holidayReport", "annualCalendar"]},
+  {name: "Academic", modules: ["classTimetable", "teacherTimetable", "classTeacherAssignment", "syllabus", "marksheet", "academicProfile", "teacherComplaint", "holidayReport", "annualCalendar"]},
   {name: "Certificate", modules: ["studentIdCard", "teacherIdCard"]},
   {name: "Settings", modules: ["masterAdmin", "schoolManagement", "userAccessSettings", "studentUserLogin", "mobileAppActivity"]},
   {name: "Security", modules: ["securityMaintenance", "securityDuplicateReceipts", "securityAlertSolver", "securityRoleHealth"]},
@@ -363,6 +369,7 @@ const feeGroupForm = document.getElementById("feeGroupForm");
 const classSetupForm = document.getElementById("classSetupForm");
 const sectionSetupForm = document.getElementById("sectionSetupForm");
 const subjectSetupForm = document.getElementById("subjectSetupForm");
+const classTeacherAssignmentForm = document.getElementById("classTeacherAssignmentForm");
 const subjectAssignForm = document.getElementById("subjectAssignForm");
 const admissionEnquiryForm = document.getElementById("admissionEnquiryForm");
 const complaintRegisterForm = document.getElementById("complaintRegisterForm");
@@ -458,6 +465,7 @@ function getAppStateSnapshot() {
     studentUserAccounts,
     mobileAppActivity,
     upiPaymentRequests,
+    mobileAppSettings,
     rolePermissions,
     rolePermissionAudit,
     staffAttendanceRecords,
@@ -1039,6 +1047,11 @@ function applySavedState(saved = {}) {
     if (Array.isArray(saved.upiPaymentRequests)) {
       upiPaymentRequests.splice(0, upiPaymentRequests.length, ...saved.upiPaymentRequests);
     }
+    if (saved.mobileAppSettings && typeof saved.mobileAppSettings === "object") {
+      mobileAppSettings.duePopupEnabled = saved.mobileAppSettings.duePopupEnabled !== false;
+      mobileAppSettings.dueLockEnabled = saved.mobileAppSettings.dueLockEnabled !== false;
+      mobileAppSettings.dueLockDays = Math.max(1, Number(saved.mobileAppSettings.dueLockDays || 75));
+    }
     if (saved.rolePermissions && typeof saved.rolePermissions === "object") {
       Object.keys(rolePermissions).forEach(role => delete rolePermissions[role]);
       Object.assign(rolePermissions, saved.rolePermissions);
@@ -1612,6 +1625,7 @@ function renderActiveView(viewName = document.querySelector(".view.active")?.id 
   if (viewName === "upiPaymentVerification") renderUpiPaymentVerification();
   if (viewName === "feeMaster") renderFeeMaster();
   if (viewName === "feeGroup") renderFeeGroups();
+  if (viewName === "feeReminder") renderStudentDueAccessSettings();
   if (viewName === "addClassSection") renderClassSectionSetup();
   if (viewName === "tuitionFineSetup") renderTuitionFineSetup();
   if (viewName === "transportPickupPoint") renderTransportVillages();
@@ -1634,6 +1648,7 @@ function renderActiveView(viewName = document.querySelector(".view.active")?.id 
   if (viewName === "admissionEnquiry") renderAdmissionEnquiryModule();
   if (viewName === "classTimetable") renderClassTimetable();
   if (viewName === "teacherTimetable") renderTeacherTimetable();
+  if (viewName === "classTeacherAssignment") renderClassTeacherAssignment();
   if (viewName === "syllabus") renderSyllabusModule();
   if (viewName === "marksheet") renderMarksheetModule();
   if (viewName === "academicProfile") renderAcademicProfileModule();
@@ -1693,6 +1708,9 @@ function setView(viewName, options = {}) {
   }
   if (viewName === "teacherTimetable") {
     renderTeacherTimetable();
+  }
+  if (viewName === "classTeacherAssignment") {
+    renderClassTeacherAssignment();
   }
   if (viewName === "syllabus") {
     renderSyllabusModule();
@@ -2050,6 +2068,36 @@ function findActiveStudentByAdmissionOrName(value) {
     || getActiveStudents().find(student => getAdmissionSearchTokens(student.admissionNo || "").some(token => token === cleanLower || (compact && (token === compact || token.endsWith(compact)))))
     || getActiveStudents().find(student => String(student.name || "").trim().toLowerCase() === cleanLower)
     || null;
+}
+
+function renderStudentDueAccessSettings() {
+  const form = document.getElementById("studentDueAccessForm");
+  const preview = document.getElementById("studentDueAccessPreview");
+  const title = document.getElementById("dueLockTitle");
+  if (!form) return;
+  form.elements.duePopupEnabled.checked = mobileAppSettings.duePopupEnabled !== false;
+  form.elements.dueLockEnabled.checked = mobileAppSettings.dueLockEnabled !== false;
+  const lockDays = Math.max(1, Number(mobileAppSettings.dueLockDays || 75));
+  form.elements.dueLockDays.value = lockDays;
+  if (title) title.textContent = `${lockDays}-Day App Lock`;
+  if (preview) {
+    const popupText = mobileAppSettings.duePopupEnabled !== false ? "ON" : "OFF";
+    const lockText = mobileAppSettings.dueLockEnabled !== false ? `${lockDays} days` : "OFF";
+    preview.innerHTML = `
+      <strong>Current:</strong>
+      <span>Popup ${popupText}</span>
+      <span>App lock ${lockText}</span>
+      <small>The student app unlocks automatically after the payment is cleared and the app is synced or reopened.</small>
+    `;
+  }
+}
+
+function syncDueLockTitleFromInput() {
+  const input = document.querySelector("#studentDueAccessForm [name='dueLockDays']");
+  const title = document.getElementById("dueLockTitle");
+  if (!input || !title) return;
+  const days = Math.max(1, Number(input.value || mobileAppSettings.dueLockDays || 75));
+  title.textContent = `${days}-Day App Lock`;
 }
 
 function setSelectValue(select, value) {
@@ -3528,6 +3576,95 @@ function renderTeacherTimetable() {
   }).join("") : `<article class="timetable-empty-card teacher-timetable-empty">Select a teacher to view timetable.</article>`;
 }
 
+function getClassTeacherStaffOptions() {
+  const activeStaff = staffMembers.filter(staff => String(staff.status || "Active") !== "Disabled");
+  const teachers = activeStaff.filter(staff =>
+    /teacher|teaching/i.test(`${staff.role || ""} ${staff.designation || ""} ${staff.department || ""} ${staff.teachingSubject || ""}`)
+  );
+  return teachers.length ? teachers : activeStaff;
+}
+
+function getClassTeacherAssignmentRows() {
+  return staffMembers
+    .filter(staff => String(staff.status || "Active") !== "Disabled" && String(staff.assignedClass || "").trim())
+    .sort((a, b) => String(a.assignedClass || "").localeCompare(String(b.assignedClass || ""), undefined, {numeric: true}));
+}
+
+function getClassTeacherSection(staff = {}) {
+  if (staff.assignedSection) return staff.assignedSection;
+  return splitStudentClassSection(staff.assignedClass || "").section || "";
+}
+
+function getClassTeacherClass(staff = {}) {
+  if (staff.assignedClassName) return staff.assignedClassName;
+  return splitStudentClassSection(staff.assignedClass || "").klass || staff.assignedClass || "";
+}
+
+function renderClassTeacherAssignment() {
+  const form = classTeacherAssignmentForm;
+  const rows = document.getElementById("classTeacherAssignmentRows");
+  const count = document.getElementById("classTeacherAssignmentCount");
+  const classSelect = form?.elements.className;
+  const sectionSelect = form?.elements.sectionName;
+  const teacherSelect = form?.elements.staffId;
+  const classes = [...new Set([
+    ...getAdmissionClassOptions(),
+    ...getActiveStudents().map(student => splitStudentClassSection(student.klass || "").klass).filter(Boolean)
+  ])].sort((a, b) => a.localeCompare(b, undefined, {numeric: true}));
+  const sections = [...new Set([
+    ...getAdmissionSectionOptions(),
+    ...getActiveStudents().map(student => splitStudentClassSection(student.klass || "").section).filter(Boolean)
+  ])].sort((a, b) => a.localeCompare(b, undefined, {numeric: true}));
+  const currentClass = classSelect?.value || "";
+  const currentSection = sectionSelect?.value || "";
+  const currentTeacher = teacherSelect?.value || "";
+  if (classSelect) {
+    classSelect.innerHTML = `<option value="">Select Class</option>` + classes
+      .map(className => `<option value="${escapeHtml(className)}">${escapeHtml(className)}</option>`)
+      .join("");
+    if (currentClass) setSelectValue(classSelect, currentClass);
+  }
+  if (sectionSelect) {
+    sectionSelect.innerHTML = `<option value="">All / No Section</option>` + sections
+      .map(section => `<option value="${escapeHtml(section)}">${escapeHtml(section)}</option>`)
+      .join("");
+    if (currentSection) setSelectValue(sectionSelect, currentSection);
+  }
+  if (teacherSelect) {
+    const teachers = getClassTeacherStaffOptions();
+    teacherSelect.innerHTML = `<option value="">Select Teacher</option>` + teachers
+      .map(staff => `<option value="${escapeHtml(staff.staffId)}">${escapeHtml(staff.name || staff.staffId)}${staff.designation ? ` - ${escapeHtml(staff.designation)}` : ""}</option>`)
+      .join("");
+    if (currentTeacher) setSelectValue(teacherSelect, currentTeacher);
+  }
+  const assignments = getClassTeacherAssignmentRows();
+  if (count) count.textContent = `${assignments.length} assigned`;
+  if (!rows) return;
+  rows.innerHTML = assignments.map(staff => {
+    const className = getClassTeacherClass(staff);
+    const sectionName = getClassTeacherSection(staff);
+    return `
+      <tr>
+        <td><span class="class-teacher-chip">${escapeHtml(className || "-")}</span></td>
+        <td><span class="class-teacher-chip section">${escapeHtml(sectionName || "All")}</span></td>
+        <td><strong>${escapeHtml(staff.name || "-")}</strong><br><small>${escapeHtml(staff.staffId || "-")} | ${escapeHtml(staff.designation || staff.role || "-")}</small></td>
+        <td>${escapeHtml(staff.teachingSubject || "-")}</td>
+        <td>${escapeHtml(staff.phone || "-")}</td>
+        <td>
+          <div class="row-actions">
+            <button class="icon-action edit" type="button" data-edit-class-teacher="${escapeHtml(staff.staffId)}" title="Edit class teacher" aria-label="Edit class teacher ${escapeHtml(staff.name || staff.staffId)}">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4.7L19.3 9.4a2.1 2.1 0 0 0 0-3L17.6 4.7a2.1 2.1 0 0 0-3 0L4 15.3V20Zm3.8-2H6v-1.8l8.5-8.5 1.8 1.8L7.8 18Zm7.9-11.5.4-.4 1.8 1.8-.4.4-1.8-1.8Z"/></svg>
+            </button>
+            <button class="icon-action delete" type="button" data-delete-class-teacher="${escapeHtml(staff.staffId)}" title="Remove class teacher" aria-label="Remove class teacher ${escapeHtml(staff.name || staff.staffId)}">
+              <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 21c-.6 0-1.1-.2-1.5-.6S5 19.5 5 19V8H4V6h5V4h6v2h5v2h-1v11c0 .6-.2 1.1-.6 1.5s-.9.6-1.5.6H7ZM17 8H7v11h10V8Zm-8 9h2v-7H9v7Zm4 0h2v-7h-2v7Z"/></svg>
+            </button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("") || `<tr><td colspan="6">No class teacher assigned yet.</td></tr>`;
+}
+
 function setStudentReportPanel(activePanelId) {
   const classPanel = document.getElementById("classSectionReportPanel");
   const genderPanel = document.getElementById("studentGenderRatioReportPanel");
@@ -5003,7 +5140,7 @@ function readHomeworkAttachment(file) {
       expiresAt: getHomeworkAttachmentExpiry(new Date()),
       source: "inline-data"
     });
-    reader.onerror = () => reject(new Error("Attachment read kora gelo na."));
+    reader.onerror = () => reject(new Error("The attachment could not be read."));
     reader.readAsDataURL(file);
   });
 }
@@ -5020,7 +5157,7 @@ function renderHomeworkModule() {
       <span>Due: ${escapeHtml(latest.due || "-")}</span>
       <p>${escapeHtml(latest.text || "-")}</p>
       <div>${getHomeworkAttachmentLink(latest.attachment)}</div>
-    ` : "Class and subject select korle homework student app-e class-wise show korbe.";
+    ` : "After selecting a class and subject, the homework will appear class-wise in the student app.";
   }
   if (!rows) return;
   rows.innerHTML = homework.map((item, index) => `
@@ -5139,7 +5276,7 @@ function renderStaffDetails() {
         </div>
       </td>
       <td>${escapeHtml(staff.role || "-")}</td>
-      <td>${escapeHtml(staff.designation || "-")}${isTeacherDesignation(staff.designation) && staff.teachingSubject ? `<br><small>Subject: ${escapeHtml(staff.teachingSubject)}</small>` : ""}</td>
+      <td>${escapeHtml(staff.designation || "-")}${isTeacherDesignation(staff.designation) && staff.teachingSubject ? `<br><small>Subject: ${escapeHtml(staff.teachingSubject)}</small>` : ""}${staff.assignedClass ? `<br><small>Class Teacher: ${escapeHtml(staff.assignedClass)}</small>` : ""}</td>
       <td>${escapeHtml(staff.department || "-")}</td>
       <td>${escapeHtml(staff.phone || "-")}<br><small>Password: phone</small></td>
       <td>${escapeHtml(staff.email || "-")}<br><small>Mobile app login ID</small></td>
@@ -8931,7 +9068,7 @@ async function renderSmartBusTracking() {
     if (dashboardLink && config.dashboardUrl) dashboardLink.href = config.dashboardUrl;
     if (statusPill) {
       statusPill.textContent = config.configured ? "Configured" : "Setup Needed";
-      statusPill.className = `status-pill ${config.configured ? "stable" : "pending"}`;
+      statusPill.className = config.configured ? "ready" : "setup";
     }
     if (statusBox) {
       statusBox.textContent = config.configured
@@ -8941,7 +9078,7 @@ async function renderSmartBusTracking() {
   } catch (error) {
     if (statusPill) {
       statusPill.textContent = "Unavailable";
-      statusPill.className = "status-pill danger";
+      statusPill.className = "danger";
     }
     if (statusBox) statusBox.textContent = error.message || "Smart Bus Tracking config check failed.";
   }
@@ -12167,6 +12304,62 @@ document.getElementById("teacherNoticeRequestRows")?.addEventListener("click", e
   }
 });
 
+classTeacherAssignmentForm?.addEventListener("submit", event => {
+  event.preventDefault();
+  const className = String(classTeacherAssignmentForm.elements.className.value || "").trim();
+  const sectionName = String(classTeacherAssignmentForm.elements.sectionName.value || "").trim();
+  const staffId = String(classTeacherAssignmentForm.elements.staffId.value || "").trim();
+  const teacher = staffMembers.find(staff => staff.staffId === staffId);
+  if (!className || !staffId || !teacher) {
+    showToast("Class and teacher required.");
+    return;
+  }
+  const classSection = [className, sectionName].filter(Boolean).join(" ");
+  staffMembers.forEach(staff => {
+    if (staff.staffId !== staffId && String(staff.assignedClass || "").trim().toLowerCase() === classSection.toLowerCase()) {
+      staff.assignedClass = "";
+      staff.assignedClassName = "";
+      staff.assignedSection = "";
+    }
+  });
+  teacher.assignedClass = classSection;
+  teacher.assignedClassName = className;
+  teacher.assignedSection = sectionName;
+  if (!saveAppState()) return;
+  renderClassTeacherAssignment();
+  renderStaffDetails();
+  renderTeacherTimetable();
+  showToast(`${teacher.name || teacher.staffId} assigned as class teacher for ${classSection}.`);
+});
+
+document.getElementById("classTeacherAssignmentRows")?.addEventListener("click", event => {
+  const editButton = event.target.closest("[data-edit-class-teacher]");
+  const deleteButton = event.target.closest("[data-delete-class-teacher]");
+  if (editButton) {
+    const staff = staffMembers.find(item => item.staffId === editButton.dataset.editClassTeacher);
+    if (!staff || !classTeacherAssignmentForm) return;
+    renderClassTeacherAssignment();
+    setSelectValue(classTeacherAssignmentForm.elements.className, getClassTeacherClass(staff));
+    setSelectValue(classTeacherAssignmentForm.elements.sectionName, getClassTeacherSection(staff));
+    setSelectValue(classTeacherAssignmentForm.elements.staffId, staff.staffId || "");
+    classTeacherAssignmentForm.scrollIntoView({behavior: "smooth", block: "center"});
+    showToast(`${staff.name || staff.staffId} assignment loaded for edit.`);
+    return;
+  }
+  if (deleteButton) {
+    const staff = staffMembers.find(item => item.staffId === deleteButton.dataset.deleteClassTeacher);
+    if (!staff) return;
+    const oldClass = staff.assignedClass || "";
+    staff.assignedClass = "";
+    staff.assignedClassName = "";
+    staff.assignedSection = "";
+    if (!saveAppState()) return;
+    renderClassTeacherAssignment();
+    renderStaffDetails();
+    showToast(`${staff.name || staff.staffId} removed from ${oldClass || "class teacher"} assignment.`);
+  }
+});
+
 staffDetailsForm.addEventListener("submit", event => {
   event.preventDefault();
   const data = new FormData(staffDetailsForm);
@@ -12188,7 +12381,11 @@ staffDetailsForm.addEventListener("submit", event => {
     return;
   }
   const existingIndex = staffMembers.findIndex(item => item.staffId.toLowerCase() === staff.staffId.toLowerCase());
-  staff.status = existingIndex >= 0 ? staffMembers[existingIndex].status || "Active" : "Active";
+  const existingStaff = existingIndex >= 0 ? staffMembers[existingIndex] : {};
+  staff.status = existingStaff.status || "Active";
+  staff.assignedClass = existingStaff.assignedClass || "";
+  staff.assignedClassName = existingStaff.assignedClassName || "";
+  staff.assignedSection = existingStaff.assignedSection || "";
   if (existingIndex >= 0) staffMembers[existingIndex] = staff;
   else staffMembers.unshift(staff);
   saveAppState();
@@ -13441,6 +13638,19 @@ document.getElementById("topbarLogout")?.addEventListener("click", () => {
 document.getElementById("sendFeeReminder").addEventListener("click", () => {
   showToast("Fee reminder campaign queued.");
 });
+
+document.getElementById("studentDueAccessForm")?.addEventListener("submit", event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  mobileAppSettings.duePopupEnabled = Boolean(form.elements.duePopupEnabled.checked);
+  mobileAppSettings.dueLockEnabled = Boolean(form.elements.dueLockEnabled.checked);
+  mobileAppSettings.dueLockDays = Math.max(1, Number(form.elements.dueLockDays.value || 75));
+  saveAppState();
+  renderStudentDueAccessSettings();
+  showToast("Student app due popup control saved.");
+});
+
+document.querySelector("#studentDueAccessForm [name='dueLockDays']")?.addEventListener("input", syncDueLockTitleFromInput);
 
 document.getElementById("disableSelectedStudent").addEventListener("click", () => {
   showToast("Selected student disable request prepared.");
