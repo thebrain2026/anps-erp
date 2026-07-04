@@ -2341,6 +2341,7 @@
         teacherComplaints: (erpState.complaintRecords || []).filter(item =>
           normalizeAdmission(item.studentId) === normalizeAdmission(student.admissionNo)
           && normalizeText(item.source).toLowerCase().includes("teacher")
+          && isTeacherComplaintVisibleToStudent(item)
         ),
         ratings: [],
         complaints: (erpState.complaintRecords || []).filter(item => normalizeAdmission(item.studentId) === normalizeAdmission(student.admissionNo)),
@@ -3047,6 +3048,13 @@
       return "warn";
     }
 
+    function isTeacherComplaintVisibleToStudent(item = {}) {
+      const source = normalizeText(item.source).toLowerCase();
+      if (!source.includes("teacher")) return false;
+      const status = normalizeText(item.status || item.reviewStatus).toLowerCase();
+      return ["review", "accepted", "approved", "in progress", "resolved", "closed"].includes(status);
+    }
+
     function complaintStudentStatusBar(item = {}) {
       const status = item.status || "Open";
       const tone = complaintStatusTone(status);
@@ -3066,7 +3074,8 @@
     function studentComplaintCards(complaints = []) {
       const ownComplaints = complaints.filter(item => {
         const source = normalizeText(item.source).toLowerCase();
-        return source === "student" || source.includes("student app");
+        if (source === "student" || source.includes("student app")) return true;
+        return isTeacherComplaintVisibleToStudent(item);
       });
       if (!ownComplaints.length) {
         return card({
@@ -3365,7 +3374,7 @@
       $("#complaintList").innerHTML = studentComplaintCards(ws.complaints);
       $("#teacherComplaintTotal").textContent = `${ws.teacherComplaints.length} records`;
       $("#teacherComplaintList").innerHTML = ws.teacherComplaints.length
-        ? ws.teacherComplaints.map(item => card({ title: `${item.type} | ${item.status || "Open"}`, meta: `${item.date} | Teacher complaint`, body: item.note, badge: "Teacher", status: "warn" })).join("")
+        ? ws.teacherComplaints.map(item => card({ title: `${item.type} | ${item.status || "Review"}`, meta: `${item.date} | Reviewed teacher complaint`, body: `${item.note || item.details || "-"}${complaintStudentStatusBar(item)}`, badge: "Teacher", status: complaintStatusTone(item.status) })).join("")
         : card({ title: "No Teacher Complaint", meta: "Nothing raised by teachers.", body: "Homework, classwork or behaviour complaints raised by teachers will appear here.", badge: "Clear" });
       $("#leaveFormHost").innerHTML = "";
       $("#leaveList").innerHTML = "";
