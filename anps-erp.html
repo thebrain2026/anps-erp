@@ -106,6 +106,7 @@
             <button data-view="classTeacherAssignment" type="button">Class Teacher Assignment</button>
             <button data-view="syllabus" type="button">Syllabus</button>
             <button data-view="marksheet" type="button">Marksheet</button>
+            <button data-view="externalExamFees" type="button">External Exam Fees</button>
             <button data-view="academicProfile" type="button">Academic Profile</button>
             <button data-view="teacherComplaint" type="button">Teacher Complaint</button>
             <button data-view="holidayReport" type="button">Holiday Report</button>
@@ -1995,6 +1996,104 @@
               <thead><tr><th>Student</th><th>Class</th><th>Exam</th><th>Subject</th><th>Marks</th><th>Teacher</th><th>Status</th><th>Action</th></tr></thead>
               <tbody id="marksheetRows">
                 <tr><td colspan="8">No marks entered yet.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="externalExamFees">
+        <div class="panel homework-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Academic / External Exam</p>
+              <h2>External Exam Fees</h2>
+              <small>SOF, Olympiad and other outside exam fees stay fully separate from regular school fees.</small>
+            </div>
+            <span class="status-pill pending" id="externalExamFeesSummary">0 entries</span>
+          </div>
+          <form class="homework-form" id="externalExamFeeForm">
+            <label>Exam Name
+              <input name="examName" placeholder="SOF / Olympiad / Spell Bee" required />
+            </label>
+            <label>Subject / Category
+              <input name="subject" placeholder="Science / Math / English" required />
+            </label>
+            <label>Class
+              <select name="className" id="externalExamClassSelect"></select>
+            </label>
+            <label>Student
+              <select name="admissionNo" id="externalExamStudentSelect" required></select>
+            </label>
+            <label>Amount
+              <input name="amount" type="number" min="0" step="1" placeholder="0" required />
+            </label>
+            <label>Payment Date
+              <input name="paymentDate" type="date" />
+            </label>
+            <label>Payment Mode
+              <select name="mode">
+                <option value="Cash">Cash</option>
+                <option value="Bank">Bank</option>
+                <option value="UPI">UPI</option>
+                <option value="Other">Other</option>
+              </select>
+            </label>
+            <label>Status
+              <select name="status">
+                <option value="Paid">Paid</option>
+                <option value="Due">Due</option>
+                <option value="Registered">Registered</option>
+              </select>
+            </label>
+            <label>Reference No.
+              <input name="referenceNo" placeholder="Receipt / UPI reference" />
+            </label>
+            <label class="wide">Remarks
+              <textarea name="remarks" placeholder="Optional note"></textarea>
+            </label>
+            <button class="primary-action" id="saveExternalExamFeeButton" type="submit">Save External Exam Fee</button>
+            <button class="ghost-action" id="resetExternalExamFeeForm" type="button">Clear</button>
+          </form>
+        </div>
+        <div class="panel homework-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Separate Register</p>
+              <h2>External Exam Fee Register</h2>
+              <small>Use this list to match who will appear for each external exam and who has paid.</small>
+            </div>
+          </div>
+          <div class="report-filter-row">
+            <input id="externalExamSearch" type="search" placeholder="Search exam, student, admission no." />
+            <select id="externalExamFilter">
+              <option value="">All Exams</option>
+            </select>
+            <select id="externalExamStatusFilter">
+              <option value="">All Status</option>
+              <option value="Paid">Paid</option>
+              <option value="Due">Due</option>
+              <option value="Registered">Registered</option>
+            </select>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Exam</th>
+                  <th>Subject</th>
+                  <th>Student</th>
+                  <th>Class</th>
+                  <th>Amount</th>
+                  <th>Status</th>
+                  <th>Mode</th>
+                  <th>Date</th>
+                  <th>Reference</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody id="externalExamFeeRows">
+                <tr><td colspan="10">No external exam fees entered yet.</td></tr>
               </tbody>
             </table>
           </div>

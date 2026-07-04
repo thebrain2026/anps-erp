@@ -43,6 +43,7 @@ const staffAttendanceRecords = [];
 const classTimetableEntries = [];
 const syllabusEntries = [];
 const marksheetEntries = [];
+const externalExamFees = [];
 const holidayReports = [];
 const transportRoutes = [];
 const transportVehicles = [];
@@ -299,6 +300,7 @@ const titleMap = {
   classTeacherAssignment: "Class Teacher Assignment",
   syllabus: "Syllabus",
   marksheet: "Marksheet",
+  externalExamFees: "External Exam Fees",
   academicProfile: "Academic Profile",
   teacherComplaint: "Teacher Complaint",
   holidayReport: "Holiday Report",
@@ -339,7 +341,7 @@ const ACCESS_PERMISSION_GROUPS = [
   {name: "Communication", modules: ["noticeBoard", "teacherNoticeRequests", "sendSms"]},
   {name: "Homework", modules: ["addHomework", "dailyAssignment"]},
   {name: "Reports", modules: ["reportStudentInformation", "dailyCollectionReport", "entireSchoolFeesReport"]},
-  {name: "Academic", modules: ["classTimetable", "teacherTimetable", "classTeacherAssignment", "syllabus", "marksheet", "academicProfile", "teacherComplaint", "holidayReport", "annualCalendar"]},
+  {name: "Academic", modules: ["classTimetable", "teacherTimetable", "classTeacherAssignment", "syllabus", "marksheet", "externalExamFees", "academicProfile", "teacherComplaint", "holidayReport", "annualCalendar"]},
   {name: "Certificate", modules: ["studentIdCard", "teacherIdCard"]},
   {name: "Settings", modules: ["masterAdmin", "schoolManagement", "userAccessSettings", "studentUserLogin", "mobileAppActivity"]},
   {name: "Security", modules: ["securityMaintenance", "securityDuplicateReceipts", "securityAlertSolver", "securityRoleHealth"]},
@@ -421,6 +423,7 @@ let activeTimetableDay = "Monday";
 let timetableBuilderRows = [];
 let timetableIntervalMap = {};
 let editingSyllabusIndex = -1;
+let editingExternalExamFeeId = "";
 let editingHolidayIndex = -1;
 let editingSchoolIndex = -1;
 
@@ -474,6 +477,7 @@ function getAppStateSnapshot() {
     classTimetableEntries: getPersistableTimetableEntries(),
     syllabusEntries,
     marksheetEntries,
+    externalExamFees,
     holidayReports,
     staffBiometricDevice,
     customAdmissionClasses,
@@ -738,6 +742,7 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
     staffAttendanceRecords: ["id", "staffId", "date"],
     syllabusEntries: ["id"],
     marksheetEntries: ["id", "studentAdmissionNo", "exam", "subject"],
+    externalExamFees: ["id", "admissionNo", "examName", "subject"],
     holidayReports: ["id", "date", "holidayName"],
     transportRoutes: ["routeName"],
     transportVehicles: ["id", "vehicleNo"],
@@ -1109,6 +1114,9 @@ function applySavedState(saved = {}) {
         status: item.status || "Published"
       })));
     }
+    if (Array.isArray(saved.externalExamFees)) {
+      externalExamFees.splice(0, externalExamFees.length, ...saved.externalExamFees);
+    }
     if (Array.isArray(saved.holidayReports)) {
       holidayReports.splice(0, holidayReports.length, ...saved.holidayReports);
     }
@@ -1256,6 +1264,7 @@ function applyProductionCleanSeedOnce() {
   classTimetableEntries.splice(0, classTimetableEntries.length);
   syllabusEntries.splice(0, syllabusEntries.length);
   marksheetEntries.splice(0, marksheetEntries.length);
+  externalExamFees.splice(0, externalExamFees.length);
   holidayReports.splice(0, holidayReports.length);
   transportRoutes.splice(0, transportRoutes.length);
   transportVehicles.splice(0, transportVehicles.length);
@@ -1659,6 +1668,7 @@ function renderActiveView(viewName = document.querySelector(".view.active")?.id 
   if (viewName === "classTeacherAssignment") renderClassTeacherAssignment();
   if (viewName === "syllabus") renderSyllabusModule();
   if (viewName === "marksheet") renderMarksheetModule();
+  if (viewName === "externalExamFees") renderExternalExamFees();
   if (viewName === "academicProfile") renderAcademicProfileModule();
   if (viewName === "holidayReport") renderHolidayReport();
   if (viewName === "annualCalendar") renderAnnualCalendar();
@@ -4537,6 +4547,139 @@ function renderMarksheetModule() {
       </tr>
     `;
   }).join("") || `<tr><td colspan="8">No marks entry found.</td></tr>`;
+}
+
+function getExternalExamStudentClass(student = {}) {
+  return String(student.className || student.klass || student.class || "").trim();
+}
+
+function getExternalExamStatusTone(status = "") {
+  const normalized = String(status || "").toLowerCase();
+  if (normalized === "paid") return "stable";
+  if (normalized === "due") return "urgent";
+  return "pending";
+}
+
+function formatExternalExamAmount(amount = 0) {
+  return `Rs. ${Number(amount || 0).toLocaleString("en-IN")}`;
+}
+
+function renderExternalExamOptions({ preserveStudent = true } = {}) {
+  const classSelect = document.getElementById("externalExamClassSelect");
+  const studentSelect = document.getElementById("externalExamStudentSelect");
+  const selectedClass = classSelect?.value || "";
+  const selectedStudent = preserveStudent ? studentSelect?.value || "" : "";
+  const classes = getAdmissionClassOptions();
+  if (classSelect) {
+    classSelect.innerHTML = `<option value="">All Classes</option>${classes.map(className => `<option value="${escapeHtml(className)}">${escapeHtml(className)}</option>`).join("")}`;
+    if (selectedClass) setSelectValue(classSelect, selectedClass);
+  }
+  const className = classSelect?.value || "";
+  const studentRows = getActiveStudents().filter(student => {
+    if (!className) return true;
+    return getExternalExamStudentClass(student) === className;
+  });
+  if (studentSelect) {
+    studentSelect.innerHTML = `<option value="">Select Student</option>${studentRows.map(student => `<option value="${escapeHtml(student.admissionNo || "")}">${escapeHtml(student.admissionNo || "-")} - ${escapeHtml(student.name || "-")}</option>`).join("")}`;
+    if (selectedStudent) setSelectValue(studentSelect, selectedStudent);
+  }
+}
+
+function resetExternalExamFeeForm() {
+  editingExternalExamFeeId = "";
+  const form = document.getElementById("externalExamFeeForm");
+  if (form) {
+    form.reset();
+    if (form.elements.paymentDate) form.elements.paymentDate.value = toDateInputValue(new Date());
+  }
+  const button = document.getElementById("saveExternalExamFeeButton");
+  if (button) button.textContent = "Save External Exam Fee";
+  renderExternalExamOptions({ preserveStudent: false });
+}
+
+function renderExternalExamFees() {
+  renderExternalExamOptions();
+  const rows = document.getElementById("externalExamFeeRows");
+  const summary = document.getElementById("externalExamFeesSummary");
+  const examFilter = document.getElementById("externalExamFilter");
+  const statusFilter = String(document.getElementById("externalExamStatusFilter")?.value || "");
+  const search = String(document.getElementById("externalExamSearch")?.value || "").trim().toLowerCase();
+  const selectedExam = String(examFilter?.value || "");
+  const examNames = [...new Set(externalExamFees.map(item => String(item.examName || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
+  if (examFilter) {
+    examFilter.innerHTML = `<option value="">All Exams</option>${examNames.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("")}`;
+    if (selectedExam) setSelectValue(examFilter, selectedExam);
+  }
+  const filtered = externalExamFees.filter(item => {
+    if (selectedExam && item.examName !== selectedExam) return false;
+    if (statusFilter && item.status !== statusFilter) return false;
+    if (!search) return true;
+    return [item.examName, item.subject, item.studentName, item.admissionNo, item.className, item.referenceNo]
+      .some(value => String(value || "").toLowerCase().includes(search));
+  });
+  const paidTotal = filtered.filter(item => item.status === "Paid").reduce((sum, item) => sum + Number(item.amount || 0), 0);
+  const dueCount = filtered.filter(item => item.status === "Due").length;
+  if (summary) summary.textContent = `${filtered.length} entries | ${formatExternalExamAmount(paidTotal)} collected | ${dueCount} due`;
+  if (!rows) return;
+  rows.innerHTML = filtered.map(item => {
+    const originalIndex = externalExamFees.indexOf(item);
+    const classText = [item.className, item.sectionName].filter(Boolean).join(" ") || "-";
+    return `
+      <tr>
+        <td><strong>${escapeHtml(item.examName || "-")}</strong><br><small>External exam</small></td>
+        <td>${escapeHtml(item.subject || "-")}</td>
+        <td><strong>${escapeHtml(item.studentName || "-")}</strong><br><small>${escapeHtml(item.admissionNo || "-")}</small></td>
+        <td>${escapeHtml(classText)}</td>
+        <td><strong>${escapeHtml(formatExternalExamAmount(item.amount))}</strong></td>
+        <td><span class="status-pill ${getExternalExamStatusTone(item.status)}">${escapeHtml(item.status || "Paid")}</span></td>
+        <td>${escapeHtml(item.mode || "-")}</td>
+        <td>${escapeHtml(item.paymentDate ? formatDateDDMMYYYY(item.paymentDate) : "-")}</td>
+        <td>${escapeHtml(item.referenceNo || "-")}</td>
+        <td class="inline-actions">
+          <button class="icon-action edit" type="button" data-edit-external-exam-fee="${originalIndex}" title="Edit external exam fee" aria-label="Edit external exam fee">✎</button>
+          <button class="icon-action delete" type="button" data-delete-external-exam-fee="${originalIndex}" title="Delete external exam fee" aria-label="Delete external exam fee">×</button>
+        </td>
+      </tr>
+    `;
+  }).join("") || `<tr><td colspan="10">No external exam fee entry found.</td></tr>`;
+}
+
+function saveExternalExamFee(form) {
+  const data = new FormData(form);
+  const admissionNo = String(data.get("admissionNo") || "").trim();
+  const student = getActiveStudents().find(item => normalizeAdmissionNo(item.admissionNo || "") === normalizeAdmissionNo(admissionNo)) || {};
+  const existingIndex = externalExamFees.findIndex(item => item.id === editingExternalExamFeeId);
+  const entry = {
+    id: editingExternalExamFeeId || `EXT-EXAM-${Date.now()}`,
+    examName: String(data.get("examName") || "").trim(),
+    subject: String(data.get("subject") || "").trim(),
+    admissionNo,
+    studentName: student.name || "",
+    className: String(data.get("className") || getExternalExamStudentClass(student)).trim(),
+    sectionName: String(student.section || student.sectionName || "").trim(),
+    amount: Number(data.get("amount") || 0),
+    paymentDate: String(data.get("paymentDate") || toDateInputValue(new Date())).trim(),
+    mode: String(data.get("mode") || "Cash").trim(),
+    status: String(data.get("status") || "Paid").trim(),
+    referenceNo: String(data.get("referenceNo") || "").trim(),
+    remarks: String(data.get("remarks") || "").trim(),
+    source: "Main ERP",
+    updatedAt: new Date().toISOString(),
+    updatedBy: getCurrentTopbarRole()
+  };
+  if (!entry.examName || !entry.subject || !entry.admissionNo) {
+    showToast("Exam name, subject and student are required.", "error");
+    return;
+  }
+  if (existingIndex >= 0) {
+    externalExamFees.splice(existingIndex, 1, {...externalExamFees[existingIndex], ...entry});
+  } else {
+    externalExamFees.unshift(entry);
+  }
+  saveAppState();
+  resetExternalExamFeeForm();
+  renderExternalExamFees();
+  showToast("External exam fee saved separately.");
 }
 
 function saveMarksheetEntry(form) {
@@ -13817,6 +13960,55 @@ document.getElementById("marksheetStatusFilter")?.addEventListener("change", ren
 document.getElementById("marksheetSearch")?.addEventListener("input", renderMarksheetModule);
 document.getElementById("academicProfileSearch")?.addEventListener("input", renderAcademicProfileModule);
 document.getElementById("academicProfileStudentSelect")?.addEventListener("change", renderAcademicProfileModule);
+
+document.getElementById("externalExamFeeForm")?.addEventListener("submit", event => {
+  event.preventDefault();
+  saveExternalExamFee(event.currentTarget);
+});
+
+document.getElementById("externalExamClassSelect")?.addEventListener("change", () => {
+  renderExternalExamOptions({ preserveStudent: false });
+});
+
+document.getElementById("resetExternalExamFeeForm")?.addEventListener("click", resetExternalExamFeeForm);
+document.getElementById("externalExamSearch")?.addEventListener("input", renderExternalExamFees);
+document.getElementById("externalExamFilter")?.addEventListener("change", renderExternalExamFees);
+document.getElementById("externalExamStatusFilter")?.addEventListener("change", renderExternalExamFees);
+
+document.getElementById("externalExamFeeRows")?.addEventListener("click", event => {
+  const editButton = event.target.closest("[data-edit-external-exam-fee]");
+  const deleteButton = event.target.closest("[data-delete-external-exam-fee]");
+  if (editButton) {
+    const entry = externalExamFees[Number(editButton.dataset.editExternalExamFee)];
+    const form = document.getElementById("externalExamFeeForm");
+    if (!entry || !form) return;
+    editingExternalExamFeeId = entry.id || "";
+    form.elements.examName.value = entry.examName || "";
+    form.elements.subject.value = entry.subject || "";
+    form.elements.className.value = entry.className || "";
+    renderExternalExamOptions({ preserveStudent: false });
+    form.elements.admissionNo.value = entry.admissionNo || "";
+    form.elements.amount.value = Number(entry.amount || 0);
+    form.elements.paymentDate.value = entry.paymentDate || "";
+    form.elements.mode.value = entry.mode || "Cash";
+    form.elements.status.value = entry.status || "Paid";
+    form.elements.referenceNo.value = entry.referenceNo || "";
+    form.elements.remarks.value = entry.remarks || "";
+    const button = document.getElementById("saveExternalExamFeeButton");
+    if (button) button.textContent = "Update External Exam Fee";
+    form.scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  if (deleteButton) {
+    const index = Number(deleteButton.dataset.deleteExternalExamFee);
+    const entry = externalExamFees[index];
+    if (!entry) return;
+    if (!confirm(`Delete external exam fee for ${entry.studentName || entry.admissionNo || "student"}?`)) return;
+    externalExamFees.splice(index, 1);
+    saveAppState();
+    renderExternalExamFees();
+    showToast("External exam fee deleted.");
+  }
+});
 
 document.getElementById("marksheetRows")?.addEventListener("click", event => {
   const checkButton = event.target.closest("[data-check-marksheet]");
