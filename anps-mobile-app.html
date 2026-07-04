@@ -3075,6 +3075,23 @@
         : card({ title: "No class scheduled today", meta: "Schedule empty for today.", badge: "Free", status: "warn" });
     }
 
+    function teacherClassWiseTimetable(entries = []) {
+      const groups = entries.reduce((map, item) => {
+        const className = item.className || "Class";
+        if (!map.has(className)) map.set(className, []);
+        map.get(className).push(item);
+        return map;
+      }, new Map());
+      return [...groups.entries()].map(([className, rows]) => {
+        const sorted = rows.slice().sort((a, b) => `${timetableDayKey(a.day)} ${a.time || ""}`.localeCompare(`${timetableDayKey(b.day)} ${b.time || ""}`));
+        const list = sorted.map((item, index) => {
+          const period = item.period || item.periodNo || item.periodNumber || `Period ${index + 1}`;
+          return `<div class="student-row"><div><b>${escapeHtml(period)} | ${escapeHtml(item.day || "-")}</b><span>${escapeHtml(item.time || "-")} | ${escapeHtml(item.subject || "-")}</span></div><span class="badge">${escapeHtml(item.room || "Room")}</span></div>`;
+        }).join("");
+        return `<article class="card"><div class="card-head"><div><h3>${escapeHtml(className)}</h3><p>${rows.length} period${rows.length === 1 ? "" : "s"} assigned</p></div><span class="status ok">Class</span></div><div class="stack" style="padding-top:10px">${list}</div></article>`;
+      }).join("");
+    }
+
     function gradeForMarks(marks = 0, maxMarks = 100, fallback = "") {
       if (fallback) return fallback;
       const percent = (Number(maxMarks) || 100) ? ((Number(marks) || 0) / (Number(maxMarks) || 100)) * 100 : 0;
@@ -3609,7 +3626,7 @@
             `<div class="section-title"><h2>Today's Classes</h2><span>${todayTeacherClasses.length}</span></div>`,
             teacherTodayClassCards(todayTeacherClasses),
             `<div class="section-title"><h2>Full Timetable</h2><span>${ws.timetable.length}</span></div>`,
-            ws.timetable.map(item => card({ title: `${item.day}, ${item.time}`, meta: `${item.className} - ${item.subject}`, badge: item.room })).join("")
+            teacherClassWiseTimetable(ws.timetable)
           ].join("")
         : card({ title: "No timetable published", meta: "Main ERP Class Timetable theke new entry korle ekhane show korbe.", badge: "Empty", status: "warn" });
       $("#subjectsList").innerHTML = ws.subjects.map(item => card({ title: item.className, meta: item.subject, badge: "Assigned" })).join("");
