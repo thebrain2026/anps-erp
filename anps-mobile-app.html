@@ -3071,7 +3071,12 @@
 
     function teacherTodayClassCards(entries = []) {
       return entries.length
-        ? entries.map(item => card({ title: `${item.time || "-"} | ${item.className || "Class"}`, meta: `${item.subject || "-"}${item.room ? ` - ${item.room}` : ""}`, badge: "Today" })).join("")
+        ? entries.map(item => card({
+            title: `Time: ${item.time || "-"}`,
+            meta: `Class: ${item.className || "Class"}`,
+            body: `Subject: ${item.subject || "-"}${item.room ? ` | Room: ${item.room}` : ""}`,
+            badge: "Today"
+          })).join("")
         : card({ title: "No class scheduled today", meta: "Schedule empty for today.", badge: "Free", status: "warn" });
     }
 
