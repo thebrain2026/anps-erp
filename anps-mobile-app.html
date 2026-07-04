@@ -3038,6 +3038,43 @@
       return { avg: (total / ratings.length).toFixed(1), count: ratings.length };
     }
 
+    function timetableDayKey(value = "") {
+      const clean = normalizeText(value).toLowerCase();
+      if (!clean) return "";
+      const map = {
+        mon: "monday",
+        monday: "monday",
+        tue: "tuesday",
+        tues: "tuesday",
+        tuesday: "tuesday",
+        wed: "wednesday",
+        weds: "wednesday",
+        wednesday: "wednesday",
+        thu: "thursday",
+        thur: "thursday",
+        thurs: "thursday",
+        thursday: "thursday",
+        fri: "friday",
+        friday: "friday",
+        sat: "saturday",
+        saturday: "saturday",
+        sun: "sunday",
+        sunday: "sunday"
+      };
+      return map[clean.slice(0, 3)] || map[clean] || clean;
+    }
+
+    function todayTimetableEntries(entries = []) {
+      const key = timetableDayKey(todayName);
+      return entries.filter(item => timetableDayKey(item.day) === key);
+    }
+
+    function teacherTodayClassCards(entries = []) {
+      return entries.length
+        ? entries.map(item => card({ title: `${item.time || "-"} | ${item.className || "Class"}`, meta: `${item.subject || "-"}${item.room ? ` - ${item.room}` : ""}`, badge: "Today" })).join("")
+        : card({ title: "No class scheduled today", meta: "Schedule empty for today.", badge: "Free", status: "warn" });
+    }
+
     function gradeForMarks(marks = 0, maxMarks = 100, fallback = "") {
       if (fallback) return fallback;
       const percent = (Number(maxMarks) || 100) ? ((Number(marks) || 0) / (Number(maxMarks) || 100)) * 100 : 0;
@@ -3374,7 +3411,7 @@
       const ws = state.workspace;
       const isTeacher = state.role === "teacher";
       const modules = isTeacher ? teacherModules : studentModules;
-      const todays = ws.timetable.filter(item => item.day === todayName);
+      const todays = todayTimetableEntries(ws.timetable);
       $("#appTitle").textContent = "Alfred Nobel Public School";
       $("#appSubtitle").textContent = isTeacher ? `Teacher Portal | ${user.role} - ${user.department}` : `Student Portal | ${user.className} - Roll ${user.roll}`;
       $("#heroCard").classList.toggle("teacher", isTeacher);
@@ -3406,9 +3443,11 @@
         : `<div class="metric"><b>${user.attendance}</b><span>Attendance</span></div><button class="metric" type="button" data-nav="fees" aria-label="Open fees status page"><b>₹${user.feesDue}</b><span>Due</span></button><div class="metric"><b>${ws.classwork.length}</b><span>Classwork</span></div>`;
 
       $("#moduleGrid").innerHTML = modules.map(item => `<button class="module" data-nav="${item.id}"><span class="module-icon">${item.icon}</span><b>${item.label}</b></button>`).join("");
-      $("#quickList").innerHTML = todays.length
-        ? todays.map(item => card({ title: `${item.time} | ${isTeacher ? item.className : item.subject}`, meta: isTeacher ? `${item.subject} - ${item.room}` : `${item.room}`, badge: "Today" })).join("")
-        : card({ title: "No class scheduled today", meta: "Schedule empty for today.", badge: "Free", status: "warn" });
+      $("#quickList").innerHTML = isTeacher
+        ? teacherTodayClassCards(todays)
+        : todays.length
+          ? todays.map(item => card({ title: `${item.time} | ${item.subject}`, meta: `${item.room}`, badge: "Today" })).join("")
+          : card({ title: "No class scheduled today", meta: "Schedule empty for today.", badge: "Free", status: "warn" });
       renderNav(modules);
     }
 
@@ -3564,8 +3603,14 @@
         card({ title: "Teacher Profile", meta: `${user.role} | ${user.department}`, body: `Assigned class: ${user.assignedClass}`, badge: "Staff" })
       ].join("");
       $("#timetableScope").textContent = "Own schedule";
+      const todayTeacherClasses = todayTimetableEntries(ws.timetable);
       $("#timetableList").innerHTML = ws.timetable.length
-        ? ws.timetable.map(item => card({ title: `${item.day}, ${item.time}`, meta: `${item.className} - ${item.subject}`, badge: item.room })).join("")
+        ? [
+            `<div class="section-title"><h2>Today's Classes</h2><span>${todayTeacherClasses.length}</span></div>`,
+            teacherTodayClassCards(todayTeacherClasses),
+            `<div class="section-title"><h2>Full Timetable</h2><span>${ws.timetable.length}</span></div>`,
+            ws.timetable.map(item => card({ title: `${item.day}, ${item.time}`, meta: `${item.className} - ${item.subject}`, badge: item.room })).join("")
+          ].join("")
         : card({ title: "No timetable published", meta: "Main ERP Class Timetable theke new entry korle ekhane show korbe.", badge: "Empty", status: "warn" });
       $("#subjectsList").innerHTML = ws.subjects.map(item => card({ title: item.className, meta: item.subject, badge: "Assigned" })).join("");
       renderDashboardLatestNotice(ws.notices);
