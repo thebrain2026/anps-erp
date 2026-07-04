@@ -1972,7 +1972,7 @@
           expiresAt: homeworkAttachmentExpiry(new Date()),
           source: "teacher-app"
         });
-        reader.onerror = () => reject(new Error("Attachment read kora gelo na."));
+        reader.onerror = () => reject(new Error("Attachment could not be read."));
         reader.readAsDataURL(file);
       });
     }
@@ -2236,7 +2236,7 @@
       return card({
         title: "Current Fees Status",
         meta: amount ? "Outstanding amount" : "No due amount",
-        body: amount ? `Outstanding amount: ₹${amount}` : "Fees clear ache.",
+        body: amount ? `Outstanding amount: ₹${amount}` : "Fees are clear.",
         badge: amount ? "Due" : "Clear",
         status: amount ? "warn" : "ok"
       });
@@ -3259,7 +3259,7 @@
         return card({
           title: "No Complaint Submitted",
           meta: "Your complaint history is empty.",
-          body: "Submit korle ekhanei complaint details and status dekhabe.",
+          body: "After submission, complaint details and status will appear here.",
           badge: "Clear"
         });
       }
@@ -3308,7 +3308,7 @@
       try {
         await AppApi.recordStudentActivity(status);
       } catch (error) {
-        if (!quiet) toast("App activity save hoyni.");
+        if (!quiet) toast("App activity could not be saved.");
         console.warn("Student app activity update failed.", error);
       }
     }
@@ -3420,7 +3420,7 @@
 
     function openView(id) {
       if (dueAccessLocked() && id !== "fees") {
-        toast("Fees clear korle app services abar chalu hobe.");
+        toast("App services will resume after fees are cleared.");
         showDueAccessPopup(true);
         id = "fees";
       }
@@ -3499,12 +3499,12 @@
       $("#resultTotal").textContent = ws.results.length ? `${ws.results.length} published` : "Not published";
       $("#resultSummary").innerHTML = ws.results.length
         ? ws.results.map(result => card({ title: `${result.exam} | ${result.grade}`, meta: `${result.total}/${result.maxTotal} | ${result.percentage}`, body: `Status: ${result.status}`, badge: "Published" })).join("")
-        : card({ title: "Result Not Published", meta: "ERP theke result publish hole ekhane dekhabe.", body: "Your marksheet will appear here after school publishes it.", badge: "Pending", status: "warn" });
+        : card({ title: "Result Not Published", meta: "Results will appear here after ERP publication.", body: "Your marksheet will appear here after school publishes it.", badge: "Pending", status: "warn" });
       $("#resultList").innerHTML = ws.results.map(result => `<article class="card"><div class="card-head"><div><h3>${result.exam}</h3><p>${result.className} | ${result.percentage}</p></div><span class="status ok">${result.grade}</span></div>${resultSubjectList(result)}</article>`).join("");
       $("#timetableScope").textContent = "Own schedule";
       $("#timetableList").innerHTML = ws.timetable.length
         ? ws.timetable.map(item => card({ title: `${item.day}, ${item.time}`, meta: `${item.subject} - ${item.room}`, badge: item.className })).join("")
-        : card({ title: "No timetable published", meta: "Main ERP theke timetable entry korle ekhane show korbe.", badge: "Empty", status: "warn" });
+        : card({ title: "No timetable published", meta: "Timetable entries will appear here after Main ERP update.", badge: "Empty", status: "warn" });
       $("#syllabusTitle").textContent = "Syllabus";
       $("#syllabusFormHost").innerHTML = "";
       $("#syllabusTotal").textContent = `${ws.syllabus.length} topics`;
@@ -3642,7 +3642,7 @@
             `<div class="section-title"><h2>Class-wise Periods</h2><span>${ws.timetable.length}</span></div>`,
             teacherClassWiseTimetable(ws.timetable)
           ].join("")
-        : card({ title: "No timetable published", meta: "Main ERP Class Timetable theke new entry korle ekhane show korbe.", badge: "Empty", status: "warn" });
+        : card({ title: "No timetable published", meta: "New entries from Main ERP Class Timetable will appear here.", badge: "Empty", status: "warn" });
       $("#subjectsList").innerHTML = ws.subjects.map(item => card({ title: item.className, meta: item.subject, badge: "Assigned" })).join("");
       renderDashboardLatestNotice(ws.notices);
       $("#resultTotal").textContent = `${ws.results.length} records`;
@@ -3650,7 +3650,7 @@
       const resultStudents = ws.students.filter(item => !initialResultClass || item.className === initialResultClass);
       $("#resultSummary").innerHTML = isClassTeacher()
         ? `<article class="card"><form class="form-grid" id="resultForm"><label>Class<select id="resultClass" required><option value="${initialResultClass}">${initialResultClass}</option></select></label><label>Subject<select id="resultSubject" required>${teacherSubjectOptionsForClass(initialResultClass)}</select></label><label>Student<select id="resultStudent" required>${resultStudents.map(item => `<option value="${item.admissionId}|${item.name}|${item.className}">${item.name} - ${item.className}</option>`).join("")}</select></label><label>Exam Name<input id="resultExam" placeholder="Exam name" required /></label><label>Marks Summary<input id="resultSummaryInput" placeholder="Example: 86/100" required /></label><label>Grade<select id="resultGrade"><option value="">Auto</option><option>A+</option><option>A</option><option>B+</option><option>B</option><option>C</option><option>D</option></select></label><button class="primary" type="submit" ${resultStudents.length ? "" : "disabled"}>Submit For ERP Review</button></form></article>`
-        : card({ title: "Result Entry Locked", meta: "Only class teacher", body: "Class teacher assigned na thakle student name ba result entry show hobe na.", badge: "Restricted", status: "warn" });
+        : card({ title: "Result Entry Locked", meta: "Only class teacher", body: "Student names and result entry are available only for assigned class teachers.", badge: "Restricted", status: "warn" });
       $("#resultList").innerHTML = ws.results.map(result => card({ title: `${result.exam} | ${result.studentName || result.studentId || result.studentAdmissionNo}`, meta: `${result.className} | ${result.subject || "Overall"} | ${result.marks ?? result.total}/${result.maxMarks ?? result.maxTotal} | ${result.percentage || ""}`, body: `Grade: ${result.grade || "-"} | Status: ${result.status || "Review"}`, badge: result.status || "Review", status: result.status === "Published" ? "ok" : "warn" })).join("");
       $("#syllabusTitle").textContent = "Syllabus Entry";
       $("#syllabusFormHost").innerHTML = `<article class="card"><form class="form-grid" id="syllabusForm"><label>Class and Subject<select id="syllabusSubject">${subjectOptions()}</select></label><label>Topic<input id="syllabusTopic" placeholder="Chapter topic" required /></label><label>Progress<select id="syllabusProgress"><option>Started</option><option>In Progress</option><option>Completed</option></select></label><button class="primary" type="submit">Save Syllabus Entry</button></form></article>`;
@@ -3658,7 +3658,7 @@
       $("#syllabusList").innerHTML = ws.syllabus.map(item => card({ title: `${item.className} - ${item.subject}`, meta: item.topic, badge: item.progress, status: item.progress === "Completed" ? "ok" : "warn" })).join("");
       $("#homeworkTitle").textContent = "Homework Entry";
       const initialHomeworkClass = firstTeacherClass();
-      $("#homeworkFormHost").innerHTML = `<article class="card homework-card"><form class="form-grid" id="homeworkForm"><label>Class<select id="homeworkClass" required>${teacherClassOptions(initialHomeworkClass)}</select></label><label>Subject<select id="homeworkSubject" required>${teacherSubjectOptionsForClass(initialHomeworkClass)}</select></label><label>Homework<textarea id="homeworkText" placeholder="Homework details" required></textarea></label><label>Due Date<input id="homeworkDue" type="date" value="${todayIso}" required /></label><label>Attachment<input id="homeworkAttachment" type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" /><small>PDF, DOC, DOCX attach korte parben.</small></label><button class="primary" type="submit">Assign Homework</button></form></article>`;
+      $("#homeworkFormHost").innerHTML = `<article class="card homework-card"><form class="form-grid" id="homeworkForm"><label>Class<select id="homeworkClass" required>${teacherClassOptions(initialHomeworkClass)}</select></label><label>Subject<select id="homeworkSubject" required>${teacherSubjectOptionsForClass(initialHomeworkClass)}</select></label><label>Homework<textarea id="homeworkText" placeholder="Homework details" required></textarea></label><label>Due Date<input id="homeworkDue" type="date" value="${todayIso}" required /></label><label>Attachment<input id="homeworkAttachment" type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" /><small>PDF, DOC, and DOCX files can be attached.</small></label><button class="primary" type="submit">Assign Homework</button></form></article>`;
       $("#homeworkTotal").textContent = `${ws.homework.length} assigned`;
       $("#homeworkList").innerHTML = ws.homework.map(item => card({ title: `${item.className || "Class"} - ${item.subject || "Homework"}`, meta: `Due ${item.due || "-"}`, body: `${item.text || ""}${homeworkAttachmentLink(item.attachment)}`, badge: "Active", status: "warn", className: "homework-card" })).join("");
       $("#classworkTitle").textContent = "Classwork Entry";
@@ -3666,7 +3666,7 @@
       $("#classworkFormHost").innerHTML = `<article class="card homework-card"><form class="form-grid" id="classworkForm"><label>Class<select id="classworkClass" required>${teacherClassOptions(initialClassworkClass)}</select></label><label>Subject<select id="classworkSubject" required>${teacherSubjectOptionsForClass(initialClassworkClass)}</select></label><label>Classwork<textarea id="classworkText" placeholder="What was taught in class today" required></textarea></label><label>Date<input id="classworkDate" type="date" value="${todayIso}" required /></label><button class="primary" type="submit">Save Classwork</button></form></article>`;
       $("#classworkTotal").textContent = `${ws.classwork.length} entries`;
       $("#classworkList").innerHTML = ws.classwork.map(item => card({ title: `${item.className} - ${item.subject}`, meta: item.date, body: item.text, badge: "Classwork" })).join("");
-      $("#noticeFormHost").innerHTML = `<article class="card notice-card"><div class="card-head"><div><h3>ERP Notices</h3><p>School notice board theke asa notice sudhu dekhar jonno.</p></div><span class="status ok">Read Only</span></div></article><article class="card homework-card"><form class="form-grid" id="teacherNoticeRequestForm"><label>Class<select id="teacherNoticeClass" required>${teacherClassOptions(firstTeacherClass())}</select></label><label>Title<input id="teacherNoticeTitle" placeholder="Notice title" required /></label><label>Message<textarea id="teacherNoticeMessage" placeholder="Students der jonno notice likhun" required></textarea></label><label>Priority<select id="teacherNoticePriority"><option>Normal</option><option>Important</option><option>Urgent</option></select></label><button class="primary" type="submit">Send for ERP Approval</button></form></article>`;
+      $("#noticeFormHost").innerHTML = `<article class="card notice-card"><div class="card-head"><div><h3>ERP Notices</h3><p>Notices from the school notice board are read-only here.</p></div><span class="status ok">Read Only</span></div></article><article class="card homework-card"><form class="form-grid" id="teacherNoticeRequestForm"><label>Class<select id="teacherNoticeClass" required>${teacherClassOptions(firstTeacherClass())}</select></label><label>Title<input id="teacherNoticeTitle" placeholder="Notice title" required /></label><label>Message<textarea id="teacherNoticeMessage" placeholder="Write a notice for students" required></textarea></label><label>Priority<select id="teacherNoticePriority"><option>Normal</option><option>Important</option><option>Urgent</option></select></label><button class="primary" type="submit">Send for ERP Approval</button></form></article>`;
       $("#noticeTotal").textContent = `${ws.notices.length} ERP notices`;
       const requestCards = (ws.teacherNoticeRequests || []).map(item => card({
         title: item.title || "Notice Request",
@@ -3678,9 +3678,9 @@
       })).join("");
       $("#noticeList").innerHTML = [
         `<div class="section-title"><h2>Published ERP Notices</h2><span>${ws.notices.length}</span></div>`,
-        ws.notices.map(item => card({ title: item.title, meta: `${item.audience || item.audienceType || "Notice"} | ${noticeDateLabel(item)}`, body: item.message, badge: "Published", className: "notice-card" })).join("") || card({ title: "No ERP Notice", meta: "Notice board empty", body: "ERP theke notice publish hole ekhane dekhabe.", badge: "Empty", status: "warn" }),
+        ws.notices.map(item => card({ title: item.title, meta: `${item.audience || item.audienceType || "Notice"} | ${noticeDateLabel(item)}`, body: item.message, badge: "Published", className: "notice-card" })).join("") || card({ title: "No ERP Notice", meta: "Notice board empty", body: "Notices will appear here after ERP publication.", badge: "Empty", status: "warn" }),
         `<div class="section-title"><h2>My Notice Requests</h2><span>${(ws.teacherNoticeRequests || []).length}</span></div>`,
-        requestCards || card({ title: "No Request Sent", meta: "Class notice request ekhane dekhabe.", body: "Request ERP approval er age student app-e publish hobe na.", badge: "Draft", status: "warn" })
+        requestCards || card({ title: "No Request Sent", meta: "Class notice requests will appear here.", body: "Requests will be published to the student app only after ERP approval.", badge: "Draft", status: "warn" })
       ].join("");
       renderReminderView();
       const today = new Date();
@@ -3698,7 +3698,7 @@
       const complaintStudents = ws.complaintStudents || ws.students || [];
       $("#complaintFormHost").innerHTML = complaintStudents.length
         ? `<article class="card"><form class="form-grid" id="complaintForm"><label>Student<select id="complaintStudent" required>${teacherComplaintStudentOptions(complaintStudents)}</select><small id="complaintStudentMeta"></small></label><label>Type<select id="complaintType"><option>Homework</option><option>Classwork</option><option>Behaviour</option><option>Attendance</option><option>Academic</option></select></label><label>Note<textarea id="complaintNote" placeholder="Complaint or observation" required></textarea></label><button class="primary" type="submit">Submit Complaint</button></form></article>`
-        : card({ title: "Complaint Entry Locked", meta: "No class assigned", body: "Class timetable or class assignment thakle oi class-er student list ekhane show korbe.", badge: "Restricted", status: "warn" });
+        : card({ title: "Complaint Entry Locked", meta: "No class assigned", body: "Students will appear here after class timetable or class assignment is available.", badge: "Restricted", status: "warn" });
       $("#complaintTotal").textContent = `${ws.complaints.length} records`;
       $("#complaintList").innerHTML = ws.complaints.map(item => card({ title: `${item.studentName} - ${item.type}`, meta: `${item.date}${item.scope === "education" ? " | Education" : ""}`, body: item.note, badge: item.source === "student" ? "Student" : "Logged", status: "warn" })).join("");
       const summary = ratingSummary(ws.ratings);
@@ -3768,7 +3768,7 @@
           return;
         }
         if (!$("#resultStudent").value) {
-          toast("Assigned class-e student found hoyni.");
+          toast("No student found for the assigned class.");
           return;
         }
         const [studentId, studentName, className] = $("#resultStudent").value.split("|");
@@ -3812,7 +3812,7 @@
         try {
           attachment = await readHomeworkAttachmentInput($("#homeworkAttachment"));
         } catch (error) {
-          toast(error.message || "Attachment save kora gelo na.");
+          toast(error.message || "Attachment could not be saved.");
           return;
         }
         await AppApi.create("homework", { teacherId: state.user.id, teacherName: state.user.name, className, subject, text: $("#homeworkText").value, due: $("#homeworkDue").value, attachment });
@@ -3857,7 +3857,7 @@
       $("#complaintForm")?.addEventListener("submit", async event => {
         event.preventDefault();
         if (!$("#complaintStudent")?.value) {
-          toast("Assigned student found hoyni.");
+          toast("No assigned student found.");
           return;
         }
         const [studentId, studentName, className] = $("#complaintStudent").value.split("|");
@@ -3930,7 +3930,7 @@
           } catch (error) {
             button.disabled = false;
             button.textContent = originalText;
-            toast(error.message || "Status update hoyni.");
+            toast(error.message || "Status could not be updated.");
           }
         });
       });
@@ -3992,7 +3992,7 @@
             submitButton.disabled = false;
             submitButton.textContent = originalText;
           }
-          toast(error.message || "Complaint submit hoyni.");
+          toast(error.message || "Complaint could not be submitted.");
         }
       });
     }
