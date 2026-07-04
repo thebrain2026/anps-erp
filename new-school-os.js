@@ -12,6 +12,7 @@ const dues = [];
 
 const notices = [];
 const teacherNoticeRequests = [];
+const teacherLeaves = [];
 const homework = [];
 const admissionEnquiries = [];
 const complaintRecords = [];
@@ -450,6 +451,7 @@ function getAppStateSnapshot() {
     receiptSerial,
     notices,
     teacherNoticeRequests,
+    teacherLeaves,
     homework,
     admissionEnquiries,
     complaintRecords,
@@ -742,7 +744,8 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
     transportVehicleAssignments: ["routeName", "vehicleNo", "shift"],
     transportRoutePickupPoints: ["routeName", "villageName", "shift"],
     notices: ["id", "title"],
-    teacherNoticeRequests: ["id", "title", "teacherId"]
+    teacherNoticeRequests: ["id", "title", "teacherId"],
+    teacherLeaves: ["id", "teacherId", "from", "to", "type"]
   };
   merged.students = mergeStudentList(remoteState.students || [], localState.students || []);
   Object.entries(objectRules).forEach(([key, fields]) => {
@@ -1007,6 +1010,9 @@ function applySavedState(saved = {}) {
     if (Array.isArray(saved.teacherNoticeRequests)) {
       teacherNoticeRequests.splice(0, teacherNoticeRequests.length, ...saved.teacherNoticeRequests);
     }
+    if (Array.isArray(saved.teacherLeaves)) {
+      teacherLeaves.splice(0, teacherLeaves.length, ...saved.teacherLeaves);
+    }
     if (Array.isArray(saved.homework)) {
       homework.splice(0, homework.length, ...saved.homework);
       pruneExpiredHomeworkAttachments();
@@ -1235,6 +1241,7 @@ function applyProductionCleanSeedOnce() {
   dues.splice(0, dues.length);
   notices.splice(0, notices.length);
   teacherNoticeRequests.splice(0, teacherNoticeRequests.length);
+  teacherLeaves.splice(0, teacherLeaves.length);
   homework.splice(0, homework.length);
   admissionEnquiries.splice(0, admissionEnquiries.length);
   complaintRecords.splice(0, complaintRecords.length);
@@ -1640,6 +1647,7 @@ function renderActiveView(viewName = document.querySelector(".view.active")?.id 
   if (viewName === "staffDetails") renderStaffDetails();
   if (viewName === "department") renderHrSetup();
   if (viewName === "staffAttendance") renderStaffAttendance();
+  if (viewName === "approveLeave") renderLeaveApprovalRequests();
   if (viewName === "disableStudent") renderDisabledStudents();
   if (viewName === "noticeBoard") renderNoticeBoard();
   if (viewName === "teacherNoticeRequests") renderTeacherNoticeRequests();
@@ -6081,6 +6089,36 @@ function renderStaffAttendance() {
       </tr>
     `;
   }).join("") || `<tr><td colspan="9">No biometric staff attendance imported yet.</td></tr>`;
+}
+
+function renderLeaveApprovalRequests() {
+  const rows = document.getElementById("leaveApprovalRows");
+  if (!rows) return;
+  if (!teacherLeaves.length) {
+    rows.innerHTML = `<tr><td colspan="6">No leave requests entered yet.</td></tr>`;
+    return;
+  }
+  rows.innerHTML = teacherLeaves.map(leave => {
+    const staff = getStaffByIdOrName(leave.teacherId || leave.staffId, leave.teacherName || leave.staffName);
+    const status = String(leave.status || "Pending");
+    const badgeClass = status === "Approved" ? "green" : status === "Rejected" ? "red" : "amber";
+    const staffName = leave.teacherName || leave.staffName || staff?.name || leave.teacherId || "Teacher";
+    const staffMeta = [leave.teacherId || leave.staffId || staff?.staffId, staff?.designation || staff?.role].filter(Boolean).join(" | ");
+    const disabled = status !== "Pending" ? "disabled" : "";
+    return `
+      <tr>
+        <td><strong>${escapeHtml(staffName)}</strong><br><small>${escapeHtml(staffMeta || "Teacher App")}</small></td>
+        <td>${escapeHtml(leave.type || "Leave")}</td>
+        <td>${escapeHtml(leave.from || "-")} to ${escapeHtml(leave.to || "-")}</td>
+        <td>${escapeHtml(leave.reason || "-")}</td>
+        <td><span class="badge ${badgeClass}">${escapeHtml(status)}</span></td>
+        <td class="table-actions">
+          <button class="ghost-action mini" type="button" data-approve-leave="${escapeHtml(leave.id || "")}" ${disabled}>Approve</button>
+          <button class="ghost-action mini" type="button" data-reject-leave="${escapeHtml(leave.id || "")}" ${disabled}>Reject</button>
+        </td>
+      </tr>
+    `;
+  }).join("");
 }
 
 function renderStaffBiometricDevice() {
@@ -13042,6 +13080,40 @@ staffAttendanceImport.addEventListener("change", event => {
 });
 
 document.getElementById("staffAttendanceDate").addEventListener("input", renderStaffAttendance);
+
+document.getElementById("leaveApprovalRows")?.addEventListener("click", event => {
+  const approveButton = event.target.closest("[data-approve-leave]");
+  const rejectButton = event.target.closest("[data-reject-leave]");
+  const leaveId = approveButton?.dataset.approveLeave || rejectButton?.dataset.rejectLeave || "";
+  if (!leaveId) return;
+  const leave = teacherLeaves.find(item => String(item.id || "") === leaveId);
+  if (!leave) {
+    showToast("Leave request not found.");
+    return;
+  }
+  leave.status = approveButton ? "Approved" : "Rejected";
+  leave.reviewedAt = new Date().toISOString();
+  leave.reviewedBy = getCurrentTopbarRole();
+  saveAppState();
+  renderLeaveApprovalRequests();
+  showToast(`Leave request ${leave.status.toLowerCase()}.`);
+});
+
+document.getElementById("approveAllPendingLeaves")?.addEventListener("click", () => {
+  const pending = teacherLeaves.filter(item => String(item.status || "Pending") === "Pending");
+  if (!pending.length) {
+    showToast("No pending leave request found.");
+    return;
+  }
+  pending.forEach(leave => {
+    leave.status = "Approved";
+    leave.reviewedAt = new Date().toISOString();
+    leave.reviewedBy = getCurrentTopbarRole();
+  });
+  saveAppState();
+  renderLeaveApprovalRequests();
+  showToast(`${pending.length} leave request approved.`);
+});
 
 ["staffAttendanceDevice", "staffAttendanceDeviceModel", "staffAttendanceDeviceNote", "staffAttendanceSource"].forEach(id => {
   document.getElementById(id).addEventListener("input", saveStaffBiometricDevice);

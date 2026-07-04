@@ -1216,12 +1216,15 @@
 
       <section class="view" id="approveLeave">
         <div class="panel">
-          <div class="panel-head"><div><p class="eyebrow">Human resources</p><h2>Approval Leave Request</h2></div><button class="primary-action" type="button">Approve Selected</button></div>
+          <div class="panel-head">
+            <div><p class="eyebrow">Human resources</p><h2>Approval Leave Request</h2></div>
+            <button class="primary-action" id="approveAllPendingLeaves" type="button">Approve Pending</button>
+          </div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Staff</th><th>Leave Type</th><th>Dates</th><th>Reason</th><th>Status</th></tr></thead>
-              <tbody>
-                <tr><td colspan="5">No leave requests entered yet.</td></tr>
+              <thead><tr><th>Staff</th><th>Leave Type</th><th>Dates</th><th>Reason</th><th>Status</th><th>Action</th></tr></thead>
+              <tbody id="leaveApprovalRows">
+                <tr><td colspan="6">No leave requests entered yet.</td></tr>
               </tbody>
             </table>
           </div>

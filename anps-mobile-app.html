@@ -3657,7 +3657,7 @@
       });
       $("#leaveForm")?.addEventListener("submit", async event => {
         event.preventDefault();
-        await AppApi.create("leaves", { teacherId: state.user.id, from: $("#leaveFrom").value, to: $("#leaveTo").value, type: $("#leaveType").value, reason: $("#leaveReason").value, status: "Pending" });
+        await AppApi.create("leaves", { teacherId: state.user.id, teacherName: state.user.name, from: $("#leaveFrom").value, to: $("#leaveTo").value, type: $("#leaveType").value, reason: $("#leaveReason").value, status: "Pending" });
         state.workspace = await AppApi.workspace("teacher", state.user.id);
         renderTeacherViews();
         toast("Leave application submitted");
