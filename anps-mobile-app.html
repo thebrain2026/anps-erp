@@ -1696,7 +1696,7 @@
     const $ = selector => document.querySelector(selector);
     const attendanceLogo = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3v3"/><path d="M16 3v3"/><path d="M4 8h16"/><rect x="4" y="5" width="16" height="16" rx="3"/><path d="m8 14 2.2 2.2L16 10.5"/></svg>`;
     const leaveLogo = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v5h5"/><path d="M9 14h6"/><path d="M9 17h4"/><path d="M9 11h2"/></svg>`;
-    let state = { role: null, user: null, workspace: null, attendanceClass: "", language: "en" };
+    let state = { role: null, user: null, workspace: null, attendanceClass: "", teacherTimetableClass: "", language: "en" };
     let activitySession = { startedAt: "", lastSavedAt: 0, timer: null };
     let lastRegisteredPushToken = "";
     let dueAccessTimer = null;
@@ -3075,21 +3075,32 @@
         : card({ title: "No class scheduled today", meta: "Schedule empty for today.", badge: "Free", status: "warn" });
     }
 
+    function teacherTimetableClassNames(entries = []) {
+      return [...new Set(entries.map(item => item.className || "Class").filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    }
+
+    function teacherTimetableClassFilter(entries = []) {
+      const classes = teacherTimetableClassNames(entries);
+      if (!classes.length) return "";
+      if (!state.teacherTimetableClass || !classes.includes(state.teacherTimetableClass)) {
+        state.teacherTimetableClass = classes[0];
+      }
+      return `<article class="card"><form class="form-grid"><label>Filter Class<select id="teacherTimetableClassFilter">${classes.map(className => `<option value="${escapeHtml(className)}" ${className === state.teacherTimetableClass ? "selected" : ""}>${escapeHtml(className)}</option>`).join("")}</select></label></form></article>`;
+    }
+
     function teacherClassWiseTimetable(entries = []) {
-      const groups = entries.reduce((map, item) => {
-        const className = item.className || "Class";
-        if (!map.has(className)) map.set(className, []);
-        map.get(className).push(item);
-        return map;
-      }, new Map());
-      return [...groups.entries()].map(([className, rows]) => {
-        const sorted = rows.slice().sort((a, b) => `${timetableDayKey(a.day)} ${a.time || ""}`.localeCompare(`${timetableDayKey(b.day)} ${b.time || ""}`));
-        const list = sorted.map((item, index) => {
-          const period = item.period || item.periodNo || item.periodNumber || `Period ${index + 1}`;
-          return `<div class="student-row"><div><b>${escapeHtml(period)} | ${escapeHtml(item.day || "-")}</b><span>${escapeHtml(item.time || "-")} | ${escapeHtml(item.subject || "-")}</span></div><span class="badge">${escapeHtml(item.room || "Room")}</span></div>`;
-        }).join("");
-        return `<article class="card"><div class="card-head"><div><h3>${escapeHtml(className)}</h3><p>${rows.length} period${rows.length === 1 ? "" : "s"} assigned</p></div><span class="status ok">Class</span></div><div class="stack" style="padding-top:10px">${list}</div></article>`;
+      const classes = teacherTimetableClassNames(entries);
+      if (!classes.length) return "";
+      if (!state.teacherTimetableClass || !classes.includes(state.teacherTimetableClass)) {
+        state.teacherTimetableClass = classes[0];
+      }
+      const rows = entries.filter(item => (item.className || "Class") === state.teacherTimetableClass);
+      const sorted = rows.slice().sort((a, b) => `${timetableDayKey(a.day)} ${a.time || ""}`.localeCompare(`${timetableDayKey(b.day)} ${b.time || ""}`));
+      const list = sorted.map((item, index) => {
+        const period = item.period || item.periodNo || item.periodNumber || `Period ${index + 1}`;
+        return `<div class="student-row"><div><b>${escapeHtml(period)} | ${escapeHtml(item.day || "-")}</b><span>${escapeHtml(item.time || "-")} | ${escapeHtml(item.subject || "-")}</span></div><span class="badge">${escapeHtml(item.room || "Room")}</span></div>`;
       }).join("");
+      return `<article class="card"><div class="card-head"><div><h3>${escapeHtml(state.teacherTimetableClass)}</h3><p>${rows.length} period${rows.length === 1 ? "" : "s"} assigned</p></div><span class="status ok">Class</span></div><div class="stack" style="padding-top:10px">${list}</div></article>`;
     }
 
     function gradeForMarks(marks = 0, maxMarks = 100, fallback = "") {
@@ -3620,12 +3631,10 @@
         card({ title: "Teacher Profile", meta: `${user.role} | ${user.department}`, body: `Assigned class: ${user.assignedClass}`, badge: "Staff" })
       ].join("");
       $("#timetableScope").textContent = "Own schedule";
-      const todayTeacherClasses = todayTimetableEntries(ws.timetable);
       $("#timetableList").innerHTML = ws.timetable.length
         ? [
-            `<div class="section-title"><h2>Today's Classes</h2><span>${todayTeacherClasses.length}</span></div>`,
-            teacherTodayClassCards(todayTeacherClasses),
-            `<div class="section-title"><h2>Full Timetable</h2><span>${ws.timetable.length}</span></div>`,
+            teacherTimetableClassFilter(ws.timetable),
+            `<div class="section-title"><h2>Class-wise Periods</h2><span>${ws.timetable.length}</span></div>`,
             teacherClassWiseTimetable(ws.timetable)
           ].join("")
         : card({ title: "No timetable published", meta: "Main ERP Class Timetable theke new entry korle ekhane show korbe.", badge: "Empty", status: "warn" });
@@ -3711,6 +3720,10 @@
         state.attendanceClass = btn.dataset.classTab;
         renderTeacherViews();
       }));
+      $("#teacherTimetableClassFilter")?.addEventListener("change", event => {
+        state.teacherTimetableClass = event.target.value;
+        renderTeacherViews();
+      });
       document.querySelectorAll(".toggle button").forEach(btn => btn.addEventListener("click", () => {
         btn.parentElement.querySelectorAll("button").forEach(item => item.classList.remove("active"));
         btn.classList.add("active");
@@ -4053,7 +4066,7 @@
       localStorage.removeItem(AppConfig.tokenKey);
       localStorage.removeItem(AppConfig.roleKey);
       localStorage.removeItem(AppConfig.userKey);
-      state = { role: null, user: null, workspace: null, attendanceClass: "", language: "en" };
+      state = { role: null, user: null, workspace: null, attendanceClass: "", teacherTimetableClass: "", language: "en" };
       document.body.classList.remove("drawer-open", "student-theme", "teacher-theme");
       showScreen("landing");
     });
