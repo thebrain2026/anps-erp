@@ -2404,6 +2404,11 @@
       const visibleStudents = assignedClass
         ? studentList(erpState).filter(student => normalizeText(student.className).toLowerCase() === assignedClass.toLowerCase())
         : [];
+      const complaintClassNames = new Set(subjects.map(item => normalizeText(item.className).toLowerCase()).filter(Boolean));
+      if (assignedClass) complaintClassNames.add(assignedClass.toLowerCase());
+      const complaintStudents = complaintClassNames.size
+        ? studentList(erpState).filter(student => complaintClassNames.has(normalizeText(student.className).toLowerCase()))
+        : [];
       state.user = {
         ...state.user,
         id: staff.staffId || state.user.id,
@@ -2429,6 +2434,7 @@
         }));
       return {
         students: visibleStudents,
+        complaintStudents,
         teachers: teacherList(erpState),
         subjects,
         timetable,
@@ -3415,6 +3421,21 @@
       classEl.addEventListener("change", syncSubjects);
     }
 
+    function teacherComplaintStudentOptions(students = []) {
+      return students.map(item => {
+        const admission = item.admissionId || item.admissionNo || item.id || "";
+        return `<option value="${admission}|${item.name}|${item.className}">${item.name} | Admission No: ${admission}</option>`;
+      }).join("");
+    }
+
+    function selectedComplaintStudentMeta() {
+      const select = $("#complaintStudent");
+      const meta = $("#complaintStudentMeta");
+      if (!select || !meta) return;
+      const [admissionNo, studentName, className] = (select.value || "").split("|");
+      meta.textContent = admissionNo ? `Selected: ${studentName || "Student"} | Admission No: ${admissionNo} | ${className || "-"}` : "No assigned student found.";
+    }
+
     function renderTeacherViews() {
       const user = state.user;
       const ws = state.workspace;
@@ -3481,7 +3502,10 @@
       $("#attendanceScope").textContent = "Teacher tools";
       const attendanceStudents = ws.students.filter(item => item.className === state.attendanceClass);
       $("#attendanceHost").innerHTML = `<article class="card"><div class="segmented">${classes.map(name => `<button class="seg-btn ${name === state.attendanceClass ? "active" : ""}" data-class-tab="${name}">${name}</button>`).join("")}</div>${attendanceStudents.map(item => `<div class="student-row"><div><b>${item.name}</b><span>${item.className} - Roll ${item.roll}</span></div><div class="toggle" data-student="${item.id}"><button class="active" data-mark="present">P</button><button data-mark="absent">A</button><button data-mark="late">L</button></div></div>`).join("")}<button class="primary" id="saveAttendanceBtn" type="button">Save Attendance</button></article>`;
-      $("#complaintFormHost").innerHTML = `<article class="card"><form class="form-grid" id="complaintForm"><label>Student<select id="complaintStudent">${ws.students.map(item => `<option value="${item.admissionId}|${item.name}|${item.className}">${item.name} - ${item.className}</option>`).join("")}</select></label><label>Type<select id="complaintType"><option>Homework</option><option>Classwork</option><option>Behaviour</option><option>Attendance</option><option>Academic</option></select></label><label>Note<textarea id="complaintNote" placeholder="Complaint or observation" required></textarea></label><button class="primary" type="submit">Submit Complaint</button></form></article>`;
+      const complaintStudents = ws.complaintStudents || ws.students || [];
+      $("#complaintFormHost").innerHTML = complaintStudents.length
+        ? `<article class="card"><form class="form-grid" id="complaintForm"><label>Student<select id="complaintStudent" required>${teacherComplaintStudentOptions(complaintStudents)}</select><small id="complaintStudentMeta"></small></label><label>Type<select id="complaintType"><option>Homework</option><option>Classwork</option><option>Behaviour</option><option>Attendance</option><option>Academic</option></select></label><label>Note<textarea id="complaintNote" placeholder="Complaint or observation" required></textarea></label><button class="primary" type="submit">Submit Complaint</button></form></article>`
+        : card({ title: "Complaint Entry Locked", meta: "No class assigned", body: "Class timetable or class assignment thakle oi class-er student list ekhane show korbe.", badge: "Restricted", status: "warn" });
       $("#complaintTotal").textContent = `${ws.complaints.length} records`;
       $("#complaintList").innerHTML = ws.complaints.map(item => card({ title: `${item.studentName} - ${item.type}`, meta: `${item.date}${item.scope === "education" ? " | Education" : ""}`, body: item.note, badge: item.source === "student" ? "Student" : "Logged", status: "warn" })).join("");
       const summary = ratingSummary(ws.ratings);
@@ -3524,6 +3548,8 @@
       });
       bindTeacherSubjectDropdowns("#homeworkClass", "#homeworkSubject");
       bindTeacherSubjectDropdowns("#classworkClass", "#classworkSubject");
+      selectedComplaintStudentMeta();
+      $("#complaintStudent")?.addEventListener("change", selectedComplaintStudentMeta);
       $("#syllabusForm")?.addEventListener("submit", async event => {
         event.preventDefault();
         const [className, subject] = $("#syllabusSubject").value.split("|");
@@ -3633,6 +3659,10 @@
       });
       $("#complaintForm")?.addEventListener("submit", async event => {
         event.preventDefault();
+        if (!$("#complaintStudent")?.value) {
+          toast("Assigned student found hoyni.");
+          return;
+        }
         const [studentId, studentName, className] = $("#complaintStudent").value.split("|");
         const type = $("#complaintType").value;
         const note = $("#complaintNote").value.trim();
