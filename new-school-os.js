@@ -6105,13 +6105,14 @@ function renderLeaveApprovalRequests() {
     const staffName = leave.teacherName || leave.staffName || staff?.name || leave.teacherId || "Teacher";
     const staffMeta = [leave.teacherId || leave.staffId || staff?.staffId, staff?.designation || staff?.role].filter(Boolean).join(" | ");
     const disabled = status !== "Pending" ? "disabled" : "";
+    const reviewNote = leave.rejectionReason ? `<br><small>Reject reason: ${escapeHtml(leave.rejectionReason)}</small>` : "";
     return `
       <tr>
         <td><strong>${escapeHtml(staffName)}</strong><br><small>${escapeHtml(staffMeta || "Teacher App")}</small></td>
         <td>${escapeHtml(leave.type || "Leave")}</td>
         <td>${escapeHtml(leave.from || "-")} to ${escapeHtml(leave.to || "-")}</td>
         <td>${escapeHtml(leave.reason || "-")}</td>
-        <td><span class="badge ${badgeClass}">${escapeHtml(status)}</span></td>
+        <td><span class="badge ${badgeClass}">${escapeHtml(status)}</span>${reviewNote}</td>
         <td class="table-actions">
           <button class="ghost-action mini" type="button" data-approve-leave="${escapeHtml(leave.id || "")}" ${disabled}>Approve</button>
           <button class="ghost-action mini" type="button" data-reject-leave="${escapeHtml(leave.id || "")}" ${disabled}>Reject</button>
@@ -13090,6 +13091,16 @@ document.getElementById("leaveApprovalRows")?.addEventListener("click", event =>
   if (!leave) {
     showToast("Leave request not found.");
     return;
+  }
+  if (rejectButton) {
+    const reason = window.prompt("Why are you rejecting this leave request?");
+    if (!reason || !reason.trim()) {
+      showToast("Reject reason is required.");
+      return;
+    }
+    leave.rejectionReason = reason.trim();
+  } else {
+    leave.rejectionReason = "";
   }
   leave.status = approveButton ? "Approved" : "Rejected";
   leave.reviewedAt = new Date().toISOString();

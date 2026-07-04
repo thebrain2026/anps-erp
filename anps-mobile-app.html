@@ -3494,7 +3494,10 @@
       ].join("");
       $("#leaveTotal").textContent = `${ws.leaves.length} applications`;
       $("#leaveFormHost").innerHTML = `<article class="card"><form class="form-grid" id="leaveForm"><label>Leave Type<select id="leaveType"><option>Casual Leave</option><option>Sick Leave</option><option>Emergency Leave</option><option>Half Day</option></select></label><label>From<input id="leaveFrom" type="date" value="${todayIso}" required /></label><label>To<input id="leaveTo" type="date" value="${todayIso}" required /></label><label>Reason<textarea id="leaveReason" placeholder="Reason for leave" required></textarea></label><button class="primary" type="submit">Apply Leave</button></form></article>`;
-      $("#leaveList").innerHTML = ws.leaves.map(item => card({ title: `${item.type} | ${item.status}`, meta: `${item.from} to ${item.to}`, body: item.reason, badge: item.status, status: item.status === "Approved" ? "ok" : "warn" })).join("");
+      $("#leaveList").innerHTML = ws.leaves.map(item => {
+        const rejectNote = item.rejectionReason ? `\nReject reason: ${item.rejectionReason}` : "";
+        return card({ title: `${item.type} | ${item.status}`, meta: `${item.from} to ${item.to}`, body: `${item.reason || ""}${rejectNote}`, badge: item.status, status: item.status === "Approved" ? "ok" : item.status === "Rejected" ? "bad" : "warn" });
+      }).join("");
       $("#feesList").innerHTML = "";
       $("#receiptList").innerHTML = "";
       bindTeacherForms();
