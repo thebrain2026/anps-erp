@@ -649,6 +649,23 @@
       display: block;
     }
 
+    .bengali-complaint-text {
+      display: none;
+      margin-top: 10px;
+      padding: 12px 13px;
+      border: 1px solid rgba(14, 165, 233, .2);
+      border-radius: 14px;
+      color: #0f172a;
+      background: linear-gradient(135deg, rgba(240, 249, 255, .96), rgba(255, 247, 237, .9));
+      font-size: .86rem;
+      font-weight: 850;
+      line-height: 1.48;
+    }
+
+    .bengali-complaint-text.show {
+      display: block;
+    }
+
     .section-title {
       display: flex;
       justify-content: space-between;
@@ -3055,6 +3072,97 @@
       return ["review", "accepted", "approved", "in progress", "resolved", "closed"].includes(status);
     }
 
+    function bengaliComplaintText(text = "") {
+      const original = normalizeText(text);
+      if (!original) return "";
+      if (/[\u0980-\u09FF]/.test(original)) return original;
+      const phraseMap = [
+        [/\bhomework\s+(?:is\s+)?(?:not\s+)?complete(?:d)?\b/gi, "হোমওয়ার্ক সম্পূর্ণ করা হয়নি"],
+        [/\bclasswork\s+(?:is\s+)?(?:not\s+)?complete(?:d)?\b/gi, "ক্লাসওয়ার্ক সম্পূর্ণ করা হয়নি"],
+        [/\bnot\s+doing\s+homework\b/gi, "হোমওয়ার্ক করছে না"],
+        [/\bnot\s+doing\s+classwork\b/gi, "ক্লাসওয়ার্ক করছে না"],
+        [/\bnot\s+attentive\b/gi, "মনোযোগী নয়"],
+        [/\bdoes\s+not\s+listen\b/gi, "কথা শুনছে না"],
+        [/\bpoor\s+handwriting\b/gi, "হাতের লেখা ভালো নয়"],
+        [/\bregularly\s+absent\b/gi, "নিয়মিত অনুপস্থিত"],
+        [/\blate\s+to\s+class\b/gi, "ক্লাসে দেরি করে আসছে"],
+        [/\btalks?\s+in\s+class\b/gi, "ক্লাসে কথা বলছে"],
+        [/\bplease\s+take\s+care\b/gi, "দয়া করে খেয়াল রাখবেন"],
+        [/\bneeds?\s+improvement\b/gi, "উন্নতির প্রয়োজন"]
+      ];
+      const wordMap = {
+        homework: "হোমওয়ার্ক",
+        classwork: "ক্লাসওয়ার্ক",
+        behaviour: "ব্যবহার",
+        behavior: "ব্যবহার",
+        attendance: "উপস্থিতি",
+        academic: "পড়াশোনা",
+        study: "পড়াশোনা",
+        studies: "পড়াশোনা",
+        student: "ছাত্র/ছাত্রী",
+        teacher: "শিক্ষক",
+        parent: "অভিভাবক",
+        guardian: "গার্ডিয়ান",
+        complaint: "অভিযোগ",
+        observation: "পর্যবেক্ষণ",
+        note: "নোট",
+        class: "ক্লাস",
+        book: "বই",
+        copy: "খাতা",
+        notebook: "খাতা",
+        absent: "অনুপস্থিত",
+        late: "দেরি",
+        weak: "দুর্বল",
+        good: "ভালো",
+        poor: "ভালো নয়",
+        improve: "উন্নতি করা",
+        improvement: "উন্নতি",
+        complete: "সম্পূর্ণ",
+        completed: "সম্পূর্ণ হয়েছে",
+        incomplete: "অসম্পূর্ণ",
+        read: "পড়া",
+        write: "লেখা",
+        writing: "লেখা",
+        listening: "শোনা",
+        attentive: "মনোযোগী",
+        attention: "মনোযোগ",
+        talking: "কথা বলা",
+        talk: "কথা",
+        regularly: "নিয়মিত",
+        please: "দয়া করে",
+        care: "খেয়াল",
+        needs: "প্রয়োজন",
+        need: "প্রয়োজন",
+        not: "না",
+        no: "না",
+        is: "",
+        are: "",
+        the: "",
+        a: "",
+        an: "",
+        in: "তে",
+        on: "তে",
+        for: "জন্য",
+        and: "এবং",
+        or: "অথবা",
+        to: ""
+      };
+      let translated = original;
+      phraseMap.forEach(([pattern, replacement]) => {
+        translated = translated.replace(pattern, replacement);
+      });
+      translated = translated.replace(/\b[A-Za-z]+\b/g, word => wordMap[word.toLowerCase()] ?? word);
+      translated = translated.replace(/\s+/g, " ").replace(/\s+([।,])/g, "$1").trim();
+      return translated || original;
+    }
+
+    function complaintBengaliBlock(item = {}) {
+      const detail = item.details || item.note || "";
+      const translated = bengaliComplaintText(detail);
+      if (!detail || /[\u0980-\u09FF]/.test(detail)) return "";
+      return `<button class="bengali-translate-action" type="button" data-bengali-complaint>বাংলায় পড়ুন</button><div class="bengali-complaint-text">${translated || "বাংলা অনুবাদ পাওয়া যায়নি।"}</div>`;
+    }
+
     function complaintStudentStatusBar(item = {}) {
       const status = item.status || "Open";
       const tone = complaintStatusTone(status);
@@ -3088,7 +3196,7 @@
       return ownComplaints.map(item => card({
         title: `${item.category || item.type || "Academic"} | ${item.status || "Open"}`,
         meta: `${item.date || "-"} | ${item.source || "Student App"}`,
-        body: `${item.details || item.note || "-"}${complaintStudentStatusBar(item)}`,
+        body: `${item.details || item.note || "-"}${complaintBengaliBlock(item)}${complaintStudentStatusBar(item)}`,
         badge: item.status || "Open",
         status: complaintStatusTone(item.status)
       })).join("");
@@ -3374,7 +3482,7 @@
       $("#complaintList").innerHTML = studentComplaintCards(ws.complaints);
       $("#teacherComplaintTotal").textContent = `${ws.teacherComplaints.length} records`;
       $("#teacherComplaintList").innerHTML = ws.teacherComplaints.length
-        ? ws.teacherComplaints.map(item => card({ title: `${item.type} | ${item.status || "Review"}`, meta: `${item.date} | Reviewed teacher complaint`, body: `${item.note || item.details || "-"}${complaintStudentStatusBar(item)}`, badge: "Teacher", status: complaintStatusTone(item.status) })).join("")
+        ? ws.teacherComplaints.map(item => card({ title: `${item.type} | ${item.status || "Review"}`, meta: `${item.date} | Reviewed teacher complaint`, body: `${item.note || item.details || "-"}${complaintBengaliBlock(item)}${complaintStudentStatusBar(item)}`, badge: "Teacher", status: complaintStatusTone(item.status) })).join("")
         : card({ title: "No Teacher Complaint", meta: "Nothing raised by teachers.", body: "Homework, classwork or behaviour complaints raised by teachers will appear here.", badge: "Clear" });
       $("#leaveFormHost").innerHTML = "";
       $("#leaveList").innerHTML = "";
@@ -3715,6 +3823,13 @@
         });
       });
       document.querySelectorAll("[data-bengali-notice]").forEach(button => {
+        button.addEventListener("click", () => {
+          const target = button.nextElementSibling;
+          target?.classList.toggle("show");
+          button.textContent = target?.classList.contains("show") ? "বাংলা লুকান" : "বাংলায় পড়ুন";
+        });
+      });
+      document.querySelectorAll("[data-bengali-complaint]").forEach(button => {
         button.addEventListener("click", () => {
           const target = button.nextElementSibling;
           target?.classList.toggle("show");
