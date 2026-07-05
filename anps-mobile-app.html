@@ -1762,10 +1762,10 @@
         if (!res.ok || payload.ok === false) throw new Error(payload.error || "Login failed");
         const user = normalizeLoginUser(payload.user, role);
         if (role === "student" && user.role !== "Student") {
-          throw new Error("Student login ID use korun.");
+          throw new Error("Please use a student login ID.");
         }
         if (role === "teacher" && user.role === "Student") {
-          throw new Error("Teacher / staff login ID use korun.");
+          throw new Error("Please use a teacher or staff login ID.");
         }
         return { token: payload.token, user };
       },
@@ -2657,228 +2657,17 @@
     }
 
     function bengaliHomeworkText(text = "") {
-      const original = normalizeText(text);
-      if (!original) return "";
-      if (/[\u0980-\u09FF]/.test(original)) return original;
-      const phraseMap = [
-        [/write\s+([a-z])\s+to\s+([a-z])/gi, "$1 থেকে $2 লিখবে"],
-        [/write\s+numbers?\s+(\d+)\s+to\s+(\d+)/gi, "$1 থেকে $2 পর্যন্ত সংখ্যা লিখবে"],
-        [/learn\s+the\s+poem/gi, "কবিতাটি শিখবে"],
-        [/read\s+the\s+chapter/gi, "অধ্যায়টি পড়বে"],
-        [/complete\s+the\s+worksheet/gi, "ওয়ার্কশিট সম্পূর্ণ করবে"],
-        [/bring\s+your\s+book/gi, "বই নিয়ে আসবে"],
-        [/bring\s+colour\s+pencils?/gi, "রঙ পেন্সিল নিয়ে আসবে"],
-        [/practice\s+writing/gi, "লেখা অনুশীলন করবে"],
-        [/draw\s+and\s+colour/gi, "আঁকবে এবং রং করবে"],
-        [/wear\s+school\s+uniform/gi, "স্কুল ইউনিফর্ম পরে আসবে"],
-        [/come\s+in\s+school\s+uniform/gi, "স্কুল ইউনিফর্ম পরে আসবে"],
-        [/school\s+will\s+remain\s+closed/gi, "স্কুল বন্ধ থাকবে"],
-        [/parents?\s+meeting/gi, "অভিভাবক সভা"],
-        [/memorize/gi, "মুখস্থ করবে"]
-      ];
-      const wordMap = {
-        notice: "নোটিস",
-        school: "স্কুল",
-        student: "ছাত্র",
-        students: "ছাত্রছাত্রী",
-        teacher: "শিক্ষক",
-        teachers: "শিক্ষকরা",
-        parent: "অভিভাবক",
-        parents: "অভিভাবকরা",
-        guardian: "গার্ডিয়ান",
-        guardians: "গার্ডিয়ানরা",
-        class: "ক্লাস",
-        classes: "ক্লাস",
-        uniform: "ইউনিফর্ম",
-        dress: "ড্রেস",
-        wear: "পরে আসবে",
-        come: "আসবে",
-        bring: "নিয়ে আসবে",
-        closed: "বন্ধ",
-        open: "খোলা",
-        holiday: "ছুটি",
-        meeting: "সভা",
-        exam: "পরীক্ষা",
-        test: "পরীক্ষা",
-        fees: "ফি",
-        fee: "ফি",
-        payment: "পেমেন্ট",
-        submit: "জমা দেবে",
-        must: "অবশ্যই",
-        all: "সব",
-        only: "শুধু",
-        important: "গুরুত্বপূর্ণ",
-        urgent: "জরুরি",
-        homework: "হোমওয়ার্ক",
-        write: "লিখবে",
-        read: "পড়বে",
-        learn: "শিখবে",
-        practice: "অনুশীলন করবে",
-        complete: "সম্পূর্ণ করবে",
-        draw: "আঁকবে",
-        colour: "রং",
-        color: "রং",
-        page: "পৃষ্ঠা",
-        pages: "পৃষ্ঠা",
-        book: "বই",
-        copy: "খাতা",
-        notebook: "খাতা",
-        worksheet: "ওয়ার্কশিট",
-        poem: "কবিতা",
-        rhyme: "ছড়া",
-        alphabet: "বর্ণমালা",
-        letters: "অক্ষর",
-        letter: "অক্ষর",
-        number: "সংখ্যা",
-        numbers: "সংখ্যা",
-        table: "নামতা",
-        addition: "যোগ",
-        subtraction: "বিয়োগ",
-        bengali: "বাংলা",
-        english: "ইংরেজি",
-        math: "গণিত",
-        maths: "গণিত",
-        evs: "পরিবেশ",
-        tomorrow: "আগামীকাল",
-        today: "আজ",
-        and: "এবং",
-        to: "থেকে",
-        for: "জন্য",
-        from: "থেকে",
-        with: "সঙ্গে",
-        the: "",
-        a: "",
-        an: "",
-        in: "তে",
-        on: "তে"
-      };
-      let translated = original;
-      phraseMap.forEach(([pattern, replacement]) => {
-        translated = translated.replace(pattern, replacement);
-      });
-      translated = translated.replace(/\b[A-Za-z]+\b/g, word => wordMap[word.toLowerCase()] || word);
-      translated = translated.replace(/\s+/g, " ").trim();
-      return translated || original;
+      return normalizeText(text);
     }
-
     function bengaliNoticeText(text = "") {
-      const original = normalizeText(text);
-      if (!original) return "";
-      if (/[\u0980-\u09FF]/.test(original)) return original;
-      const phraseMap = [
-        [/\b(?:the\s+)?students?\s+(?:are\s+)?(?:here\s*by|hereby)\s+(?:inform|informed|notified)\s+that\b/gi, "ছাত্রছাত্রীদের জানানো যাচ্ছে যে"],
-        [/\bthis\s+is\s+to\s+(?:inform|notify)\s+(?:all\s+)?students?\s+that\b/gi, "ছাত্রছাত্রীদের জানানো যাচ্ছে যে"],
-        [/\b(?:all\s+)?students?\s+(?:are\s+)?(?:requested|instructed)\s+to\b/gi, "সব ছাত্রছাত্রীকে বলা হচ্ছে"],
-        [/\b(?:our\s+)?school\s+(?:will\s+remain|shall\s+remain)\s+closed\b/gi, "আমাদের স্কুল বন্ধ থাকবে"],
-        [/\b(?:our\s+)?school\s+is\s+going\s+to\s+(?:be\s+)?closed\b/gi, "আমাদের স্কুল বন্ধ থাকবে"],
-        [/\b(?:our\s+)?school\s+is\s+going\s+to\b/gi, "আমাদের স্কুল"],
-        [/\bparents?\s+meeting\b/gi, "অভিভাবক সভা"],
-        [/\bwear\s+(?:the\s+)?school\s+uniform\b/gi, "স্কুল ইউনিফর্ম পরে আসবে"],
-        [/\bcome\s+in\s+(?:the\s+)?school\s+uniform\b/gi, "স্কুল ইউনিফর্ম পরে আসবে"],
-        [/\bbring\s+(?:your\s+)?(?:books?|copies|notebooks?)\b/gi, "বই ও খাতা নিয়ে আসবে"],
-        [/\bsubmit\s+(?:the\s+)?fees?\b/gi, "ফি জমা দেবে"],
-        [/\bpay\s+(?:the\s+)?fees?\b/gi, "ফি জমা দেবে"],
-        [/\bholiday\s+on\b/gi, "ছুটি থাকবে"],
-        [/\bclass\s+test\b/gi, "ক্লাস টেস্ট"]
-      ];
-      const wordMap = {
-        notice: "নোটিস",
-        student: "ছাত্রছাত্রী",
-        students: "ছাত্রছাত্রী",
-        school: "স্কুল",
-        class: "ক্লাস",
-        classes: "ক্লাস",
-        teacher: "শিক্ষক",
-        teachers: "শিক্ষকরা",
-        parent: "অভিভাবক",
-        parents: "অভিভাবকরা",
-        guardian: "গার্ডিয়ান",
-        guardians: "গার্ডিয়ানরা",
-        uniform: "ইউনিফর্ম",
-        dress: "ড্রেস",
-        wear: "পরে আসবে",
-        come: "আসবে",
-        bring: "নিয়ে আসবে",
-        closed: "বন্ধ থাকবে",
-        open: "খোলা থাকবে",
-        holiday: "ছুটি",
-        meeting: "সভা",
-        exam: "পরীক্ষা",
-        test: "পরীক্ষা",
-        fee: "ফি",
-        fees: "ফি",
-        payment: "পেমেন্ট",
-        submit: "জমা দেবে",
-        pay: "জমা দেবে",
-        tomorrow: "আগামীকাল",
-        today: "আজ",
-        morning: "সকাল",
-        afternoon: "দুপুর",
-        monday: "সোমবার",
-        tuesday: "মঙ্গলবার",
-        wednesday: "বুধবার",
-        thursday: "বৃহস্পতিবার",
-        friday: "শুক্রবার",
-        saturday: "শনিবার",
-        sunday: "রবিবার",
-        important: "গুরুত্বপূর্ণ",
-        urgent: "জরুরি",
-        all: "সব",
-        must: "অবশ্যই",
-        requested: "অনুরোধ করা হচ্ছে",
-        informed: "জানানো যাচ্ছে",
-        notified: "জানানো যাচ্ছে",
-        and: "এবং",
-        or: "অথবা",
-        for: "জন্য",
-        with: "সঙ্গে",
-        in: "তে",
-        on: "তে",
-        at: "তে",
-        the: "",
-        a: "",
-        an: "",
-        is: "",
-        are: "",
-        am: "",
-        be: "",
-        been: "",
-        being: "",
-        by: "",
-        here: "",
-        hereby: "",
-        inform: "",
-        notify: "",
-        that: "",
-        this: "",
-        our: "",
-        your: "",
-        going: "",
-        to: "",
-        will: "",
-        shall: "",
-        remain: ""
-      };
-      let translated = original;
-      phraseMap.forEach(([pattern, replacement]) => {
-        translated = translated.replace(pattern, replacement);
-      });
-      translated = translated.replace(/\b[A-Za-z]+\b/g, word => wordMap[word.toLowerCase()] ?? word);
-      translated = translated
-        .replace(/\s+/g, " ")
-        .replace(/\s+([।,])/g, "$1")
-        .replace(/(স্কুল)\s+স্কুল/g, "$1")
-        .replace(/(ছাত্রছাত্রী)\s+ছাত্রছাত্রী/g, "$1")
-        .trim();
-      return translated || original;
+      return normalizeText(text);
     }
-
     function studentHomeworkCard(item = {}, user = {}) {
       const className = item.className || user.className || "Class";
       const body = normalizeText(item.text);
       const showTranslator = isJuniorClass(user.className) || isJuniorClass(className);
       const translated = bengaliHomeworkText(body);
-      const translator = showTranslator ? `<button class="bengali-translate-action" type="button" data-bengali-homework>বাংলায় দেখুন</button><div class="bengali-homework-text">${translated || "বাংলা অনুবাদ পাওয়া যায়নি।"}</div>` : "";
+      const translator = showTranslator ? `<button class="bengali-translate-action" type="button" data-bengali-homework>View Bengali translation</button><div class="bengali-homework-text">${translated || "Bengali translation is not available."}</div>` : "";
       const attachment = homeworkAttachmentLink(item.attachment);
       return `<article class="card homework-card">
         <div class="card-head">
@@ -2898,14 +2687,14 @@
       const translatedTitle = bengaliNoticeText(title);
       const translatedMessage = bengaliNoticeText(message);
       const hasBangla = /[\u0980-\u09FF]/.test(`${title} ${message}`);
-      const translator = hasBangla ? "" : `<button class="bengali-translate-action" type="button" data-bengali-notice>বাংলায় পড়ুন</button><div class="bengali-notice-text"><strong>${translatedTitle}</strong><br>${translatedMessage || "বাংলা অনুবাদ পাওয়া যায়নি।"}</div>`;
+      const translator = hasBangla ? "" : `<button class="bengali-translate-action" type="button" data-bengali-notice>View Bengali translation</button><div class="bengali-notice-text"><strong>${translatedTitle}</strong><br>${translatedMessage || "Bengali translation is not available."}</div>`;
       return `<article class="card notice-card">
         <div class="card-head">
           <div>
             <span class="notice-date-line">Notice Date: ${noticeDate}</span>
             <strong class="notice-subject-line">Subject: ${title}</strong>
           </div>
-          <span class="status ok">${state.language === "bn" ? "নোটিশ" : "Notice"}</span>
+          <span class="status ok">${state.language === "bn" ? "Notice" : "Notice"}</span>
         </div>
         ${message ? `<p>${message}</p>` : ""}
         ${translator}
@@ -3143,94 +2932,13 @@
     }
 
     function bengaliComplaintText(text = "") {
-      const original = normalizeText(text);
-      if (!original) return "";
-      if (/[\u0980-\u09FF]/.test(original)) return original;
-      const phraseMap = [
-        [/\bhomework\s+(?:is\s+)?(?:not\s+)?complete(?:d)?\b/gi, "হোমওয়ার্ক সম্পূর্ণ করা হয়নি"],
-        [/\bclasswork\s+(?:is\s+)?(?:not\s+)?complete(?:d)?\b/gi, "ক্লাসওয়ার্ক সম্পূর্ণ করা হয়নি"],
-        [/\bnot\s+doing\s+homework\b/gi, "হোমওয়ার্ক করছে না"],
-        [/\bnot\s+doing\s+classwork\b/gi, "ক্লাসওয়ার্ক করছে না"],
-        [/\bnot\s+attentive\b/gi, "মনোযোগী নয়"],
-        [/\bdoes\s+not\s+listen\b/gi, "কথা শুনছে না"],
-        [/\bpoor\s+handwriting\b/gi, "হাতের লেখা ভালো নয়"],
-        [/\bregularly\s+absent\b/gi, "নিয়মিত অনুপস্থিত"],
-        [/\blate\s+to\s+class\b/gi, "ক্লাসে দেরি করে আসছে"],
-        [/\btalks?\s+in\s+class\b/gi, "ক্লাসে কথা বলছে"],
-        [/\bplease\s+take\s+care\b/gi, "দয়া করে খেয়াল রাখবেন"],
-        [/\bneeds?\s+improvement\b/gi, "উন্নতির প্রয়োজন"]
-      ];
-      const wordMap = {
-        homework: "হোমওয়ার্ক",
-        classwork: "ক্লাসওয়ার্ক",
-        behaviour: "ব্যবহার",
-        behavior: "ব্যবহার",
-        attendance: "উপস্থিতি",
-        academic: "পড়াশোনা",
-        study: "পড়াশোনা",
-        studies: "পড়াশোনা",
-        student: "ছাত্র/ছাত্রী",
-        teacher: "শিক্ষক",
-        parent: "অভিভাবক",
-        guardian: "গার্ডিয়ান",
-        complaint: "অভিযোগ",
-        observation: "পর্যবেক্ষণ",
-        note: "নোট",
-        class: "ক্লাস",
-        book: "বই",
-        copy: "খাতা",
-        notebook: "খাতা",
-        absent: "অনুপস্থিত",
-        late: "দেরি",
-        weak: "দুর্বল",
-        good: "ভালো",
-        poor: "ভালো নয়",
-        improve: "উন্নতি করা",
-        improvement: "উন্নতি",
-        complete: "সম্পূর্ণ",
-        completed: "সম্পূর্ণ হয়েছে",
-        incomplete: "অসম্পূর্ণ",
-        read: "পড়া",
-        write: "লেখা",
-        writing: "লেখা",
-        listening: "শোনা",
-        attentive: "মনোযোগী",
-        attention: "মনোযোগ",
-        talking: "কথা বলা",
-        talk: "কথা",
-        regularly: "নিয়মিত",
-        please: "দয়া করে",
-        care: "খেয়াল",
-        needs: "প্রয়োজন",
-        need: "প্রয়োজন",
-        not: "না",
-        no: "না",
-        is: "",
-        are: "",
-        the: "",
-        a: "",
-        an: "",
-        in: "তে",
-        on: "তে",
-        for: "জন্য",
-        and: "এবং",
-        or: "অথবা",
-        to: ""
-      };
-      let translated = original;
-      phraseMap.forEach(([pattern, replacement]) => {
-        translated = translated.replace(pattern, replacement);
-      });
-      translated = translated.replace(/\b[A-Za-z]+\b/g, word => wordMap[word.toLowerCase()] ?? word);
-      translated = translated.replace(/\s+/g, " ").replace(/\s+([।,])/g, "$1").trim();
-      return translated || original;
+      return normalizeText(text);
     }
-
     function complaintBengaliBlock(item = {}) {
       const detail = item.details || item.note || "";
       const translated = bengaliComplaintText(detail);
       if (!detail || /[\u0980-\u09FF]/.test(detail)) return "";
-      return `<button class="bengali-translate-action" type="button" data-bengali-complaint>বাংলায় পড়ুন</button><div class="bengali-complaint-text">${translated || "বাংলা অনুবাদ পাওয়া যায়নি।"}</div>`;
+      return `<button class="bengali-translate-action" type="button" data-bengali-complaint>View Bengali translation</button><div class="bengali-complaint-text">${translated || "Bengali translation is not available."}</div>`;
     }
 
     function complaintStudentStatusBar(item = {}) {
@@ -3273,14 +2981,14 @@
     }
 
     function languageControl() {
-      return `<article class="card"><div class="segmented"><button class="seg-btn ${state.language === "en" ? "active" : ""}" data-lang="en">English</button><button class="seg-btn ${state.language === "bn" ? "active" : ""}" data-lang="bn">বাংলা</button></div></article>`;
+      return `<article class="card"><div class="segmented"><button class="seg-btn ${state.language === "en" ? "active" : ""}" data-lang="en">English</button><button class="seg-btn ${state.language === "bn" ? "active" : ""}" data-lang="bn">Bengali</button></div></article>`;
     }
 
     function bindLanguageControls() {
       document.querySelectorAll("[data-lang]").forEach(btn => btn.addEventListener("click", () => {
         state.language = btn.dataset.lang;
         renderStudentViews();
-        toast(state.language === "bn" ? "বাংলা চালু হয়েছে" : "English enabled");
+        toast(state.language === "bn" ? "Bengali mode enabled" : "English enabled");
       }));
     }
 
@@ -3294,7 +3002,7 @@
       state.role = role;
       $("#loginEyebrow").textContent = role === "student" ? "Student Login" : "Teacher Login";
       $("#loginTitle").textContent = role === "student" ? "Student Portal" : "Teacher Portal";
-      $("#loginHelp").textContent = role === "student" ? "ERP admission no/login id diye login korun." : "ERP teacher/staff login id diye login korun.";
+      $("#loginHelp").textContent = role === "student" ? "Log in with the ERP admission number or login ID." : "Log in with the ERP teacher or staff login ID.";
       $("#loginIdLabel").textContent = role === "student" ? "Admission No / Login ID" : "Teacher / Staff Login ID";
       $("#loginId").value = "";
       $("#password").value = "";
@@ -3899,21 +3607,21 @@
         button.addEventListener("click", () => {
           const target = button.nextElementSibling;
           target?.classList.toggle("show");
-          button.textContent = target?.classList.contains("show") ? "বাংলা লুকান" : "বাংলায় দেখুন";
+          button.textContent = target?.classList.contains("show") ? "Hide Bengali translation" : "View Bengali translation";
         });
       });
       document.querySelectorAll("[data-bengali-notice]").forEach(button => {
         button.addEventListener("click", () => {
           const target = button.nextElementSibling;
           target?.classList.toggle("show");
-          button.textContent = target?.classList.contains("show") ? "বাংলা লুকান" : "বাংলায় পড়ুন";
+          button.textContent = target?.classList.contains("show") ? "Hide Bengali translation" : "View Bengali translation";
         });
       });
       document.querySelectorAll("[data-bengali-complaint]").forEach(button => {
         button.addEventListener("click", () => {
           const target = button.nextElementSibling;
           target?.classList.toggle("show");
-          button.textContent = target?.classList.contains("show") ? "বাংলা লুকান" : "বাংলায় পড়ুন";
+          button.textContent = target?.classList.contains("show") ? "Hide Bengali translation" : "View Bengali translation";
         });
       });
       document.querySelectorAll("[data-complaint-satisfied]").forEach(button => {

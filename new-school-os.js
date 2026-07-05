@@ -1436,9 +1436,9 @@ function ensureLoginOverlay() {
   overlay.querySelector(".login-forgot-link")?.addEventListener("click", () => {
     const error = overlay.querySelector("#loginOverlayError");
     if (error) {
-      error.textContent = "Password reset korte Master Admin / office admin-er sathe contact korun.";
+      error.textContent = "Please contact the Master Admin or Office Admin to reset your password.";
     }
-    showToast("Forgot password: Master Admin theke password reset korte hobe.");
+    showToast("Forgot password: please contact the Master Admin or Office Admin.");
   });
   overlay.querySelector("form").addEventListener("submit", async event => {
     event.preventDefault();
@@ -4513,8 +4513,8 @@ function renderMarksheetModule() {
     preview.innerHTML = latest ? `
       <strong>${escapeHtml(latest.studentName || "-")} | ${escapeHtml(latest.exam || "-")}</strong>
       <span>${escapeHtml(latest.subject || "-")} - ${escapeHtml(latest.marks || 0)}/${escapeHtml(latest.maxMarks || 100)}</span>
-      <p>Status: ${escapeHtml(latest.status || "Review")}. Published hole student app-e result visible hobe.</p>
-    ` : "Marks save korle first review status-e thakbe. Publish korle student app-e visible hobe.";
+      <p>Status: ${escapeHtml(latest.status || "Review")}. Published results will be visible in the student app.</p>
+    ` : "Saved marks will remain under review first. Published marks will be visible in the student app.";
   }
   if (!rows) return;
   const filtered = marksheetEntries.filter(item => {
@@ -4845,7 +4845,7 @@ function renderAcademicProfileModule() {
       <div class="panel">
         <div class="panel-head"><div><p class="eyebrow">Result</p><h2>Marksheet</h2></div></div>
         <div class="task-list">
-          ${results.slice(0, 6).map(result => `<article><b>${escapeHtml(result.grade || "-")}</b><div><strong>${escapeHtml(result.exam || "-")} | ${escapeHtml(result.subject || "-")}</strong><p>${escapeHtml(result.marks ?? result.total ?? 0)}/${escapeHtml(result.maxMarks ?? result.maxTotal ?? 100)} | ${escapeHtml(result.percentage || "")}</p><small>${escapeHtml(result.status || "Review")}</small></div><em>${escapeHtml(result.status === "Published" ? "Visible" : "Review")}</em></article>`).join("") || `<article><b>0</b><div><strong>No result entered</strong><p>Marksheet publish hole ekhane show korbe.</p></div><em>Empty</em></article>`}
+          ${results.slice(0, 6).map(result => `<article><b>${escapeHtml(result.grade || "-")}</b><div><strong>${escapeHtml(result.exam || "-")} | ${escapeHtml(result.subject || "-")}</strong><p>${escapeHtml(result.marks ?? result.total ?? 0)}/${escapeHtml(result.maxMarks ?? result.maxTotal ?? 100)} | ${escapeHtml(result.percentage || "")}</p><small>${escapeHtml(result.status || "Review")}</small></div><em>${escapeHtml(result.status === "Published" ? "Visible" : "Review")}</em></article>`).join("") || `<article><b>0</b><div><strong>No result entered</strong><p>Published marksheets will appear here.</p></div><em>Empty</em></article>`}
         </div>
       </div>
       <div class="panel">
@@ -5215,7 +5215,7 @@ function approveTeacherNoticeRequest(requestId) {
 function rejectTeacherNoticeRequest(requestId) {
   const request = teacherNoticeRequests.find(item => item.id === requestId);
   if (!request) return;
-  const reason = prompt("Reject reason likhun", request.rejectReason || "");
+  const reason = prompt("Enter rejection reason", request.rejectReason || "");
   if (reason === null) return;
   request.status = "Rejected";
   request.rejectReason = String(reason || "").trim() || "Rejected by ERP";
@@ -7299,7 +7299,7 @@ function rejectUpiPaymentRequest(requestId = "") {
     showToast("UPI request not found.");
     return;
   }
-  const reason = prompt("Reject reason লিখুন", request.rejectReason || "Payment not matched");
+  const reason = prompt("Enter rejection reason", request.rejectReason || "Payment not matched");
   if (reason === null) return;
   request.status = "Rejected";
   request.rejectReason = String(reason || "").trim() || "Payment not matched";
@@ -10705,10 +10705,10 @@ function getAlertSolverRules() {
       patterns: ["receipt number used for multiple students", "linked with", "duplicate receipt", "same receipt"],
       reason: "Same receipt number multiple admission numbers-e use hoyeche.",
       steps: [
-        "Security > Duplicate Receipts page open korun.",
-        "Receipt group review korun.",
-        "Fix This ba Fix All Duplicates click korun.",
-        "Tarpor Security Maintenance > System Health refresh kore alert komeche kina dekhun."
+        "Open Security > Duplicate Receipts.",
+        "Review the receipt group.",
+        "Click Fix This or Fix All Duplicates.",
+        "Then refresh Security Maintenance > System Health and check whether the alert is reduced."
       ]
     },
     {
@@ -10718,13 +10718,13 @@ function getAlertSolverRules() {
       module: "Collect Fees",
       pages: ["Collect Fees > Payment History"],
       patterns: ["receipt allocation mismatch", "fee allocations"],
-      reason: "Payment amount, discount, fine ba fee allocation total ek line-e milche na.",
+      reason: "Payment amount, discount, fine and fee allocation totals do not match in one row.",
       steps: [
-        "Collect Fees > Payment History open korun.",
-        "Receipt No search-e receipt number likhun.",
-        "Edit icon diye payment details check korun.",
-        "Discount thakle Paid + Discount allocation-er sathe milche kina dekhun.",
-        "Vul entry hole edit/delete kore correct payment save korun."
+        "Open Collect Fees > Payment History.",
+        "Enter the receipt number in Receipt No search.",
+        "Use the edit icon to check payment details.",
+        "If a discount exists, check whether Paid plus Discount matches the allocation.",
+        "If the entry is incorrect, edit or delete it and save the correct payment."
       ]
     },
     {
@@ -10736,9 +10736,9 @@ function getAlertSolverRules() {
       patterns: ["bank/cash total mismatch", "bank+cash"],
       reason: "Saved amount-er sathe bank payment + cash payment total milche na.",
       steps: [
-        "Collect Fees > Payment History page-e receipt no search korun.",
-        "Edit icon diye bank/cash amount check korun.",
-        "Bank + Cash total jeno Total Amount-er sathe mile seta update korun."
+        "Search the receipt number on Collect Fees > Payment History.",
+        "Use the edit icon to check bank and cash amounts.",
+        "Update Bank plus Cash so it matches the Total Amount."
       ]
     },
     {
@@ -10750,9 +10750,9 @@ function getAlertSolverRules() {
       patterns: ["payment without receipt", "no receipt no"],
       reason: "Payment save hoyeche kintu receipt number blank.",
       steps: [
-        "Collect Fees > Payment History open korun.",
-        "Problem payment row find korun.",
-        "Edit kore unique receipt number diye save korun."
+        "Open Collect Fees > Payment History.",
+        "Find the problem payment row.",
+        "Edit the row, enter a unique receipt number and save."
       ]
     },
     {
@@ -10762,11 +10762,11 @@ function getAlertSolverRules() {
       module: "Security",
       pages: ["Security > Security Maintenance"],
       patterns: ["no backup found", "backup is older"],
-      reason: "Recent backup nei ba backup purono hoye geche.",
+      reason: "No recent backup is available, or the backup is outdated.",
       steps: [
-        "Security > Security Maintenance open korun.",
-        "Create Backup click korun.",
-        "Backup Date card update hoyeche kina dekhun."
+        "Open Security > Security Maintenance.",
+        "Click Create Backup.",
+        "Check whether the Backup Date card has updated."
       ]
     },
     {
@@ -10776,12 +10776,12 @@ function getAlertSolverRules() {
       module: "Transport",
       pages: ["Transport > Route Pickup Point", "Transport > Assign Vehicle", "Transport > Student Transport Fees"],
       patterns: ["transport student village not mapped", "route pickup has no assigned vehicle", "transport student without village", "transport student without transport fee"],
-      reason: "Transport student-er village, route, vehicle assignment ba fee missing.",
+      reason: "A transport student is missing village, route, vehicle assignment or fee setup.",
       steps: [
-        "Transport > Pickup Point-e village ache kina check korun.",
-        "Transport > Route Pickup Point-e village route/shift-e map korun.",
-        "Transport > Assign Vehicle-e route + shift-er vehicle assign korun.",
-        "Student Transport Fees page-e fee/status verify korun."
+        "Check whether the village exists in Transport > Pickup Point.",
+        "Map the village to route and shift in Transport > Route Pickup Point.",
+        "Assign the vehicle by route and shift in Transport > Assign Vehicle.",
+        "Verify fee and status on the Student Transport Fees page."
       ]
     },
     {
@@ -10793,9 +10793,9 @@ function getAlertSolverRules() {
       patterns: ["duplicate admission number", "duplicate vehicle number", "duplicate route name", "duplicate staff id"],
       reason: "Same master data ekadhik bar save hoyeche.",
       steps: [
-        "Alert text-e kon duplicate bola ache seta dekhen.",
-        "Related page open korun.",
-        "Duplicate row edit/delete kore ekta correct record rakhen."
+        "Check which duplicate is mentioned in the alert text.",
+        "Open the related page.",
+        "Edit or delete duplicate rows and keep one correct record."
       ]
     },
     {
@@ -10805,12 +10805,12 @@ function getAlertSolverRules() {
       module: "Backend / Save",
       pages: ["Topbar Online Status", "Security > Security Maintenance"],
       patterns: ["no internet", "server connection", "entry not saved", "offline", "backend save failed"],
-      reason: "Internet/server connection stable na hole entry save hobe na.",
+      reason: "Entries will not save if the internet or server connection is unstable.",
       steps: [
-        "Topbar-e Online dekha jacche kina check korun.",
-        "Offline/Checking hole page refresh kore abar login korun.",
-        "Entry save korar age Online status confirm korun.",
-        "Problem thakle Render service running ache kina check korun."
+        "Check whether Online is visible in the top bar.",
+        "If Offline or Checking appears, refresh the page and log in again.",
+        "Confirm Online status before saving an entry.",
+        "If the problem continues, check whether the Render service is running."
       ]
     }
   ];
@@ -10835,8 +10835,8 @@ function renderAlertSolverMatches(matches = [], rawText = "") {
     output.innerHTML = `
       <article class="alert-solver-card solver-warning">
         <span>Unknown Alert</span>
-        <strong>Exact rule match pawa jayni.</strong>
-        <p>Security Maintenance > System Health-e alert group dekhe related page check korun. Alert text-ta Codex-e pathale ami logic add kore dite parbo.</p>
+        <strong>No exact rule match was found.</strong>
+        <p>Check the alert group in Security Maintenance > System Health, then open the related page. Send the alert text to Codex if a new rule is needed.</p>
       </article>
     `;
     return;
@@ -10939,17 +10939,17 @@ function getRoleHealthRows() {
 
 function getRoleHealthIssues(rows = getRoleHealthRows()) {
   const issues = [];
-  if (!roles.length) issues.push({severity: "Warning", title: "No roles saved", detail: "HR Setup > Role Setup-e role add korun."});
-  if (!userAccessAccounts.length) issues.push({severity: "Info", title: "No user login saved", detail: "Settings > User Access & Permissions-e staff login create korun."});
+  if (!roles.length) issues.push({severity: "Warning", title: "No roles saved", detail: "Add roles in HR Setup > Role Setup."});
+  if (!userAccessAccounts.length) issues.push({severity: "Info", title: "No user login saved", detail: "Create staff logins in Settings > User Access & Permissions."});
   rows.forEach(row => {
     if (!row.roleExists && !row.protectedRole) {
-      issues.push({severity: "Critical", title: `${row.roleName} role setup missing`, detail: "User access-e role ache, but HR Setup role list-e nei."});
+      issues.push({severity: "Critical", title: `${row.roleName} role setup missing`, detail: "The role exists in User Access, but it is missing from the HR Setup role list."});
     }
     if (!row.protectedRole && row.counts.viewOn === 0) {
       issues.push({severity: "Critical", title: `${row.roleName} has no view permission`, detail: "Ei role login korle sidebar almost blank hote pare."});
     }
     if (!row.protectedRole && row.counts.totalOn === row.counts.total) {
-      issues.push({severity: "Warning", title: `${row.roleName} has full access`, detail: "Admin/Master Admin chara full access dorkar kina check korun."});
+      issues.push({severity: "Warning", title: `${row.roleName} has full access`, detail: "Check whether full access is required for non-admin roles."});
     }
     if (row.protectedRole && row.counts.totalOn < row.counts.total) {
       issues.push({severity: "Critical", title: `${row.roleName} protected permission changed`, detail: "Protected role full access locked thaka uchit."});
@@ -10957,9 +10957,9 @@ function getRoleHealthIssues(rows = getRoleHealthRows()) {
   });
   userAccessAccounts.forEach(account => {
     const name = account.staffName || account.loginId || "User";
-    if (!String(account.role || "").trim()) issues.push({severity: "Critical", title: `${name} has no role`, detail: "User access login-e role select korun."});
+    if (!String(account.role || "").trim()) issues.push({severity: "Critical", title: `${name} has no role`, detail: "Select a role in the user access login."});
     if (!String(account.loginId || "").trim()) issues.push({severity: "Critical", title: `${name} login ID missing`, detail: "Login ID chara user login korte parbe na."});
-    if (!String(account.password || "").trim()) issues.push({severity: "Warning", title: `${name} password missing`, detail: "Password blank thakle login issue hote pare."});
+    if (!String(account.password || "").trim()) issues.push({severity: "Warning", title: `${name} password missing`, detail: "A blank password may cause login issues."});
   });
   return issues;
 }
@@ -13297,7 +13297,7 @@ document.getElementById("approveAllPendingLeaves")?.addEventListener("click", ()
 
 document.getElementById("staffBiometricSyncBtn").addEventListener("click", () => {
   saveStaffBiometricDevice();
-  showToast("Biometric API connection provision ready. Device software/API connect korlei data sync hobe.");
+  showToast("Biometric API connection provision ready. Data will sync after connecting the device software or API.");
 });
 
 document.getElementById("classSectionReportBtn").addEventListener("click", () => {
@@ -14108,7 +14108,7 @@ document.getElementById("transportFineForm").addEventListener("submit", event =>
   transportFineSetup.updatedAt = new Date().toISOString();
   if (!saveAppState()) {
     renderTransportFineSetup();
-    showToast("Transport fine setup save hoyni. Internet/server connection check korun.", "error", 6000);
+    showToast("Transport fine setup was not saved. Please check the internet or server connection.", "error", 6000);
     return;
   }
   renderTransportFineSetup();
