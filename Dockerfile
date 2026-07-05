@@ -11,6 +11,8 @@ ENV ANPS_ERP_UPLOAD_DIR=/data/uploads
 
 WORKDIR /app
 
+RUN pip install --no-cache-dir google-auth requests
+
 COPY anps-erp.html anps-mobile-app.html anps-payment-policies.html new-school-os.css new-school-os.js anps_erp_backend.py ./
 COPY assets ./assets
 

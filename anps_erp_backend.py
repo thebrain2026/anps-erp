@@ -11,6 +11,13 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+try:
+    from google.auth.transport.requests import Request as GoogleAuthRequest
+    from google.oauth2 import service_account
+except Exception:  # pragma: no cover - optional dependency is installed in production image
+    GoogleAuthRequest = None
+    service_account = None
+
 
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = Path(os.environ.get("ANPS_ERP_DATA_DIR", ROOT / "anps-erp-data")).resolve()
@@ -28,6 +35,8 @@ WHATSAPP_PHONE_NUMBER_ID = os.environ.get("ANPS_WHATSAPP_PHONE_NUMBER_ID", "").s
 WHATSAPP_API_VERSION = os.environ.get("ANPS_WHATSAPP_API_VERSION", "v23.0").strip() or "v23.0"
 FCM_SERVER_KEY = os.environ.get("ANPS_FCM_SERVER_KEY", "").strip()
 FCM_ENDPOINT = os.environ.get("ANPS_FCM_ENDPOINT", "https://fcm.googleapis.com/fcm/send").strip() or "https://fcm.googleapis.com/fcm/send"
+FCM_SERVICE_ACCOUNT_JSON = os.environ.get("ANPS_FIREBASE_SERVICE_ACCOUNT_JSON", "").strip()
+FCM_V1_SCOPE = "https://www.googleapis.com/auth/firebase.messaging"
 ICICI_GATEWAY_ENABLED = os.environ.get("ANPS_ICICI_GATEWAY_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
 ICICI_MERCHANT_ID = os.environ.get("ANPS_ICICI_MERCHANT_ID", "").strip()
 ICICI_TERMINAL_ID = os.environ.get("ANPS_ICICI_TERMINAL_ID", "").strip()
@@ -424,18 +433,116 @@ def upsert_mobile_push_token(payload, user):
         tokens.insert(0, record)
     state["mobilePushTokens"] = tokens[:5000]
     updated_at = write_state(state)
-    return {"ok": True, "configured": bool(FCM_SERVER_KEY), "updated_at": updated_at}
+    return {"ok": True, "configured": fcm_is_configured(), "updated_at": updated_at}
+
+
+def get_fcm_service_account_info():
+    raw = FCM_SERVICE_ACCOUNT_JSON.strip()
+    if not raw:
+        return None
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError:
+        possible_path = Path(raw).expanduser()
+        if possible_path.exists():
+            try:
+                return json.loads(possible_path.read_text())
+            except Exception:
+                return None
+    return None
+
+
+def fcm_v1_is_configured():
+    info = get_fcm_service_account_info()
+    return bool(info and info.get("project_id") and info.get("client_email") and info.get("private_key"))
+
+
+def fcm_is_configured():
+    return fcm_v1_is_configured() or bool(FCM_SERVER_KEY)
+
+
+def string_data_payload(data):
+    clean = {}
+    for key, value in (data or {}).items():
+        if value is None:
+            clean[str(key)] = ""
+        elif isinstance(value, (dict, list)):
+            clean[str(key)] = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
+        else:
+            clean[str(key)] = str(value)
+    return clean
+
+
+def send_fcm_v1_notifications(tokens, title, body, data=None):
+    info = get_fcm_service_account_info()
+    if not info:
+        return {"ok": False, "configured": False, "sent": 0, "error": "Firebase service account JSON is missing."}
+    if service_account is None or GoogleAuthRequest is None:
+        return {
+            "ok": False,
+            "configured": False,
+            "sent": 0,
+            "error": "Firebase V1 dependencies are missing. Rebuild the Render service after the latest deploy.",
+        }
+    try:
+        credentials = service_account.Credentials.from_service_account_info(info, scopes=[FCM_V1_SCOPE])
+        credentials.refresh(GoogleAuthRequest())
+    except Exception as exc:
+        return {"ok": False, "configured": True, "sent": 0, "error": f"Firebase authentication failed: {exc}"}
+
+    project_id = str(info.get("project_id") or "").strip()
+    endpoint = f"https://fcm.googleapis.com/v1/projects/{project_id}/messages:send"
+    sent = 0
+    failed = 0
+    errors = []
+    clean_data = string_data_payload(data)
+    for token in list(dict.fromkeys(tokens))[:1000]:
+        payload = {
+            "message": {
+                "token": token,
+                "notification": {"title": title, "body": body},
+                "data": clean_data,
+                "android": {
+                    "priority": "high",
+                    "notification": {"sound": "default"},
+                },
+            }
+        }
+        request = urllib.request.Request(
+            endpoint,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={
+                "Authorization": f"Bearer {credentials.token}",
+                "Content-Type": "application/json; charset=utf-8",
+            },
+            method="POST",
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=15) as response:
+                response.read()
+            sent += 1
+        except urllib.error.HTTPError as exc:
+            failed += 1
+            if len(errors) < 5:
+                errors.append(exc.read().decode("utf-8", errors="replace"))
+        except Exception as exc:
+            failed += 1
+            if len(errors) < 5:
+                errors.append(str(exc))
+    return {"ok": failed == 0 or sent > 0, "configured": True, "sent": sent, "failed": failed, "errors": errors}
 
 
 def send_fcm_notifications(tokens, title, body, data=None):
     if not tokens:
-        return {"ok": True, "configured": bool(FCM_SERVER_KEY), "sent": 0, "message": "No target device tokens."}
+        return {"ok": True, "configured": fcm_is_configured(), "sent": 0, "message": "No target device tokens."}
+    if fcm_v1_is_configured():
+        return send_fcm_v1_notifications(tokens, title, body, data)
     if not FCM_SERVER_KEY:
         return {
             "ok": False,
             "configured": False,
             "sent": 0,
-            "error": "Firebase Cloud Messaging is not configured. Set ANPS_FCM_SERVER_KEY on Render.",
+            "error": "Firebase Cloud Messaging is not configured. Set ANPS_FIREBASE_SERVICE_ACCOUNT_JSON on Render.",
         }
     payload = {
         "registration_ids": tokens[:1000],
