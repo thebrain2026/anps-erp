@@ -4061,14 +4061,81 @@ function renderTasks() {
   `).join("") || `<article><b>0</b><div><strong>No priority actions</strong><p>New tasks will appear after entry.</p><small>Ready</small></div><em>Empty</em></article>`;
 }
 
+function moduleActivityTime(value = "") {
+  if (!value) return 0;
+  const clean = String(value || "").trim();
+  if (!clean) return 0;
+  const normalized = normalizeCollectionHistoryDateValue(clean);
+  const match = normalized.match(/^(\d{2})-(\d{2})-(\d{2}|\d{4})$/);
+  if (match) {
+    const year = match[3].length === 2 ? Number(`20${match[3]}`) : Number(match[3]);
+    const date = new Date(year, Number(match[2]) - 1, Number(match[1]));
+    return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+  }
+  const date = new Date(clean);
+  return Number.isNaN(date.getTime()) ? 0 : date.getTime();
+}
+
+function collectModuleActivities() {
+  const activities = [];
+  getDailyCollectionReportRows().slice(0, 4).forEach(row => {
+    activities.push({
+      title: "Fee collection posted",
+      detail: `${row.date} | ${formatRs(row.total)} | ${row.receipts.size} receipt(s)`,
+      badge: "Finance",
+      tone: "stable",
+      time: moduleActivityTime(row.date)
+    });
+  });
+  notices.slice(0, 4).forEach(item => activities.push({
+    title: "Notice published",
+    detail: `${getNoticeDateLabel(item)} | ${item.title || "School notice"}`,
+    badge: "Notice",
+    tone: "live",
+    time: moduleActivityTime(item.noticeDate || item.publishDate || item.date || item.createdAt)
+  }));
+  homework.slice(0, 4).forEach(item => activities.push({
+    title: "Homework assigned",
+    detail: `${item.className || "Class"} | ${item.subject || "Subject"} | Due ${item.due || "-"}`,
+    badge: "Homework",
+    tone: "watch",
+    time: moduleActivityTime(item.createdAt || item.date || item.due)
+  }));
+  complaintRecords.slice(0, 4).forEach(item => activities.push({
+    title: "Complaint updated",
+    detail: `${item.studentName || item.name || item.source || "Complaint"} | ${item.status || item.reviewStatus || "Review"}`,
+    badge: "Complaint",
+    tone: "pending",
+    time: moduleActivityTime(item.createdAt || item.date || item.updatedAt)
+  }));
+  teacherLeaves.slice(0, 4).forEach(item => activities.push({
+    title: "Leave request received",
+    detail: `${item.teacherName || item.staffName || "Staff"} | ${item.from || "-"} to ${item.to || "-"}`,
+    badge: "Leave",
+    tone: "watch",
+    time: moduleActivityTime(item.createdAt || item.from || item.date)
+  }));
+  students.slice(0, 4).forEach(item => activities.push({
+    title: "Student record saved",
+    detail: `${item.name || "Student"} | ${item.className || item.class || "-"} | ${item.admissionNo || "-"}`,
+    badge: "Student",
+    tone: "live",
+    time: moduleActivityTime(item.updatedAt || item.createdAt || item.admissionDate || item.date)
+  }));
+  return activities
+    .sort((a, b) => (b.time || 0) - (a.time || 0))
+    .slice(0, 10);
+}
+
 function renderModules() {
-  document.getElementById("moduleStatus").innerHTML = modules.map(([name, detail, status]) => `
+  const activities = collectModuleActivities();
+  document.getElementById("moduleStatus").innerHTML = activities.map(item => `
     <article>
       <div>
-        <strong>${name}</strong>
-        <small>${detail}</small>
+        <strong>${escapeHtml(item.title)}</strong>
+        <small>${escapeHtml(item.detail)}</small>
       </div>
-      <span class="status-pill ${status.toLowerCase()}">${status}</span>
+      <span class="status-pill ${item.tone}">${escapeHtml(item.badge)}</span>
     </article>
   `).join("") || `<article><div><strong>No module activity</strong><small>Operational records will appear after entry.</small></div><span class="status-pill stable">Empty</span></article>`;
 }
