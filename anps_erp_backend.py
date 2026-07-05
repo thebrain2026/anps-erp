@@ -375,6 +375,23 @@ def token_matches_notice(token_record, notice):
     return True
 
 
+def token_matches_class_payload(token_record, payload):
+    if not isinstance(token_record, dict) or not token_record.get("token"):
+        return False
+    if str(token_record.get("enabled", "true")).lower() in {"false", "0", "no", "disabled"}:
+        return False
+    role = str(token_record.get("role") or "").strip().lower()
+    if role != "student":
+        return False
+    class_name = str(payload.get("className") or payload.get("noticeClass") or "").strip().lower()
+    section = str(payload.get("section") or payload.get("sectionName") or "").strip().lower()
+    if class_name and str(token_record.get("className") or "").strip().lower() != class_name:
+        return False
+    if section and str(token_record.get("section") or "").strip().lower() != section:
+        return False
+    return True
+
+
 def upsert_mobile_push_token(payload, user):
     token = str(payload.get("token") or "").strip()
     if not token:
@@ -476,6 +493,36 @@ def send_notice_push(payload):
             "type": "notice",
             "noticeId": str(notice.get("id") or ""),
             "noticeDate": str(notice.get("noticeDate") or notice.get("publishDate") or ""),
+        },
+    )
+
+
+def send_homework_push(payload):
+    homework = payload.get("homework") if isinstance(payload.get("homework"), dict) else payload
+    state = read_state() or {}
+    tokens = [
+        item.get("token")
+        for item in state.get("mobilePushTokens", []) or []
+        if token_matches_class_payload(item, homework)
+    ]
+    subject = str(homework.get("subject") or "Homework").strip()
+    class_name = str(homework.get("className") or "").strip()
+    body = str(homework.get("text") or "New homework has been assigned.").strip()
+    if len(body) > 160:
+        body = body[:157].rstrip() + "..."
+    title = f"New Homework: {subject}" if subject else "New Homework"
+    if class_name:
+        title = f"{title} | {class_name}"
+    return send_fcm_notifications(
+        list(dict.fromkeys(tokens)),
+        title,
+        body,
+        {
+            "type": "homework",
+            "homeworkId": str(homework.get("id") or ""),
+            "className": class_name,
+            "subject": subject,
+            "due": str(homework.get("due") or ""),
         },
     )
 
@@ -1193,6 +1240,14 @@ def merge_state_without_losing_receipts(server_state, incoming_state):
         **(server_state.get("mobileAppSettings") if isinstance(server_state.get("mobileAppSettings"), dict) else {}),
         **(incoming_state.get("mobileAppSettings") if isinstance(incoming_state.get("mobileAppSettings"), dict) else {}),
     }
+    push_tokens = {}
+    for item in [*(server_state.get("mobilePushTokens") or []), *(incoming_state.get("mobilePushTokens") or [])]:
+        if not isinstance(item, dict):
+            continue
+        token = str(item.get("token") or "").strip()
+        if token:
+            push_tokens[token] = {**push_tokens.get(token, {}), **item}
+    merged["mobilePushTokens"] = list(push_tokens.values())[:5000]
     return merged
 
 
@@ -3006,6 +3061,8 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             return self.mobile_push_token_request()
         if path == "/api/notifications/notice":
             return self.notice_push_request()
+        if path == "/api/notifications/homework":
+            return self.homework_push_request()
         if path == "/api/notifications/birthday":
             return self.birthday_push_request()
         if path == "/api/payments/icici/create":
@@ -3043,6 +3100,8 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
                     "updated_at": current_record.get("updated_at"),
                     "state": state,
                 }, status=409)
+            if current_record and current_record.get("state"):
+                state = merge_state_without_losing_receipts(current_record.get("state") or {}, state)
             updated_at = write_state(state)
             self.json_response({"ok": True, "updated_at": updated_at, "state": state})
         except Exception as exc:
@@ -3097,6 +3156,18 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
             result = send_notice_push(payload)
+            self.json_response(result, status=200 if result.get("ok") or not result.get("configured") else 400)
+        except Exception as exc:
+            self.json_response({"ok": False, "error": str(exc)}, status=400)
+
+    def homework_push_request(self):
+        length = int(self.headers.get("Content-Length") or "0")
+        if length > MAX_BODY:
+            self.send_error(413, "Request body too large")
+            return
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+            result = send_homework_push(payload)
             self.json_response(result, status=200 if result.get("ok") or not result.get("configured") else 400)
         except Exception as exc:
             self.json_response({"ok": False, "error": str(exc)}, status=400)

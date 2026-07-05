@@ -5056,6 +5056,26 @@ async function sendNoticePushNotification(notice = {}) {
   }
 }
 
+async function sendHomeworkPushNotification(homeworkEntry = {}) {
+  try {
+    const response = await backendFetch("/api/notifications/homework", {
+      method: "POST",
+      headers: backendHeaders({"Content-Type": "application/json"}),
+      body: JSON.stringify({homework: homeworkEntry})
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!result.configured) {
+      console.info("Homework push saved, but Firebase Cloud Messaging is not configured yet.");
+      return;
+    }
+    if (result.ok) {
+      showToast(`Homework notification sent to ${result.sent || 0} device(s).`);
+    }
+  } catch (error) {
+    console.warn("Homework push notification failed.", error);
+  }
+}
+
 function renderNoticeAudienceOptions() {
   const classSelect = document.getElementById("noticeClassSelect");
   const sectionSelect = document.getElementById("noticeSectionSelect");
@@ -5186,6 +5206,7 @@ function approveTeacherNoticeRequest(requestId) {
   request.approvedAt = new Date().toISOString();
   request.publishedNoticeId = noticeId;
   saveAppState();
+  sendNoticePushNotification(notices[0]);
   renderTeacherNoticeRequests();
   renderNoticeBoard();
   showToast("Teacher notice approved and published.");
@@ -5351,6 +5372,7 @@ async function publishHomeworkEntry(form) {
   }
   homework.unshift(entry);
   saveAppState();
+  sendHomeworkPushNotification(entry);
   form.reset();
   if (form.elements.due) form.elements.due.value = toDateInputValue(new Date());
   renderHomeworkModule();
