@@ -1749,7 +1749,15 @@
         const headers = {"Content-Type": "application/json", ...(options.headers || {})};
         const token = this.token();
         if (token) headers.Authorization = `Bearer ${token}`;
-        const res = await fetch(`${AppConfig.apiBaseUrl}${path}`, {...options, headers});
+        const method = String(options.method || "GET").toUpperCase();
+        const requestPath = method === "GET"
+          ? `${path}${path.includes("?") ? "&" : "?"}_=${Date.now()}`
+          : path;
+        const res = await fetch(`${AppConfig.apiBaseUrl}${requestPath}`, {
+          ...options,
+          headers,
+          cache: method === "GET" ? "no-store" : options.cache
+        });
         const payload = await res.json().catch(() => ({}));
         if (!res.ok || payload.ok === false) {
           throw new Error(payload.error || "ERP API request failed");
@@ -3042,7 +3050,7 @@
     }
 
     async function refreshLiveWorkspace({ quiet = true } = {}) {
-      if (!state.user || liveSyncInFlight || document.hidden) return;
+      if (!state.user || liveSyncInFlight) return;
       liveSyncInFlight = true;
       try {
         const previousNoticeSignature = lastNoticeSignature;
@@ -3067,7 +3075,8 @@
     function startLiveWorkspaceSync() {
       clearInterval(liveSyncTimer);
       lastNoticeSignature = noticeSyncSignature(state.workspace?.notices || []);
-      liveSyncTimer = setInterval(() => refreshLiveWorkspace({ quiet: false }), 45 * 1000);
+      window.setTimeout(() => refreshLiveWorkspace({ quiet: true }), 2500);
+      liveSyncTimer = setInterval(() => refreshLiveWorkspace({ quiet: false }), 10 * 1000);
     }
 
     function stopLiveWorkspaceSync() {
