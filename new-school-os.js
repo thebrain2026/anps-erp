@@ -1611,6 +1611,7 @@ function updateTopbarSystemStatus() {
 
 function renderDashboardOnly() {
   renderBars();
+  renderDailyCashTrendChart();
   renderTasks();
   renderModules();
   renderSessions();
@@ -2845,6 +2846,45 @@ function getDailyCollectionReportRows() {
     });
   });
   return [...dailyMap.values()].sort((a, b) => parseDateDDMMYYYY(b.date) - parseDateDDMMYYYY(a.date));
+}
+
+function shortCollectionDateLabel(value = "") {
+  const date = parseDateDDMMYYYY(value);
+  if (Number.isNaN(date.getTime())) return String(value || "-").slice(0, 5);
+  return `${String(date.getDate()).padStart(2, "0")}/${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function renderDailyCashTrendChart() {
+  const chart = document.getElementById("dailyCashTrendChart");
+  const total = document.getElementById("dailyCashTrendTotal");
+  const note = document.getElementById("dailyCashTrendNote");
+  if (!chart || !total || !note) return;
+  const rows = getDailyCollectionReportRows()
+    .filter(row => Number(row.cash || 0) > 0 || Number(row.total || 0) > 0)
+    .slice(0, 14)
+    .reverse();
+  if (!rows.length) {
+    chart.innerHTML = `<div class="empty-chart">No daily cash collection found yet.</div>`;
+    total.textContent = "Rs. 0";
+    note.textContent = "Cash collections will appear here after fee entry.";
+    return;
+  }
+  const maxCash = Math.max(...rows.map(row => Number(row.cash || 0)), 1);
+  const cashTotal = rows.reduce((sum, row) => sum + Number(row.cash || 0), 0);
+  const bankTotal = rows.reduce((sum, row) => sum + Number(row.bank || 0), 0);
+  total.textContent = formatRs(cashTotal);
+  note.textContent = `Last ${rows.length} collection day(s) | Bank ${formatRs(bankTotal)}`;
+  chart.innerHTML = rows.map(row => {
+    const cash = Number(row.cash || 0);
+    const height = cash > 0 ? Math.max(10, Math.round((cash / maxCash) * 150)) : 8;
+    return `
+      <div class="market-point" title="${escapeHtml(row.date)} | Cash ${escapeHtml(formatRs(cash))} | Total ${escapeHtml(formatRs(row.total))}">
+        <strong>${escapeHtml(formatRs(cash).replace("Rs. ", ""))}</strong>
+        <i style="height:${height}px"></i>
+        <span>${escapeHtml(shortCollectionDateLabel(row.date))}</span>
+      </div>
+    `;
+  }).join("");
 }
 
 function renderDailyCollectionReport() {

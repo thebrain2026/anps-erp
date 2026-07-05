@@ -1027,6 +1027,104 @@ h2 { font-size: 1.15rem; }
   background: #fff;
 }
 
+.collection-trend-panel {
+  grid-column: 1 / -1;
+  overflow: hidden;
+  border-color: rgba(20, 121, 139, .22);
+  background:
+    radial-gradient(circle at 10% 0%, rgba(37, 99, 201, .12), transparent 28%),
+    linear-gradient(135deg, #ffffff 0%, #f7fbff 48%, #f4fff9 100%);
+}
+
+.collection-trend-panel .panel-head {
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.collection-trend-panel .panel-head small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-weight: 800;
+}
+
+.trend-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(20, 121, 139, .24);
+  border-radius: 999px;
+  background: #ecfdf5;
+  color: #0f766e;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
+.market-chart {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(14, minmax(28px, 1fr));
+  align-items: end;
+  gap: 9px;
+  min-height: 220px;
+  padding: 18px 12px 10px;
+  border: 1px solid rgba(210, 224, 238, .86);
+  border-radius: 8px;
+  background:
+    linear-gradient(to bottom, rgba(148, 163, 184, .14) 1px, transparent 1px) 0 0 / 100% 25%,
+    linear-gradient(180deg, rgba(255, 255, 255, .94), rgba(248, 252, 255, .94));
+}
+
+.market-chart::before {
+  content: "";
+  position: absolute;
+  inset: 18px 12px 42px;
+  border-bottom: 2px solid rgba(20, 121, 139, .24);
+  pointer-events: none;
+}
+
+.market-point {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  align-content: end;
+  gap: 7px;
+  min-height: 176px;
+}
+
+.market-point i {
+  display: block;
+  min-height: 8px;
+  border-radius: 999px 999px 4px 4px;
+  background: linear-gradient(180deg, #22c55e 0%, #14798b 60%, #173761 100%);
+  box-shadow: 0 10px 22px rgba(20, 121, 139, .18);
+}
+
+.market-point:nth-child(2n) i {
+  background: linear-gradient(180deg, #38bdf8 0%, #2563c9 68%, #173761 100%);
+}
+
+.market-point strong,
+.market-point span {
+  overflow: hidden;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.market-point strong {
+  color: var(--ink);
+  font-size: .72rem;
+  font-weight: 950;
+}
+
+.market-point span {
+  color: var(--muted);
+  font-size: .68rem;
+  font-weight: 850;
+}
+
 .pay-panel {
   grid-column: 1 / -1;
   overflow: hidden;
