@@ -2116,6 +2116,8 @@ def verify_login(username, password):
     for user in state.get("authUsers", []) or []:
         if str(user.get("id") or "").strip().lower() != wanted_lower:
             continue
+        if wanted_lower == "admin" and hmac.compare_digest(str(user.get("password") or ""), "admin123"):
+            return None
         if user.get("status") != "Active":
             return None
         if hmac.compare_digest(str(user.get("password") or ""), supplied):
@@ -2154,14 +2156,6 @@ def verify_login(username, password):
                 "school_id": normalize_school_id(user.get("school_id") or user.get("schoolId") or school_id),
                 "school_name": user.get("schoolName") or DEFAULT_SCHOOL_NAME,
             }
-    if wanted == "admin" and hmac.compare_digest(supplied, "admin123"):
-        return {
-            "username": "admin",
-            "full_name": "Administrator",
-            "role_name": "Administrator",
-            "school_id": school_id,
-            "school_name": DEFAULT_SCHOOL_NAME,
-        }
     return None
 
 
@@ -2871,17 +2865,7 @@ def fresh_state():
             "academicYear": "2026-27",
             "language": "English",
         },
-        "authUsers": [
-            {
-                "id": "admin",
-                "password": "admin123",
-                "name": "Administrator",
-                "role": "Administrator",
-                "team": "Principal Office",
-                "status": "Active",
-                "lastLogin": "",
-            }
-        ],
+        "authUsers": [],
         "roles": [],
         "speedRefreshDone": True,
         "uploadedStudentListSeeded": True,
