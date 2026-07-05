@@ -5088,15 +5088,56 @@ function renderAnnualCalendar() {
 }
 
 function renderDues() {
-  const session = financeSessions[activeSession];
-  document.getElementById("dueTable").innerHTML = session.dues.map(([name, klass, due, status]) => `
+  const table = document.getElementById("dueTable");
+  if (!table) return;
+  const followUps = getDashboardDueFollowUps();
+  table.innerHTML = followUps.map(item => `
     <tr>
-      <td><strong>${name}</strong></td>
-      <td>${klass}</td>
-      <td>${due}</td>
-      <td><span class="badge ${["Overdue"].includes(status) ? "red" : status === "Closed" ? "green" : "amber"}">${status}</span></td>
+      <td>
+        <button class="student-name-link" type="button" data-open-fee-book="${escapeHtml(item.admissionNo)}">
+          <strong>${escapeHtml(item.studentName)}</strong>
+        </button>
+        <small>${escapeHtml(item.admissionNo)}${item.mobile ? ` | ${escapeHtml(item.mobile)}` : ""}</small>
+      </td>
+      <td>${escapeHtml(item.className)}</td>
+      <td><strong>${formatRs(item.totalDue)}</strong><small>${escapeHtml(item.summary)}</small></td>
+      <td><span class="badge ${item.priorityClass}">${escapeHtml(item.status)}</span></td>
     </tr>
-  `).join("") || `<tr><td colspan="4">No dues recorded for this session.</td></tr>`;
+  `).join("") || `<tr><td colspan="4">No active fee follow-ups. Paid students will stay clear here.</td></tr>`;
+}
+
+function getDashboardDueFollowUps() {
+  return getActiveStudents().map(student => {
+    const dueRows = getLedgerRows(student).map(row => {
+      if (Array.isArray(row.months) && row.months.length) {
+        const details = getSearchDueMonthDetails(student, row);
+        const due = details.reduce((sum, item) => sum + Number(item.total || 0), 0);
+        const fine = details.reduce((sum, item) => sum + Number(item.fine || 0), 0);
+        const months = details.map(item => item.month);
+        return due > 0 ? {...row, due, fine, period: formatMonthPeriod(months), details} : null;
+      }
+      return Number(row.due || 0) > 0 ? row : null;
+    }).filter(Boolean);
+    const totalDue = dueRows.reduce((sum, row) => sum + Number(row.due || 0), 0);
+    if (totalDue <= 0) return null;
+    const fineDue = dueRows.reduce((sum, row) => sum + Number(row.fine || 0), 0);
+    const heads = dueRows.map(row => row.name).filter(Boolean);
+    const periods = dueRows.flatMap(row => row.details?.map(item => item.month) || [row.period]).filter(Boolean);
+    const status = fineDue > 0 ? "High Priority" : totalDue >= 5000 ? "Call Today" : "Pending";
+    return {
+      admissionNo: student.admissionNo || "",
+      studentName: student.name || "Student",
+      className: student.klass || student.className || student.class || "-",
+      mobile: student.mobile || student.fatherMobile || student.motherMobile || "",
+      totalDue,
+      fineDue,
+      status,
+      priorityClass: status === "High Priority" ? "red" : status === "Call Today" ? "amber" : "blue",
+      summary: `${[...new Set(heads)].slice(0, 2).join(", ")}${heads.length > 2 ? " +" : ""}${periods.length ? ` | ${[...new Set(periods)].slice(0, 3).join(", ")}` : ""}`
+    };
+  }).filter(Boolean)
+    .sort((a, b) => b.fineDue - a.fineDue || b.totalDue - a.totalDue)
+    .slice(0, 8);
 }
 
 function getSelectedNoticeOptions(select) {
@@ -6758,19 +6799,21 @@ function renderSessions() {
 function renderFinanceSession(includeTables = true) {
   const session = financeSessions[activeSession];
   const dashboardMonthly = getDashboardMonthlyFeeCollectionSummary();
+  const dashboardFollowUps = getDashboardDueFollowUps();
+  const dashboardHighPriority = dashboardFollowUps.filter(item => item.status === "High Priority").length;
   document.getElementById("academicYearText").textContent = `Academic year ${activeSession}`;
   document.getElementById("sessionSummaryText").textContent = session.summary;
   document.getElementById("kpiFeesCollected").textContent = formatRs(dashboardMonthly.collected);
   document.getElementById("kpiFeesNote").textContent = `${dashboardMonthly.percent}% monthly fees collected, Annual Fee excluded`;
-  document.getElementById("kpiFollowUps").textContent = String(session.followUps).padStart(2, "0");
-  document.getElementById("kpiFollowUpsNote").textContent = `${session.highPriority} high priority`;
+  document.getElementById("kpiFollowUps").textContent = String(dashboardFollowUps.length).padStart(2, "0");
+  document.getElementById("kpiFollowUpsNote").textContent = `${dashboardHighPriority} high priority`;
   document.getElementById("studentCount").textContent = getActiveStudents().length.toLocaleString("en-IN");
+  renderDues();
   if (!includeTables) return;
   resetFeeMasterEditing();
   resetFeeGroupEditing();
   renderFeeMaster();
   renderFeeGroups();
-  renderDues();
   renderDueFeesSearch();
 }
 

@@ -1609,6 +1609,19 @@ h2 { font-size: 1.15rem; }
   padding: 11px 10px;
 }
 
+#dueTable td {
+  vertical-align: top;
+}
+
+#dueTable td small {
+  display: block;
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: .72rem;
+  font-weight: 800;
+  line-height: 1.25;
+}
+
 .row-actions {
   display: inline-flex;
   align-items: center;
