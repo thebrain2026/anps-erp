@@ -5046,13 +5046,23 @@ async function sendNoticePushNotification(notice = {}) {
     const result = await response.json().catch(() => ({}));
     if (!result.configured) {
       console.info("Notice push saved, but Firebase Cloud Messaging is not configured yet.");
+      showToast("Notice saved. Firebase Cloud Messaging is not configured yet.");
       return;
     }
     if (result.ok) {
-      showToast(`Notice notification sent to ${result.sent || 0} device(s).`);
+      const targetCount = Number(result.targetDeviceCount || 0);
+      const sentCount = Number(result.sent || 0);
+      if (!targetCount) {
+        showToast("Notice saved. No registered mobile device found for this audience.");
+      } else {
+        showToast(`Notice notification sent to ${sentCount}/${targetCount} device(s).`);
+      }
+    } else {
+      showToast(result.error || "Notice saved, but push notification failed.");
     }
   } catch (error) {
     console.warn("Notice push notification failed.", error);
+    showToast("Notice saved, but push notification could not be sent.");
   }
 }
 

@@ -583,16 +583,17 @@ def send_fcm_notifications(tokens, title, body, data=None):
 def send_notice_push(payload):
     notice = payload.get("notice") if isinstance(payload.get("notice"), dict) else payload
     state = read_state() or {}
-    tokens = [
-        item.get("token")
+    matched_records = [
+        item
         for item in state.get("mobilePushTokens", []) or []
         if token_matches_notice(item, notice)
     ]
+    tokens = [item.get("token") for item in matched_records]
     title = str(notice.get("title") or "School Notice").strip()
     body = str(notice.get("message") or "New notice published.").strip()
     if len(body) > 160:
         body = body[:157].rstrip() + "..."
-    return send_fcm_notifications(
+    result = send_fcm_notifications(
         list(dict.fromkeys(tokens)),
         title,
         body,
@@ -602,6 +603,9 @@ def send_notice_push(payload):
             "noticeDate": str(notice.get("noticeDate") or notice.get("publishDate") or ""),
         },
     )
+    result["targetDeviceCount"] = len(list(dict.fromkeys(tokens)))
+    result["matchedUserCount"] = len(matched_records)
+    return result
 
 
 def send_homework_push(payload):

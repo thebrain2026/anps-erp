@@ -1703,6 +1703,10 @@
     let duePopupOpenOnceShown = false;
     let reminderTimer = null;
     let activeReminderId = "";
+    let activeViewId = "dashboard";
+    let liveSyncTimer = null;
+    let liveSyncInFlight = false;
+    let lastNoticeSignature = "";
     try {
       localStorage.removeItem("anps_pending_teacher_timetable");
     } catch (error) {
@@ -2998,6 +3002,81 @@
       $("#appScreen").classList.toggle("hidden", name !== "app");
     }
 
+    function noticeSyncSignature(notices = []) {
+      return (notices || [])
+        .map(item => [
+          item.id || item.noticeId || "",
+          item.title || "",
+          item.noticeDate || item.publishDate || item.date || "",
+          item.message || ""
+        ].join("::"))
+        .join("||");
+    }
+
+    function renderLiveNoticePanel() {
+      if (!state.workspace) return;
+      renderDashboardLatestNotice(state.workspace.notices || []);
+      if (activeViewId !== "notice") return;
+      if (state.role === "student") {
+        $("#noticeFormHost").innerHTML = languageControl();
+        $("#noticeTotal").textContent = `${state.workspace.notices.length} notices`;
+        $("#noticeList").innerHTML = state.workspace.notices.map(item => studentNoticeCard(item)).join("");
+        bindLanguageControls();
+        return;
+      }
+      const requestCards = (state.workspace.teacherNoticeRequests || []).map(item => card({
+        title: item.title || "Notice Request",
+        meta: `${item.className || "-"} | ${item.status || "Pending"}`,
+        body: item.message,
+        badge: item.status || "Pending",
+        status: item.status === "Approved" ? "ok" : item.status === "Rejected" ? "bad" : "warn",
+        className: "notice-card"
+      })).join("");
+      $("#noticeTotal").textContent = `${state.workspace.notices.length} ERP notices`;
+      $("#noticeList").innerHTML = [
+        `<div class="section-title"><h2>Published ERP Notices</h2><span>${state.workspace.notices.length}</span></div>`,
+        state.workspace.notices.map(item => card({ title: item.title, meta: `${item.audience || item.audienceType || "Notice"} | ${noticeDateLabel(item)}`, body: item.message, badge: "Published", className: "notice-card" })).join("") || card({ title: "No ERP Notice", meta: "Notice board empty", body: "Notices will appear here after ERP publication.", badge: "Empty", status: "warn" }),
+        `<div class="section-title"><h2>My Notice Requests</h2><span>${(state.workspace.teacherNoticeRequests || []).length}</span></div>`,
+        requestCards || card({ title: "No Request Sent", meta: "Class notice requests will appear here.", body: "Requests will be published to the student app only after ERP approval.", badge: "Draft", status: "warn" })
+      ].join("");
+    }
+
+    async function refreshLiveWorkspace({ quiet = true } = {}) {
+      if (!state.user || liveSyncInFlight || document.hidden) return;
+      liveSyncInFlight = true;
+      try {
+        const previousNoticeSignature = lastNoticeSignature;
+        state.workspace = await AppApi.workspace(state.role, state.user.id);
+        const nextNoticeSignature = noticeSyncSignature(state.workspace.notices || []);
+        const noticeChanged = previousNoticeSignature && nextNoticeSignature !== previousNoticeSignature;
+        lastNoticeSignature = nextNoticeSignature;
+        if (activeViewId === "dashboard") renderDashboard();
+        renderLiveNoticePanel();
+        if (state.role === "student") {
+          scheduleDueAccessPopup();
+          if (!dueAccessLocked()) hideDueAccessPopup();
+        }
+        if (noticeChanged && !quiet) toast("New notice received");
+      } catch (error) {
+        console.warn("Live workspace sync failed.", error);
+      } finally {
+        liveSyncInFlight = false;
+      }
+    }
+
+    function startLiveWorkspaceSync() {
+      clearInterval(liveSyncTimer);
+      lastNoticeSignature = noticeSyncSignature(state.workspace?.notices || []);
+      liveSyncTimer = setInterval(() => refreshLiveWorkspace({ quiet: false }), 45 * 1000);
+    }
+
+    function stopLiveWorkspaceSync() {
+      clearInterval(liveSyncTimer);
+      liveSyncTimer = null;
+      liveSyncInFlight = false;
+      lastNoticeSignature = "";
+    }
+
     function setupLogin(role) {
       state.role = role;
       $("#loginEyebrow").textContent = role === "student" ? "Student Login" : "Teacher Login";
@@ -3132,6 +3211,7 @@
         showDueAccessPopup(true);
         id = "fees";
       }
+      activeViewId = id;
       document.querySelectorAll(".view").forEach(view => view.classList.toggle("active", view.id === `${id}View`));
       document.querySelectorAll("[data-nav]").forEach(btn => btn.classList.toggle("active", btn.dataset.nav === id));
       document.body.classList.remove("drawer-open");
@@ -3720,6 +3800,7 @@
       if (role === "teacher") renderTeacherViews();
       openView("dashboard");
       scheduleReminderCheck();
+      startLiveWorkspaceSync();
       if (role === "student") startStudentActivityTracking();
       await registerCurrentPushToken();
       showBirthdayGreeting();
@@ -3763,6 +3844,7 @@
     $("#syncBtn").addEventListener("click", async () => {
       if (!state.user) return;
       state.workspace = await AppApi.workspace(state.role, state.user.id);
+      lastNoticeSignature = noticeSyncSignature(state.workspace?.notices || []);
       renderDashboard();
       state.role === "student" ? renderStudentViews() : renderTeacherViews();
       scheduleReminderCheck();
@@ -3771,6 +3853,7 @@
     });
     $("#logoutBtn").addEventListener("click", async () => {
       await stopStudentActivityTracking();
+      stopLiveWorkspaceSync();
       clearDueAccessTimer();
       hideDueAccessPopup();
       clearInterval(reminderTimer);
@@ -3780,6 +3863,7 @@
       localStorage.removeItem(AppConfig.roleKey);
       localStorage.removeItem(AppConfig.userKey);
       state = { role: null, user: null, workspace: null, attendanceClass: "", teacherTimetableClass: "", language: "en" };
+      activeViewId = "dashboard";
       document.body.classList.remove("drawer-open", "student-theme", "teacher-theme");
       showScreen("landing");
     });
@@ -3790,6 +3874,7 @@
         activitySession.startedAt = new Date().toISOString();
         activitySession.lastSavedAt = Date.now();
         saveStudentActivity("Active");
+        refreshLiveWorkspace({ quiet: true });
       }
     });
     document.addEventListener("keydown", event => {
@@ -3810,9 +3895,15 @@
       }
       hideReminderPopup();
     });
-    window.addEventListener("focus", checkReminderPopup);
+    window.addEventListener("focus", () => {
+      checkReminderPopup();
+      refreshLiveWorkspace({ quiet: true });
+    });
     document.addEventListener("visibilitychange", () => {
-      if (!document.hidden) checkReminderPopup();
+      if (!document.hidden) {
+        checkReminderPopup();
+        refreshLiveWorkspace({ quiet: true });
+      }
     });
   </script>
 </body>
