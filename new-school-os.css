@@ -2840,6 +2840,39 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   margin-bottom: 14px;
 }
 
+.daily-collection-filter {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px;
+  margin-bottom: 12px;
+  border: 1px solid #c7ddf2;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #eaf5ff 0%, #ffffff 58%, #fff4d8 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .78), 0 8px 18px rgba(31, 50, 72, .06);
+}
+
+.daily-collection-filter label {
+  display: grid;
+  gap: 7px;
+  min-width: 190px;
+  color: #50657b;
+  font-size: .8rem;
+  font-weight: 950;
+}
+
+.daily-collection-filter input {
+  min-height: 40px;
+  border: 1px solid #c8d9ee;
+  border-radius: 7px;
+  background: #fff;
+  color: #123456;
+  padding: 0 10px;
+  font: inherit;
+  font-weight: 850;
+}
+
 .entire-school-fees-summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));

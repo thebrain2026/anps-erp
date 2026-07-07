@@ -2907,7 +2907,10 @@ function renderDailyCollectionReport() {
   const summary = document.getElementById("dailyCollectionSummary");
   const rows = document.getElementById("dailyCollectionReportRows");
   if (!summary || !rows) return;
-  const reportRows = getDailyCollectionReportRows();
+  const dateFilter = document.getElementById("dailyCollectionDateFilter");
+  const selectedDateLabel = dateFilter?.value ? formatDateDDMMYYYY(dateFilter.value) : "";
+  const allRows = getDailyCollectionReportRows();
+  const reportRows = selectedDateLabel ? allRows.filter(row => row.date === selectedDateLabel) : allRows;
   const totals = reportRows.reduce((sum, row) => {
     sum.bank += row.bank;
     sum.cash += row.cash;
@@ -2917,7 +2920,7 @@ function renderDailyCollectionReport() {
     return sum;
   }, {bank: 0, cash: 0, fine: 0, total: 0, receipts: 0});
   summary.innerHTML = `
-    <article><span>Total Days</span><strong>${reportRows.length}</strong></article>
+    <article><span>${selectedDateLabel ? "Selected Date" : "Total Days"}</span><strong>${selectedDateLabel ? escapeHtml(selectedDateLabel) : reportRows.length}</strong></article>
     <article><span>Total Collection</span><strong>${formatRs(totals.total)}</strong></article>
     <article><span>Bank</span><strong>${formatRs(totals.bank)}</strong></article>
     <article><span>Cash</span><strong>${formatRs(totals.cash)}</strong></article>
@@ -2934,7 +2937,7 @@ function renderDailyCollectionReport() {
       <td>${formatRs(row.fine)}</td>
       <td><strong>${formatRs(row.total)}</strong></td>
     </tr>
-  `).join("") || `<tr><td colspan="7">No daily collection found yet.</td></tr>`;
+  `).join("") || `<tr><td colspan="7">${selectedDateLabel ? "No collection found for selected date." : "No daily collection found yet."}</td></tr>`;
 }
 
 function openDailyCollectionDetails(dateLabel = "") {
@@ -13686,6 +13689,12 @@ document.getElementById("studentTeacherRatioReportBtn").addEventListener("click"
 document.getElementById("entireSchoolFeesMonthFilter")?.addEventListener("change", renderEntireSchoolFeesReport);
 document.getElementById("showEntireSchoolMonthlyFeesBtn")?.addEventListener("click", () => setEntireSchoolFeesPanel("monthly"));
 document.getElementById("showEntireSchoolYearlyFeesBtn")?.addEventListener("click", () => setEntireSchoolFeesPanel("yearly"));
+document.getElementById("dailyCollectionDateFilter")?.addEventListener("change", renderDailyCollectionReport);
+document.getElementById("dailyCollectionClearDate")?.addEventListener("click", () => {
+  const input = document.getElementById("dailyCollectionDateFilter");
+  if (input) input.value = "";
+  renderDailyCollectionReport();
+});
 
 classTimetableForm.addEventListener("submit", event => {
   event.preventDefault();
