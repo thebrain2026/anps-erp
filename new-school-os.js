@@ -2823,6 +2823,7 @@ function getDailyCollectionReportRows() {
           date: dateLabel,
           receipts: new Set(),
           students: new Set(),
+          details: [],
           bank: 0,
           cash: 0,
           fine: 0,
@@ -2840,6 +2841,16 @@ function getDailyCollectionReportRows() {
         .reduce((sum, allocation) => sum + Number(allocation.amount || 0), 0);
       row.receipts.add(payment.receipt || "-");
       row.students.add(student?.name || admissionNo || "-");
+      row.details.push({
+        admissionNo,
+        studentName: student?.name || "-",
+        receipt: payment.receipt || "-",
+        bank: split.bank,
+        cash: split.cash,
+        fine,
+        total,
+        remarks: payment.remarks || "-"
+      });
       row.bank += split.bank;
       row.cash += split.cash;
       row.fine += fine;
@@ -2915,7 +2926,7 @@ function renderDailyCollectionReport() {
   `;
   rows.innerHTML = reportRows.map(row => `
     <tr>
-      <td><strong>${escapeHtml(row.date)}</strong></td>
+      <td><button class="daily-collection-date-action" type="button" data-open-daily-collection="${encodeURIComponent(row.date)}">${escapeHtml(row.date)}</button></td>
       <td>${row.receipts.size}</td>
       <td>${row.students.size}</td>
       <td>${formatRs(row.bank)}</td>
@@ -2924,6 +2935,60 @@ function renderDailyCollectionReport() {
       <td><strong>${formatRs(row.total)}</strong></td>
     </tr>
   `).join("") || `<tr><td colspan="7">No daily collection found yet.</td></tr>`;
+}
+
+function openDailyCollectionDetails(dateLabel = "") {
+  const reportRow = getDailyCollectionReportRows().find(row => row.date === dateLabel);
+  if (!reportRow) {
+    showToast("No collection details found for this date.");
+    return;
+  }
+  const details = [...(reportRow.details || [])].sort((a, b) => {
+    return String(a.studentName || "").localeCompare(String(b.studentName || ""), undefined, {numeric: true});
+  });
+  const remarks = [...new Set(details.map(item => String(item.remarks || "").trim()).filter(item => item && item !== "-"))];
+  openReceiptPreviewWithPrint(`Daily Collection - ${dateLabel}`, `
+    <article class="receipt-preview-card daily-collection-detail-card">
+      <div class="receipt-preview-banner">
+        <div>
+          <p class="eyebrow">Daily Collection Report</p>
+          <h3>${escapeHtml(dateLabel)}</h3>
+          <p>${details.length} student payment row(s), ${reportRow.receipts.size} receipt(s)</p>
+        </div>
+        <div class="receipt-preview-stamp">${escapeHtml(formatRs(reportRow.total))}</div>
+      </div>
+      <div class="daily-collection-detail-summary">
+        <article><span>Bank</span><strong>${formatRs(reportRow.bank)}</strong></article>
+        <article><span>Cash</span><strong>${formatRs(reportRow.cash)}</strong></article>
+        <article><span>Fine</span><strong>${formatRs(reportRow.fine)}</strong></article>
+        <article><span>Total</span><strong>${formatRs(reportRow.total)}</strong></article>
+      </div>
+      <div class="table-wrap daily-collection-detail-table">
+        <table>
+          <thead>
+            <tr><th>Student</th><th>Admission No.</th><th>Receipt</th><th>Bank</th><th>Cash</th><th>Total</th><th>Remarks</th></tr>
+          </thead>
+          <tbody>
+            ${details.map(item => `
+              <tr>
+                <td><strong>${escapeHtml(item.studentName || "-")}</strong></td>
+                <td>${escapeHtml(item.admissionNo || "-")}</td>
+                <td>${escapeHtml(item.receipt || "-")}</td>
+                <td>${formatRs(item.bank || 0)}</td>
+                <td>${formatRs(item.cash || 0)}</td>
+                <td><strong>${formatRs(item.total || 0)}</strong></td>
+                <td>${escapeHtml(item.remarks || "-")}</td>
+              </tr>
+            `).join("") || `<tr><td colspan="7">No student payments found for this date.</td></tr>`}
+          </tbody>
+        </table>
+      </div>
+      <div class="daily-collection-detail-remarks">
+        <span>Remarks</span>
+        <p>${remarks.length ? escapeHtml(remarks.join(" | ")) : "No remarks saved for this date."}</p>
+      </div>
+    </article>
+  `);
 }
 
 function getMonthReceivedTotal(month) {
@@ -14459,6 +14524,7 @@ document.body.addEventListener("click", event => {
   const paymentReceiptPreview = event.target.closest("[data-preview-payment-receipt]");
   const savedReceiptPreview = event.target.closest("[data-preview-saved-receipt]");
   const selectedPaymentPreview = event.target.closest("[data-preview-selected-payments]");
+  const dailyCollectionDate = event.target.closest("[data-open-daily-collection]");
   const classSectionDetail = event.target.closest("[data-view-class-section]");
   const openStudentDetails = event.target.closest("[data-open-student-details]");
   const openFeeBook = event.target.closest("[data-open-fee-book]");
@@ -14911,6 +14977,9 @@ document.body.addEventListener("click", event => {
       selectedPaymentPreview.dataset.previewSelectedPayments,
       selectedPaymentPreview.dataset.feeHead || ""
     );
+  }
+  if (dailyCollectionDate) {
+    openDailyCollectionDetails(decodeURIComponent(dailyCollectionDate.dataset.openDailyCollection || ""));
   }
   if (disableStudent) {
     openDisableReasonModal(disableStudent.dataset.disableStudent);

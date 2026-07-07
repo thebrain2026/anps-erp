@@ -3008,6 +3008,96 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   font-weight: 950;
 }
 
+.daily-collection-date-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid #b7d6ef;
+  border-radius: 7px;
+  background: linear-gradient(135deg, #ffffff 0%, #eaf5ff 100%);
+  color: #174f81;
+  font: inherit;
+  font-weight: 950;
+  cursor: pointer;
+  box-shadow: 0 8px 16px rgba(31, 50, 72, .08);
+}
+
+.daily-collection-date-action:hover {
+  border-color: #177e89;
+  background: linear-gradient(135deg, #fff8df 0%, #e9fbff 100%);
+  color: #123f66;
+}
+
+.daily-collection-detail-card {
+  background: #f7fbff;
+}
+
+.daily-collection-detail-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  gap: 10px;
+  padding: 14px;
+}
+
+.daily-collection-detail-summary article,
+.daily-collection-detail-remarks {
+  border: 1px solid #d8e7f4;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #ffffff 0%, #eff8ff 65%, #fff7e8 100%);
+  padding: 12px;
+}
+
+.daily-collection-detail-summary span,
+.daily-collection-detail-remarks span {
+  display: block;
+  color: #50657b;
+  font-size: .72rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.daily-collection-detail-summary strong {
+  display: block;
+  margin-top: 4px;
+  color: #173761;
+  font-size: 1.05rem;
+  font-weight: 950;
+}
+
+.daily-collection-detail-table {
+  margin: 0 14px 14px;
+  border-radius: 8px;
+}
+
+.daily-collection-detail-table table {
+  min-width: 920px;
+}
+
+.daily-collection-detail-table th {
+  color: #fff;
+  background: linear-gradient(90deg, #174f81 0%, #177e89 56%, #6d8f20 100%);
+}
+
+.daily-collection-detail-table td {
+  background: #fff;
+}
+
+.daily-collection-detail-table tbody tr:nth-child(odd) td {
+  background: #f4f9ff;
+}
+
+.daily-collection-detail-remarks {
+  margin: 0 14px 14px;
+}
+
+.daily-collection-detail-remarks p {
+  margin: 5px 0 0;
+  color: #173761;
+  font-weight: 800;
+}
+
 .entire-school-fees-table td:first-child,
 .entire-school-fees-table td:nth-child(9),
 .entire-school-fees-table td:nth-child(10),
