@@ -2874,50 +2874,36 @@ function renderDailyCashTrendChart() {
   const bankTotal = rows.reduce((sum, row) => sum + Number(row.bank || 0), 0);
   total.textContent = formatRs(cashTotal);
   note.textContent = `Last ${rows.length} collection day(s) | Bank ${formatRs(bankTotal)}`;
-  const width = 640;
-  const height = 220;
-  const padX = 34;
-  const topPad = 22;
-  const bottomPad = 48;
-  const graphHeight = height - topPad - bottomPad;
-  const points = rows.map((row, index) => {
-    const cash = Number(row.cash || 0);
-    const x = rows.length === 1 ? width / 2 : padX + (index * ((width - (padX * 2)) / (rows.length - 1)));
-    const y = topPad + graphHeight - ((cash / maxCash) * graphHeight);
-    return {row, cash, x: Math.round(x), y: Math.round(y)};
-  });
-  const linePoints = points.map(point => `${point.x},${point.y}`).join(" ");
-  const areaPoints = `${padX},${height - bottomPad} ${linePoints} ${width - padX},${height - bottomPad}`;
+  const highestRow = rows.reduce((best, row) => Number(row.cash || 0) > Number(best.cash || 0) ? row : best, rows[0]);
+  const latestRow = rows[rows.length - 1];
   chart.innerHTML = `
-    <svg class="market-wave" viewBox="0 0 ${width} ${height}" role="img" aria-label="Daily cash collection line graph" preserveAspectRatio="none">
-      <defs>
-        <linearGradient id="cashWaveFill" x1="0" x2="0" y1="0" y2="1">
-          <stop offset="0%" stop-color="#1d9f8f" stop-opacity=".26" />
-          <stop offset="100%" stop-color="#2563c9" stop-opacity=".02" />
-        </linearGradient>
-        <linearGradient id="cashWaveLine" x1="0" x2="1" y1="0" y2="0">
-          <stop offset="0%" stop-color="#14798b" />
-          <stop offset="54%" stop-color="#2563c9" />
-          <stop offset="100%" stop-color="#22c55e" />
-        </linearGradient>
-      </defs>
-      <path class="market-wave-grid" d="M34 42 H606 M34 86 H606 M34 130 H606 M34 174 H606" />
-      <polygon class="market-wave-area" points="${areaPoints}" />
-      <polyline class="market-wave-line" points="${linePoints}" />
-      ${points.map((point, index) => `
-        <g class="market-wave-point ${index === points.length - 1 ? "is-latest" : ""}">
-          <circle cx="${point.x}" cy="${point.y}" r="7" />
-          <circle cx="${point.x}" cy="${point.y}" r="3.2" />
-        </g>
-      `).join("")}
-    </svg>
-    <div class="market-point-strip">
-      ${points.map((point, index) => `
-        <span class="market-point-pill ${index === points.length - 1 ? "is-latest" : ""}" title="${escapeHtml(point.row.date)} | Cash ${escapeHtml(formatRs(point.cash))} | Total ${escapeHtml(formatRs(point.row.total))}">
-          <small>${escapeHtml(shortCollectionDateLabel(point.row.date))}</small>
-          <strong>${escapeHtml(formatRs(point.cash).replace("Rs. ", ""))}</strong>
-        </span>
-      `).join("")}
+    <div class="cash-flow-board">
+      <div class="cash-flow-hero">
+        <span>Latest Cash</span>
+        <strong>${escapeHtml(formatRs(Number(latestRow.cash || 0)))}</strong>
+        <small>${escapeHtml(latestRow.date || "-")} | Total ${escapeHtml(formatRs(Number(latestRow.total || 0)))}</small>
+      </div>
+      <div class="cash-flow-high">
+        <span>Highest Day</span>
+        <strong>${escapeHtml(formatRs(Number(highestRow.cash || 0)))}</strong>
+        <small>${escapeHtml(highestRow.date || "-")}</small>
+      </div>
+      <div class="cash-flow-list">
+      ${rows.map((row, index) => {
+        const cash = Number(row.cash || 0);
+        const percent = Math.max(4, Math.round((cash / maxCash) * 100));
+        return `
+        <div class="cash-flow-row ${index === rows.length - 1 ? "is-latest" : ""}" title="${escapeHtml(row.date)} | Cash ${escapeHtml(formatRs(cash))} | Total ${escapeHtml(formatRs(row.total))}">
+          <div>
+            <strong>${escapeHtml(shortCollectionDateLabel(row.date))}</strong>
+            <span>${escapeHtml(formatRs(cash))}</span>
+          </div>
+          <i><b style="width:${percent}%"></b></i>
+          <small>${escapeHtml(formatRs(Number(row.total || 0)))}</small>
+        </div>
+      `;
+      }).join("")}
+      </div>
     </div>
   `;
 }

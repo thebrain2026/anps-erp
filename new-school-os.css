@@ -1064,98 +1064,156 @@ h2 { font-size: 1.15rem; }
 .market-chart {
   position: relative;
   display: grid;
-  gap: 10px;
   min-height: 220px;
-  padding: 10px 10px 12px;
+  padding: 12px;
   border: 1px solid rgba(210, 224, 238, .86);
   border-radius: 8px;
   background:
-    radial-gradient(circle at 92% 12%, rgba(34, 197, 94, .13), transparent 26%),
+    linear-gradient(135deg, rgba(23, 55, 97, .04), transparent 42%),
     linear-gradient(180deg, rgba(255, 255, 255, .96), rgba(248, 252, 255, .94));
 }
 
-.market-wave {
-  display: block;
-  width: 100%;
-  min-height: 176px;
-  overflow: visible;
+.cash-flow-board {
+  display: grid;
+  grid-template-columns: minmax(180px, .7fr) minmax(170px, .55fr) minmax(280px, 1.4fr);
+  gap: 12px;
+  align-items: stretch;
 }
 
-.market-wave-grid {
-  fill: none;
-  stroke: rgba(148, 163, 184, .22);
-  stroke-dasharray: 6 8;
-  stroke-width: 1;
+.cash-flow-hero,
+.cash-flow-high {
+  display: grid;
+  align-content: center;
+  gap: 7px;
+  min-height: 172px;
+  border: 1px solid rgba(37, 99, 201, .14);
+  border-radius: 8px;
+  padding: 18px;
+  background: #fff;
+  box-shadow: 0 14px 30px rgba(23, 55, 97, .07);
 }
 
-.market-wave-area {
-  fill: url(#cashWaveFill);
+.cash-flow-hero {
+  color: #fff;
+  background:
+    linear-gradient(145deg, rgba(20, 121, 139, .95), rgba(23, 55, 97, .96));
 }
 
-.market-wave-line {
-  fill: none;
-  stroke: url(#cashWaveLine);
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 6;
-  filter: drop-shadow(0 10px 13px rgba(37, 99, 201, .18));
+.cash-flow-high {
+  background:
+    linear-gradient(180deg, #fff, #f6fbff);
 }
 
-.market-wave-point circle:first-child {
-  fill: #fff;
-  stroke: #14798b;
-  stroke-width: 4;
+.cash-flow-hero span,
+.cash-flow-high span {
+  font-size: .76rem;
+  font-weight: 950;
+  letter-spacing: .08em;
+  text-transform: uppercase;
 }
 
-.market-wave-point circle:last-child {
-  fill: #22c55e;
+.cash-flow-hero span,
+.cash-flow-hero small {
+  color: rgba(255, 255, 255, .82);
 }
 
-.market-wave-point.is-latest circle:first-child {
-  stroke: #2563c9;
+.cash-flow-high span,
+.cash-flow-high small {
+  color: var(--muted);
 }
 
-.market-wave-point.is-latest circle:last-child {
-  fill: #2563c9;
+.cash-flow-hero strong,
+.cash-flow-high strong {
+  font-size: 1.55rem;
+  line-height: 1;
+  font-weight: 950;
 }
 
-.market-point-strip {
-  display: flex;
+.cash-flow-high strong {
+  color: #173761;
+}
+
+.cash-flow-list {
+  display: grid;
   gap: 8px;
-  overflow-x: auto;
-  padding-bottom: 2px;
+  max-height: 178px;
+  overflow: auto;
+  padding-right: 3px;
   scrollbar-width: thin;
 }
 
-.market-point-pill {
-  flex: 0 0 auto;
-  display: inline-grid;
-  grid-template-columns: auto auto;
+.cash-flow-row {
+  display: grid;
+  grid-template-columns: 112px minmax(90px, 1fr) 92px;
   align-items: center;
-  gap: 7px;
-  min-height: 32px;
-  padding: 0 10px;
-  border: 1px solid rgba(37, 99, 201, .15);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, .82);
-  box-shadow: 0 8px 20px rgba(23, 55, 97, .06);
+  gap: 10px;
+  min-height: 40px;
+  border: 1px solid rgba(210, 224, 238, .82);
+  border-radius: 8px;
+  padding: 8px 10px;
+  background: #fff;
 }
 
-.market-point-pill small {
-  color: var(--muted);
-  font-size: .68rem;
-  font-weight: 900;
+.cash-flow-row.is-latest {
+  border-color: rgba(20, 121, 139, .25);
+  background: #f1fbfa;
 }
 
-.market-point-pill strong {
+.cash-flow-row div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.cash-flow-row strong {
   color: #173761;
   font-size: .75rem;
   font-weight: 950;
 }
 
-.market-point-pill.is-latest {
-  border-color: rgba(34, 197, 94, .32);
-  background: #ecfdf5;
+.cash-flow-row span,
+.cash-flow-row small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: .7rem;
+  font-weight: 850;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cash-flow-row small {
+  text-align: right;
+}
+
+.cash-flow-row i {
+  display: block;
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e6edf5;
+}
+
+.cash-flow-row i b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #14798b, #22c55e);
+}
+
+@media (max-width: 980px) {
+  .cash-flow-board {
+    grid-template-columns: 1fr;
+  }
+
+  .cash-flow-hero,
+  .cash-flow-high {
+    min-height: 118px;
+  }
+
+  .cash-flow-list {
+    max-height: none;
+    padding-right: 0;
+  }
 }
 
 .pay-panel {
