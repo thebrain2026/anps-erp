@@ -749,6 +749,17 @@ h2 { font-size: 1.15rem; }
   font-size: .86rem;
 }
 
+.mini-input {
+  min-height: 30px;
+  width: min(150px, 100%);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 0 9px;
+  font-size: .84rem;
+  color: var(--ink);
+  background: #fff;
+}
+
 .primary-mini {
   background: #173b78;
   border-color: #173b78;

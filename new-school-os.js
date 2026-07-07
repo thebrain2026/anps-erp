@@ -5530,6 +5530,12 @@ function getHomeworkAttachmentLink(attachment = {}) {
   return `<a class="homework-attachment-link" href="${escapeHtml(attachment.url)}" target="_blank" rel="noopener" download="${escapeHtml(label)}">${escapeHtml(label)}</a>`;
 }
 
+function getLeaveAttachmentLink(attachment = {}) {
+  if (!attachment || !attachment.url) return "-";
+  const label = attachment.name || "Open Attachment";
+  return `<a class="homework-attachment-link" href="${escapeHtml(attachment.url)}" target="_blank" rel="noopener" download="${escapeHtml(label)}">${escapeHtml(label)}</a>`;
+}
+
 function isTeacherHomeworkEntry(item = {}) {
   const source = String(item.source || item.createdFrom || item.origin || "").toLowerCase();
   return source.includes("teacher") || Boolean(item.teacherId || item.teacherName || item.teacher);
@@ -6567,10 +6573,10 @@ function renderLeaveApprovalRequests() {
   const rows = document.getElementById("leaveApprovalRows");
   if (!rows) return;
   if (!teacherLeaves.length) {
-    rows.innerHTML = `<tr><td colspan="6">No leave requests entered yet.</td></tr>`;
+    rows.innerHTML = `<tr><td colspan="7">No leave requests entered yet.</td></tr>`;
     return;
   }
-  rows.innerHTML = teacherLeaves.map(leave => {
+  rows.innerHTML = teacherLeaves.map((leave, index) => {
     const staff = getStaffByIdOrName(leave.teacherId || leave.staffId, leave.teacherName || leave.staffName);
     const status = String(leave.status || "Pending");
     const badgeClass = status === "Approved" ? "green" : status === "Rejected" ? "red" : "amber";
@@ -6578,16 +6584,19 @@ function renderLeaveApprovalRequests() {
     const staffMeta = [leave.teacherId || leave.staffId || staff?.staffId, staff?.designation || staff?.role].filter(Boolean).join(" | ");
     const disabled = status !== "Pending" ? "disabled" : "";
     const reviewNote = leave.rejectionReason ? `<br><small>Reject reason: ${escapeHtml(leave.rejectionReason)}</small>` : "";
+    const leaveKey = escapeHtml(leave.id || "");
     return `
-      <tr>
+      <tr data-leave-row="${index}">
         <td><strong>${escapeHtml(staffName)}</strong><br><small>${escapeHtml(staffMeta || "Teacher App")}</small></td>
         <td>${escapeHtml(leave.type || "Leave")}</td>
         <td>${escapeHtml(leave.from || "-")} to ${escapeHtml(leave.to || "-")}</td>
         <td>${escapeHtml(leave.reason || "-")}</td>
+        <td>${getLeaveAttachmentLink(leave.attachment)}</td>
         <td><span class="badge ${badgeClass}">${escapeHtml(status)}</span>${reviewNote}</td>
         <td class="table-actions">
-          <button class="ghost-action mini" type="button" data-approve-leave="${escapeHtml(leave.id || "")}" ${disabled}>Approve</button>
-          <button class="ghost-action mini" type="button" data-reject-leave="${escapeHtml(leave.id || "")}" ${disabled}>Reject</button>
+          <button class="ghost-action mini" type="button" data-approve-leave="${leaveKey}" data-leave-index="${index}" ${disabled}>Approve</button>
+          <button class="ghost-action mini" type="button" data-reject-leave="${leaveKey}" data-leave-index="${index}" ${disabled}>Reject</button>
+          ${status === "Pending" ? `<input class="mini-input leave-reject-note" type="text" placeholder="Reject reason" />` : ""}
         </td>
       </tr>
     `;
@@ -13632,14 +13641,16 @@ document.getElementById("leaveApprovalRows")?.addEventListener("click", event =>
   const approveButton = event.target.closest("[data-approve-leave]");
   const rejectButton = event.target.closest("[data-reject-leave]");
   const leaveId = approveButton?.dataset.approveLeave || rejectButton?.dataset.rejectLeave || "";
-  if (!leaveId) return;
-  const leave = teacherLeaves.find(item => String(item.id || "") === leaveId);
+  const leaveIndex = Number(approveButton?.dataset.leaveIndex || rejectButton?.dataset.leaveIndex || -1);
+  if (!leaveId && leaveIndex < 0) return;
+  const leave = teacherLeaves.find(item => String(item.id || "") === leaveId) || teacherLeaves[leaveIndex];
   if (!leave) {
     showToast("Leave request not found.");
     return;
   }
   if (rejectButton) {
-    const reason = window.prompt("Why are you rejecting this leave request?");
+    const row = rejectButton.closest("[data-leave-row]");
+    const reason = row?.querySelector(".leave-reject-note")?.value || "";
     if (!reason || !reason.trim()) {
       showToast("Reject reason is required.");
       return;

@@ -1943,6 +1943,8 @@
     const homeworkAttachmentMaxBytes = 10 * 1024 * 1024;
     const homeworkAttachmentExtensions = [".pdf", ".doc", ".docx"];
     const homeworkAttachmentValidDays = 30;
+    const leaveAttachmentMaxBytes = 10 * 1024 * 1024;
+    const leaveAttachmentExtensions = [".pdf", ".doc", ".docx", ".jpg", ".jpeg", ".png"];
 
     function homeworkAttachmentExpiry(baseDate = new Date()) {
       const date = baseDate instanceof Date ? new Date(baseDate) : new Date(baseDate);
@@ -1991,6 +1993,43 @@
 
     function homeworkAttachmentLink(attachment = {}) {
       if (!attachment || !attachment.url || homeworkAttachmentExpired(attachment)) return "";
+      const label = attachment.name || "Open Attachment";
+      return `<a class="homework-attachment-link" href="${escapeHtml(attachment.url)}" target="_blank" rel="noopener" download="${escapeHtml(label)}">Open Attachment: ${escapeHtml(label)}</a>`;
+    }
+
+    function readLeaveAttachmentInput(input) {
+      const file = input?.files?.[0];
+      return new Promise((resolve, reject) => {
+        if (!file) {
+          resolve(null);
+          return;
+        }
+        const lowerName = normalizeText(file.name).toLowerCase();
+        const allowed = leaveAttachmentExtensions.some(ext => lowerName.endsWith(ext));
+        if (!allowed) {
+          reject(new Error("Only PDF, DOC, DOCX, JPG, or PNG attachment allowed."));
+          return;
+        }
+        if (file.size > leaveAttachmentMaxBytes) {
+          reject(new Error("Attachment must be within 10 MB."));
+          return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => resolve({
+          name: file.name,
+          type: file.type || "application/octet-stream",
+          size: file.size,
+          url: String(reader.result || ""),
+          createdAt: new Date().toISOString(),
+          source: "teacher-leave"
+        });
+        reader.onerror = () => reject(new Error("Attachment could not be read."));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    function leaveAttachmentLink(attachment = {}) {
+      if (!attachment || !attachment.url) return "";
       const label = attachment.name || "Open Attachment";
       return `<a class="homework-attachment-link" href="${escapeHtml(attachment.url)}" target="_blank" rel="noopener" download="${escapeHtml(label)}">Open Attachment: ${escapeHtml(label)}</a>`;
     }
@@ -3507,10 +3546,10 @@
         ...ws.ratings.map(item => card({ title: `${stars(item.rating)} ${item.rating}/5`, meta: item.date, body: item.comment || "No comment", badge: "Anonymous" }))
       ].join("");
       $("#leaveTotal").textContent = `${ws.leaves.length} applications`;
-      $("#leaveFormHost").innerHTML = `<article class="card"><form class="form-grid" id="leaveForm"><label>Leave Type<select id="leaveType"><option>Casual Leave</option><option>Sick Leave</option><option>Emergency Leave</option><option>Half Day</option></select></label><label>From<input id="leaveFrom" type="date" value="${todayIso}" required /></label><label>To<input id="leaveTo" type="date" value="${todayIso}" required /></label><label>Reason<textarea id="leaveReason" placeholder="Reason for leave" required></textarea></label><button class="primary" type="submit">Apply Leave</button></form></article>`;
+      $("#leaveFormHost").innerHTML = `<article class="card"><form class="form-grid" id="leaveForm"><label>Leave Type<select id="leaveType"><option>Casual Leave</option><option>Sick Leave</option><option>Emergency Leave</option><option>Half Day</option></select></label><label>From<input id="leaveFrom" type="date" value="${todayIso}" required /></label><label>To<input id="leaveTo" type="date" value="${todayIso}" required /></label><label>Reason<textarea id="leaveReason" placeholder="Reason for leave" required></textarea></label><label>Attachment<input id="leaveAttachment" type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png" /><small>Optional: PDF, DOC, DOCX, JPG, or PNG within 10 MB.</small></label><button class="primary" id="leaveSubmitBtn" type="submit">Apply Leave</button><small id="leaveSubmitStatus"></small></form></article>`;
       $("#leaveList").innerHTML = ws.leaves.map(item => {
         const rejectNote = item.rejectionReason ? `\nReject reason: ${item.rejectionReason}` : "";
-        return card({ title: `${item.type} | ${item.status}`, meta: `${item.from} to ${item.to}`, body: `${item.reason || ""}${rejectNote}`, badge: item.status, status: item.status === "Approved" ? "ok" : item.status === "Rejected" ? "bad" : "warn" });
+        return card({ title: `${item.type} | ${item.status}`, meta: `${item.from} to ${item.to}`, body: `${item.reason || ""}${rejectNote}${leaveAttachmentLink(item.attachment)}`, badge: item.status, status: item.status === "Approved" ? "ok" : item.status === "Rejected" ? "bad" : "warn" });
       }).join("");
       $("#feesList").innerHTML = "";
       $("#receiptList").innerHTML = "";
@@ -3684,10 +3723,42 @@
       });
       $("#leaveForm")?.addEventListener("submit", async event => {
         event.preventDefault();
-        await AppApi.create("leaves", { teacherId: state.user.id, teacherName: state.user.name, from: $("#leaveFrom").value, to: $("#leaveTo").value, type: $("#leaveType").value, reason: $("#leaveReason").value, status: "Pending" });
-        state.workspace = await AppApi.workspace("teacher", state.user.id);
-        renderTeacherViews();
-        toast("Leave application submitted");
+        const submitButton = $("#leaveSubmitBtn");
+        const statusText = $("#leaveSubmitStatus");
+        if (submitButton?.disabled) return;
+        if (submitButton) {
+          submitButton.disabled = true;
+          submitButton.classList.add("clicked", "saving");
+          submitButton.textContent = "Submitting...";
+        }
+        if (statusText) statusText.textContent = "Submitting leave request. Please wait...";
+        let attachment = null;
+        try {
+          attachment = await readLeaveAttachmentInput($("#leaveAttachment"));
+        } catch (error) {
+          toast(error.message || "Attachment could not be saved.");
+          if (statusText) statusText.textContent = "";
+          if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.classList.remove("clicked", "saving");
+            submitButton.textContent = "Apply Leave";
+          }
+          return;
+        }
+        try {
+          await AppApi.create("leaves", { teacherId: state.user.id, teacherName: state.user.name, from: $("#leaveFrom").value, to: $("#leaveTo").value, type: $("#leaveType").value, reason: $("#leaveReason").value, attachment, status: "Pending" });
+          state.workspace = await AppApi.workspace("teacher", state.user.id);
+          renderTeacherViews();
+          toast("Leave application submitted");
+        } catch (error) {
+          toast(error.message || "Leave application could not be submitted.");
+          if (statusText) statusText.textContent = "";
+          if (submitButton) {
+            submitButton.disabled = false;
+            submitButton.classList.remove("clicked", "saving");
+            submitButton.textContent = "Apply Leave";
+          }
+        }
       });
     }
 
