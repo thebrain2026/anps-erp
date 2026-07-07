@@ -92,6 +92,7 @@ let activeFeeStudentAdmissionNo = "";
 let activeLedgerAdmissionNo = "";
 let activeFeeReturnView = "finance";
 let feeBookReturnStudentAdmissionNo = "";
+let activeDailyCollectionDate = "";
 const viewHistoryStack = [];
 const collectedPayments = {};
 const selectedHistoryPayments = new Set();
@@ -2927,71 +2928,83 @@ function renderDailyCollectionReport() {
     <article><span>Fine</span><strong>${formatRs(totals.fine)}</strong></article>
     <article><span>Receipts</span><strong>${totals.receipts}</strong></article>
   `;
-  rows.innerHTML = reportRows.map(row => `
-    <tr>
-      <td><button class="daily-collection-date-action" type="button" data-open-daily-collection="${encodeURIComponent(row.date)}">${escapeHtml(row.date)}</button></td>
-      <td>${row.receipts.size}</td>
-      <td>${row.students.size}</td>
-      <td>${formatRs(row.bank)}</td>
-      <td>${formatRs(row.cash)}</td>
-      <td>${formatRs(row.fine)}</td>
-      <td><strong>${formatRs(row.total)}</strong></td>
-    </tr>
-  `).join("") || `<tr><td colspan="7">${selectedDateLabel ? "No collection found for selected date." : "No daily collection found yet."}</td></tr>`;
+  rows.innerHTML = reportRows.map(row => {
+    const isOpen = activeDailyCollectionDate === row.date;
+    return `
+      <tr class="${isOpen ? "daily-collection-open-row" : ""}">
+        <td><button class="daily-collection-date-action" type="button" data-open-daily-collection="${encodeURIComponent(row.date)}" aria-expanded="${isOpen ? "true" : "false"}">${escapeHtml(row.date)}</button></td>
+        <td>${row.receipts.size}</td>
+        <td>${row.students.size}</td>
+        <td>${formatRs(row.bank)}</td>
+        <td>${formatRs(row.cash)}</td>
+        <td>${formatRs(row.fine)}</td>
+        <td><strong>${formatRs(row.total)}</strong></td>
+      </tr>
+      ${isOpen ? renderDailyCollectionDropdown(row) : ""}
+    `;
+  }).join("") || `<tr><td colspan="7">${selectedDateLabel ? "No collection found for selected date." : "No daily collection found yet."}</td></tr>`;
 }
 
-function openDailyCollectionDetails(dateLabel = "") {
+function renderDailyCollectionDropdown(reportRow = {}) {
+  const details = [...(reportRow.details || [])].sort((a, b) => {
+    return String(a.studentName || "").localeCompare(String(b.studentName || ""), undefined, {numeric: true});
+  });
+  const remarks = [...new Set(details.map(item => String(item.remarks || "").trim()).filter(item => item && item !== "-"))];
+  return `
+    <tr class="daily-collection-dropdown-row">
+      <td colspan="7">
+        <div class="daily-collection-detail-card">
+          <div class="daily-collection-detail-head">
+            <div>
+              <strong>${escapeHtml(reportRow.date || "-")}</strong>
+              <span>${details.length} student payment row(s), ${reportRow.receipts?.size || 0} receipt(s)</span>
+            </div>
+            <em>${escapeHtml(formatRs(reportRow.total || 0))}</em>
+          </div>
+          <div class="daily-collection-detail-summary">
+            <article><span>Bank</span><strong>${formatRs(reportRow.bank)}</strong></article>
+            <article><span>Cash</span><strong>${formatRs(reportRow.cash)}</strong></article>
+            <article><span>Fine</span><strong>${formatRs(reportRow.fine)}</strong></article>
+            <article><span>Total</span><strong>${formatRs(reportRow.total)}</strong></article>
+          </div>
+          <div class="table-wrap daily-collection-detail-table">
+            <table>
+              <thead>
+                <tr><th>Student</th><th>Admission No.</th><th>Receipt</th><th>Bank</th><th>Cash</th><th>Total</th><th>Remarks</th></tr>
+              </thead>
+              <tbody>
+                ${details.map(item => `
+                  <tr>
+                    <td><strong>${escapeHtml(item.studentName || "-")}</strong></td>
+                    <td>${escapeHtml(item.admissionNo || "-")}</td>
+                    <td>${escapeHtml(item.receipt || "-")}</td>
+                    <td>${formatRs(item.bank || 0)}</td>
+                    <td>${formatRs(item.cash || 0)}</td>
+                    <td><strong>${formatRs(item.total || 0)}</strong></td>
+                    <td>${escapeHtml(item.remarks || "-")}</td>
+                  </tr>
+                `).join("") || `<tr><td colspan="7">No student payments found for this date.</td></tr>`}
+              </tbody>
+            </table>
+          </div>
+          <div class="daily-collection-detail-remarks">
+            <span>Remarks</span>
+            <p>${remarks.length ? escapeHtml(remarks.join(" | ")) : "No remarks saved for this date."}</p>
+          </div>
+        </div>
+      </td>
+    </tr>
+  `;
+}
+
+function toggleDailyCollectionDetails(dateLabel = "") {
   const reportRow = getDailyCollectionReportRows().find(row => row.date === dateLabel);
   if (!reportRow) {
     showToast("No collection details found for this date.");
     return;
   }
-  const details = [...(reportRow.details || [])].sort((a, b) => {
-    return String(a.studentName || "").localeCompare(String(b.studentName || ""), undefined, {numeric: true});
-  });
-  const remarks = [...new Set(details.map(item => String(item.remarks || "").trim()).filter(item => item && item !== "-"))];
-  openReceiptPreviewWithPrint(`Daily Collection - ${dateLabel}`, `
-    <article class="receipt-preview-card daily-collection-detail-card">
-      <div class="receipt-preview-banner">
-        <div>
-          <p class="eyebrow">Daily Collection Report</p>
-          <h3>${escapeHtml(dateLabel)}</h3>
-          <p>${details.length} student payment row(s), ${reportRow.receipts.size} receipt(s)</p>
-        </div>
-        <div class="receipt-preview-stamp">${escapeHtml(formatRs(reportRow.total))}</div>
-      </div>
-      <div class="daily-collection-detail-summary">
-        <article><span>Bank</span><strong>${formatRs(reportRow.bank)}</strong></article>
-        <article><span>Cash</span><strong>${formatRs(reportRow.cash)}</strong></article>
-        <article><span>Fine</span><strong>${formatRs(reportRow.fine)}</strong></article>
-        <article><span>Total</span><strong>${formatRs(reportRow.total)}</strong></article>
-      </div>
-      <div class="table-wrap daily-collection-detail-table">
-        <table>
-          <thead>
-            <tr><th>Student</th><th>Admission No.</th><th>Receipt</th><th>Bank</th><th>Cash</th><th>Total</th><th>Remarks</th></tr>
-          </thead>
-          <tbody>
-            ${details.map(item => `
-              <tr>
-                <td><strong>${escapeHtml(item.studentName || "-")}</strong></td>
-                <td>${escapeHtml(item.admissionNo || "-")}</td>
-                <td>${escapeHtml(item.receipt || "-")}</td>
-                <td>${formatRs(item.bank || 0)}</td>
-                <td>${formatRs(item.cash || 0)}</td>
-                <td><strong>${formatRs(item.total || 0)}</strong></td>
-                <td>${escapeHtml(item.remarks || "-")}</td>
-              </tr>
-            `).join("") || `<tr><td colspan="7">No student payments found for this date.</td></tr>`}
-          </tbody>
-        </table>
-      </div>
-      <div class="daily-collection-detail-remarks">
-        <span>Remarks</span>
-        <p>${remarks.length ? escapeHtml(remarks.join(" | ")) : "No remarks saved for this date."}</p>
-      </div>
-    </article>
-  `);
+  activeDailyCollectionDate = activeDailyCollectionDate === dateLabel ? "" : dateLabel;
+  renderDailyCollectionReport();
 }
 
 function getMonthReceivedTotal(month) {
@@ -13689,10 +13702,14 @@ document.getElementById("studentTeacherRatioReportBtn").addEventListener("click"
 document.getElementById("entireSchoolFeesMonthFilter")?.addEventListener("change", renderEntireSchoolFeesReport);
 document.getElementById("showEntireSchoolMonthlyFeesBtn")?.addEventListener("click", () => setEntireSchoolFeesPanel("monthly"));
 document.getElementById("showEntireSchoolYearlyFeesBtn")?.addEventListener("click", () => setEntireSchoolFeesPanel("yearly"));
-document.getElementById("dailyCollectionDateFilter")?.addEventListener("change", renderDailyCollectionReport);
+document.getElementById("dailyCollectionDateFilter")?.addEventListener("change", () => {
+  activeDailyCollectionDate = "";
+  renderDailyCollectionReport();
+});
 document.getElementById("dailyCollectionClearDate")?.addEventListener("click", () => {
   const input = document.getElementById("dailyCollectionDateFilter");
   if (input) input.value = "";
+  activeDailyCollectionDate = "";
   renderDailyCollectionReport();
 });
 
@@ -14988,7 +15005,7 @@ document.body.addEventListener("click", event => {
     );
   }
   if (dailyCollectionDate) {
-    openDailyCollectionDetails(decodeURIComponent(dailyCollectionDate.dataset.openDailyCollection || ""));
+    toggleDailyCollectionDetails(decodeURIComponent(dailyCollectionDate.dataset.openDailyCollection || ""));
   }
   if (disableStudent) {
     openDisableReasonModal(disableStudent.dataset.disableStudent);
