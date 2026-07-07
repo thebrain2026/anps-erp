@@ -1064,7 +1064,7 @@
       bottom: 0;
       left: max(0px, calc(50% - 260px));
       width: min(86vw, 330px);
-      padding: calc(18px + env(safe-area-inset-top)) 14px 18px;
+      padding: calc(12px + env(safe-area-inset-top)) 12px calc(18px + env(safe-area-inset-bottom));
       background:
         radial-gradient(circle at 18% 4%, rgba(36,107,254,.2), transparent 28%),
         radial-gradient(circle at 86% 12%, rgba(240,108,155,.18), transparent 26%),
@@ -1074,6 +1074,7 @@
       transform: translateX(-105%);
       transition: .23s ease;
       overflow: auto;
+      overscroll-behavior: contain;
     }
 
     .drawer-open .drawer-backdrop { opacity: 1; pointer-events: auto; }
@@ -1091,13 +1092,13 @@
         linear-gradient(180deg, rgba(250,246,255,.98), rgba(255,242,247,.95));
     }
     .drawer-title {
-      padding: 12px;
+      padding: 9px;
       border: 1px solid rgba(255,255,255,.74);
-      border-radius: 20px;
+      border-radius: 16px;
       background:
         linear-gradient(135deg, rgba(255,255,255,.82), rgba(255,255,255,.58)),
         linear-gradient(135deg, rgba(36,107,254,.16), rgba(240,108,155,.14));
-      box-shadow: 0 14px 32px rgba(16,26,74,.12);
+      box-shadow: 0 10px 24px rgba(16,26,74,.1);
     }
     body.student-theme .drawer-title {
       background: linear-gradient(135deg, rgba(255,255,255,.84), rgba(222,249,255,.88));
@@ -1108,7 +1109,7 @@
     .drawer-title b {
       display: block;
       color: var(--deep);
-      font-size: .98rem;
+      font-size: .92rem;
       line-height: 1.12;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -1123,20 +1124,20 @@
       color: #0f3d91;
       text-shadow: 0 1px 0 rgba(255,255,255,.72), 0 8px 18px rgba(27,182,217,.18);
     }
-    .drawer-title span { color: var(--muted); font-size: .78rem; font-weight: 760; }
+    .drawer-title span { color: var(--muted); font-size: .72rem; font-weight: 760; }
     .drawer-profile-row {
       display: grid;
-      grid-template-columns: 44px 1fr;
-      gap: 10px;
+      grid-template-columns: 38px 1fr;
+      gap: 8px;
       align-items: center;
       min-width: 0;
     }
     .drawer-photo {
       display: grid;
       place-items: center;
-      width: 44px;
-      height: 44px;
-      border-radius: 15px;
+      width: 38px;
+      height: 38px;
+      border-radius: 13px;
       color: #fff;
       background: linear-gradient(135deg, var(--deep), var(--blue));
       font-weight: 950;
@@ -1144,31 +1145,32 @@
     }
     .drawer-photo img { width: 100%; height: 100%; object-fit: cover; }
     .profile-link {
-      margin-top: 10px;
+      margin-top: 7px;
       width: auto;
-      min-height: 34px;
-      padding: 0 12px;
+      min-height: 30px;
+      padding: 0 10px;
       border: 0;
       border-radius: 12px;
       color: #fff;
       background: linear-gradient(135deg, var(--deep), var(--blue));
-      font-size: .78rem;
+      font-size: .74rem;
       font-weight: 900;
     }
     body.student-theme .profile-link { background: linear-gradient(135deg, #0f3d91, #1bb6d9); }
     body.teacher-theme .profile-link { background: linear-gradient(135deg, #40238f, #f06c9b); }
-    .drawer-list { display: grid; gap: 7px; margin-top: 12px; }
+    .drawer-list { display: grid; gap: 5px; margin-top: 8px; }
     .drawer-link {
       width: 100%;
-      min-height: 48px;
-      padding: 0 12px;
+      min-height: 38px;
+      padding: 0 10px;
       border: 0;
-      border-radius: 16px;
+      border-radius: 12px;
       color: var(--ink);
       background: rgba(255,255,255,.7);
       border: 1px solid rgba(255,255,255,.74);
-      box-shadow: 0 10px 22px rgba(16,26,74,.07);
+      box-shadow: 0 7px 16px rgba(16,26,74,.06);
       font-weight: 900;
+      font-size: .86rem;
       text-align: left;
     }
 

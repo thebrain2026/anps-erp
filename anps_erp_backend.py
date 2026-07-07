@@ -36,6 +36,11 @@ WHATSAPP_API_VERSION = os.environ.get("ANPS_WHATSAPP_API_VERSION", "v23.0").stri
 FCM_SERVER_KEY = os.environ.get("ANPS_FCM_SERVER_KEY", "").strip()
 FCM_ENDPOINT = os.environ.get("ANPS_FCM_ENDPOINT", "https://fcm.googleapis.com/fcm/send").strip() or "https://fcm.googleapis.com/fcm/send"
 FCM_SERVICE_ACCOUNT_JSON = os.environ.get("ANPS_FIREBASE_SERVICE_ACCOUNT_JSON", "").strip()
+FCM_SERVICE_ACCOUNT_JSON_FALLBACKS = (
+    "ANPS_FCM_SERVICE_ACCOUNT_JSON",
+    "FIREBASE_SERVICE_ACCOUNT_JSON",
+    "GOOGLE_APPLICATION_CREDENTIALS_JSON",
+)
 FCM_V1_SCOPE = "https://www.googleapis.com/auth/firebase.messaging"
 ICICI_GATEWAY_ENABLED = os.environ.get("ANPS_ICICI_GATEWAY_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
 ICICI_MERCHANT_ID = os.environ.get("ANPS_ICICI_MERCHANT_ID", "").strip()
@@ -437,7 +442,11 @@ def upsert_mobile_push_token(payload, user):
 
 
 def get_fcm_service_account_info():
-    raw = FCM_SERVICE_ACCOUNT_JSON.strip()
+    raw_values = [FCM_SERVICE_ACCOUNT_JSON.strip()]
+    raw_values.extend(os.environ.get(key, "").strip() for key in FCM_SERVICE_ACCOUNT_JSON_FALLBACKS)
+    if FCM_SERVER_KEY.startswith("{") or FCM_SERVER_KEY.startswith("/"):
+        raw_values.append(FCM_SERVER_KEY)
+    raw = next((value for value in raw_values if value), "")
     if not raw:
         return None
     try:
@@ -457,8 +466,18 @@ def fcm_v1_is_configured():
     return bool(info and info.get("project_id") and info.get("client_email") and info.get("private_key"))
 
 
+def legacy_fcm_server_key():
+    key = FCM_SERVER_KEY.strip()
+    lower_key = key.lower()
+    if not key or key.startswith("{") or key.startswith("/"):
+        return ""
+    if "firebase" in lower_key or "server key" in lower_key or len(key) < 20:
+        return ""
+    return key
+
+
 def fcm_is_configured():
-    return fcm_v1_is_configured() or bool(FCM_SERVER_KEY)
+    return fcm_v1_is_configured() or bool(legacy_fcm_server_key())
 
 
 def string_data_payload(data):
@@ -537,7 +556,8 @@ def send_fcm_notifications(tokens, title, body, data=None):
         return {"ok": True, "configured": fcm_is_configured(), "sent": 0, "message": "No target device tokens."}
     if fcm_v1_is_configured():
         return send_fcm_v1_notifications(tokens, title, body, data)
-    if not FCM_SERVER_KEY:
+    server_key = legacy_fcm_server_key()
+    if not server_key:
         return {
             "ok": False,
             "configured": False,
@@ -558,7 +578,7 @@ def send_fcm_notifications(tokens, title, body, data=None):
         FCM_ENDPOINT,
         data=json.dumps(payload).encode("utf-8"),
         headers={
-            "Authorization": f"key={FCM_SERVER_KEY}",
+            "Authorization": f"key={server_key}",
             "Content-Type": "application/json",
         },
         method="POST",
