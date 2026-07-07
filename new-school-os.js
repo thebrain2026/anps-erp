@@ -2874,17 +2874,52 @@ function renderDailyCashTrendChart() {
   const bankTotal = rows.reduce((sum, row) => sum + Number(row.bank || 0), 0);
   total.textContent = formatRs(cashTotal);
   note.textContent = `Last ${rows.length} collection day(s) | Bank ${formatRs(bankTotal)}`;
-  chart.innerHTML = rows.map(row => {
+  const width = 640;
+  const height = 220;
+  const padX = 34;
+  const topPad = 22;
+  const bottomPad = 48;
+  const graphHeight = height - topPad - bottomPad;
+  const points = rows.map((row, index) => {
     const cash = Number(row.cash || 0);
-    const height = cash > 0 ? Math.max(10, Math.round((cash / maxCash) * 150)) : 8;
-    return `
-      <div class="market-point" title="${escapeHtml(row.date)} | Cash ${escapeHtml(formatRs(cash))} | Total ${escapeHtml(formatRs(row.total))}">
-        <strong>${escapeHtml(formatRs(cash).replace("Rs. ", ""))}</strong>
-        <i style="height:${height}px"></i>
-        <span>${escapeHtml(shortCollectionDateLabel(row.date))}</span>
-      </div>
-    `;
-  }).join("");
+    const x = rows.length === 1 ? width / 2 : padX + (index * ((width - (padX * 2)) / (rows.length - 1)));
+    const y = topPad + graphHeight - ((cash / maxCash) * graphHeight);
+    return {row, cash, x: Math.round(x), y: Math.round(y)};
+  });
+  const linePoints = points.map(point => `${point.x},${point.y}`).join(" ");
+  const areaPoints = `${padX},${height - bottomPad} ${linePoints} ${width - padX},${height - bottomPad}`;
+  chart.innerHTML = `
+    <svg class="market-wave" viewBox="0 0 ${width} ${height}" role="img" aria-label="Daily cash collection line graph" preserveAspectRatio="none">
+      <defs>
+        <linearGradient id="cashWaveFill" x1="0" x2="0" y1="0" y2="1">
+          <stop offset="0%" stop-color="#1d9f8f" stop-opacity=".26" />
+          <stop offset="100%" stop-color="#2563c9" stop-opacity=".02" />
+        </linearGradient>
+        <linearGradient id="cashWaveLine" x1="0" x2="1" y1="0" y2="0">
+          <stop offset="0%" stop-color="#14798b" />
+          <stop offset="54%" stop-color="#2563c9" />
+          <stop offset="100%" stop-color="#22c55e" />
+        </linearGradient>
+      </defs>
+      <path class="market-wave-grid" d="M34 42 H606 M34 86 H606 M34 130 H606 M34 174 H606" />
+      <polygon class="market-wave-area" points="${areaPoints}" />
+      <polyline class="market-wave-line" points="${linePoints}" />
+      ${points.map((point, index) => `
+        <g class="market-wave-point ${index === points.length - 1 ? "is-latest" : ""}">
+          <circle cx="${point.x}" cy="${point.y}" r="7" />
+          <circle cx="${point.x}" cy="${point.y}" r="3.2" />
+        </g>
+      `).join("")}
+    </svg>
+    <div class="market-point-strip">
+      ${points.map((point, index) => `
+        <span class="market-point-pill ${index === points.length - 1 ? "is-latest" : ""}" title="${escapeHtml(point.row.date)} | Cash ${escapeHtml(formatRs(point.cash))} | Total ${escapeHtml(formatRs(point.row.total))}">
+          <small>${escapeHtml(shortCollectionDateLabel(point.row.date))}</small>
+          <strong>${escapeHtml(formatRs(point.cash).replace("Rs. ", ""))}</strong>
+        </span>
+      `).join("")}
+    </div>
+  `;
 }
 
 function renderDailyCollectionReport() {

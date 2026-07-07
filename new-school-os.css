@@ -1064,65 +1064,98 @@ h2 { font-size: 1.15rem; }
 .market-chart {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(14, minmax(28px, 1fr));
-  align-items: end;
-  gap: 9px;
+  gap: 10px;
   min-height: 220px;
-  padding: 18px 12px 10px;
+  padding: 10px 10px 12px;
   border: 1px solid rgba(210, 224, 238, .86);
   border-radius: 8px;
   background:
-    linear-gradient(to bottom, rgba(148, 163, 184, .14) 1px, transparent 1px) 0 0 / 100% 25%,
-    linear-gradient(180deg, rgba(255, 255, 255, .94), rgba(248, 252, 255, .94));
+    radial-gradient(circle at 92% 12%, rgba(34, 197, 94, .13), transparent 26%),
+    linear-gradient(180deg, rgba(255, 255, 255, .96), rgba(248, 252, 255, .94));
 }
 
-.market-chart::before {
-  content: "";
-  position: absolute;
-  inset: 18px 12px 42px;
-  border-bottom: 2px solid rgba(20, 121, 139, .24);
-  pointer-events: none;
-}
-
-.market-point {
-  position: relative;
-  z-index: 1;
-  display: grid;
-  align-content: end;
-  gap: 7px;
-  min-height: 176px;
-}
-
-.market-point i {
+.market-wave {
   display: block;
-  min-height: 8px;
-  border-radius: 999px 999px 4px 4px;
-  background: linear-gradient(180deg, #22c55e 0%, #14798b 60%, #173761 100%);
-  box-shadow: 0 10px 22px rgba(20, 121, 139, .18);
+  width: 100%;
+  min-height: 176px;
+  overflow: visible;
 }
 
-.market-point:nth-child(2n) i {
-  background: linear-gradient(180deg, #38bdf8 0%, #2563c9 68%, #173761 100%);
+.market-wave-grid {
+  fill: none;
+  stroke: rgba(148, 163, 184, .22);
+  stroke-dasharray: 6 8;
+  stroke-width: 1;
 }
 
-.market-point strong,
-.market-point span {
-  overflow: hidden;
-  text-align: center;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.market-wave-area {
+  fill: url(#cashWaveFill);
 }
 
-.market-point strong {
-  color: var(--ink);
-  font-size: .72rem;
+.market-wave-line {
+  fill: none;
+  stroke: url(#cashWaveLine);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 6;
+  filter: drop-shadow(0 10px 13px rgba(37, 99, 201, .18));
+}
+
+.market-wave-point circle:first-child {
+  fill: #fff;
+  stroke: #14798b;
+  stroke-width: 4;
+}
+
+.market-wave-point circle:last-child {
+  fill: #22c55e;
+}
+
+.market-wave-point.is-latest circle:first-child {
+  stroke: #2563c9;
+}
+
+.market-wave-point.is-latest circle:last-child {
+  fill: #2563c9;
+}
+
+.market-point-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: thin;
+}
+
+.market-point-pill {
+  flex: 0 0 auto;
+  display: inline-grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  gap: 7px;
+  min-height: 32px;
+  padding: 0 10px;
+  border: 1px solid rgba(37, 99, 201, .15);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .82);
+  box-shadow: 0 8px 20px rgba(23, 55, 97, .06);
+}
+
+.market-point-pill small {
+  color: var(--muted);
+  font-size: .68rem;
+  font-weight: 900;
+}
+
+.market-point-pill strong {
+  color: #173761;
+  font-size: .75rem;
   font-weight: 950;
 }
 
-.market-point span {
-  color: var(--muted);
-  font-size: .68rem;
-  font-weight: 850;
+.market-point-pill.is-latest {
+  border-color: rgba(34, 197, 94, .32);
+  background: #ecfdf5;
 }
 
 .pay-panel {
