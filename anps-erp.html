@@ -1549,6 +1549,22 @@
               </div>
               <span class="teacher-homework-count" id="teacherHomeworkCount">0 Submitted</span>
             </div>
+            <div class="teacher-homework-filters">
+              <label>Teacher
+                <select id="teacherHomeworkTeacherFilter">
+                  <option value="">All Teachers</option>
+                </select>
+              </label>
+              <label>Class
+                <select id="teacherHomeworkClassFilter">
+                  <option value="">All Classes</option>
+                </select>
+              </label>
+              <label>Date
+                <input id="teacherHomeworkDateFilter" type="date" />
+              </label>
+              <button class="ghost-action" id="teacherHomeworkClearFilters" type="button">Clear</button>
+            </div>
             <div class="table-wrap teacher-homework-table-wrap">
               <table>
                 <thead><tr><th>Teacher</th><th>Class</th><th>Subject</th><th>Homework</th><th>Due Date</th><th>Attachment</th><th>Status</th></tr></thead>

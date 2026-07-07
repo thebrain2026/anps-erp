@@ -2485,6 +2485,41 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   box-shadow: 0 8px 18px rgba(24, 92, 168, .1);
 }
 
+.teacher-homework-filters {
+  display: grid;
+  grid-template-columns: minmax(190px, 1fr) minmax(160px, .8fr) minmax(150px, .7fr) auto;
+  gap: 12px;
+  align-items: end;
+  padding: 14px 16px;
+  border-bottom: 1px solid #e1edf8;
+  background: rgba(255,255,255,.78);
+}
+
+.teacher-homework-filters label {
+  display: grid;
+  gap: 7px;
+  color: #15395f;
+  font-size: .78rem;
+  font-weight: 950;
+}
+
+.teacher-homework-filters select,
+.teacher-homework-filters input {
+  min-height: 40px;
+  width: 100%;
+  border: 1px solid #c8daed;
+  border-radius: 8px;
+  background: #fff;
+  color: #10233f;
+  font-weight: 900;
+  padding: 9px 11px;
+}
+
+.teacher-homework-filters .ghost-action {
+  min-height: 40px;
+  padding-inline: 16px;
+}
+
 .teacher-homework-table-wrap {
   max-height: 360px;
   background: rgba(255,255,255,.86);

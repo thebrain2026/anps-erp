@@ -5458,6 +5458,21 @@ function getHomeworkTeacherName(item = {}) {
   return item.teacherName || item.teacher || item.staffName || item.createdBy || "Teacher App";
 }
 
+function getTeacherHomeworkDate(item = {}) {
+  return item.due || item.dueDate || item.date || item.createdDate || "";
+}
+
+function setTeacherHomeworkFilterOptions(select, values = [], placeholder = "All") {
+  if (!select) return;
+  const current = select.value;
+  const uniqueValues = [...new Set(values.map(value => String(value || "").trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, undefined, {numeric: true, sensitivity: "base"}));
+  select.innerHTML = `<option value="">${escapeHtml(placeholder)}</option>${uniqueValues
+    .map(value => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`)
+    .join("")}`;
+  if (uniqueValues.includes(current)) select.value = current;
+}
+
 function readHomeworkAttachment(file) {
   return new Promise((resolve, reject) => {
     if (!file) {
@@ -5495,6 +5510,9 @@ function renderHomeworkModule() {
   const rows = document.getElementById("homeworkRows");
   const teacherRows = document.getElementById("teacherHomeworkRows");
   const teacherCount = document.getElementById("teacherHomeworkCount");
+  const teacherFilter = document.getElementById("teacherHomeworkTeacherFilter");
+  const classFilter = document.getElementById("teacherHomeworkClassFilter");
+  const dateFilter = document.getElementById("teacherHomeworkDateFilter");
   const preview = document.getElementById("homeworkPreviewBox");
   if (preview) {
     const latest = homework[0];
@@ -5508,21 +5526,36 @@ function renderHomeworkModule() {
   const teacherHomework = homework
     .map((item, index) => ({item, index}))
     .filter(({item}) => isTeacherHomeworkEntry(item));
+  setTeacherHomeworkFilterOptions(teacherFilter, teacherHomework.map(({item}) => getHomeworkTeacherName(item)), "All Teachers");
+  setTeacherHomeworkFilterOptions(classFilter, teacherHomework.map(({item}) => item.className || item.class), "All Classes");
+  const selectedTeacher = String(teacherFilter?.value || "").trim();
+  const selectedClass = String(classFilter?.value || "").trim();
+  const selectedDate = String(dateFilter?.value || "").trim();
+  const filteredTeacherHomework = teacherHomework.filter(({item}) => {
+    const teacherName = String(getHomeworkTeacherName(item)).trim();
+    const className = String(item.className || item.class || "").trim();
+    const homeworkDate = String(getTeacherHomeworkDate(item)).trim();
+    return (!selectedTeacher || teacherName === selectedTeacher)
+      && (!selectedClass || className === selectedClass)
+      && (!selectedDate || homeworkDate === selectedDate);
+  });
   if (teacherCount) {
-    teacherCount.textContent = `${teacherHomework.length} Submitted`;
+    teacherCount.textContent = selectedTeacher || selectedClass || selectedDate
+      ? `${filteredTeacherHomework.length} of ${teacherHomework.length} Submitted`
+      : `${teacherHomework.length} Submitted`;
   }
   if (teacherRows) {
-    teacherRows.innerHTML = teacherHomework.map(({item}) => `
+    teacherRows.innerHTML = filteredTeacherHomework.map(({item}) => `
       <tr>
         <td><strong>${escapeHtml(getHomeworkTeacherName(item))}</strong><br><small>${escapeHtml(item.teacherId || item.staffId || item.source || "Teacher App")}</small></td>
         <td><strong>${escapeHtml(item.className || item.class || "-")}</strong></td>
         <td>${escapeHtml(item.subject || "-")}</td>
         <td><div class="teacher-homework-text">${escapeHtml(item.text || item.homework || "-")}</div></td>
-        <td>${escapeHtml(item.due || item.dueDate || "-")}</td>
+        <td>${escapeHtml(getTeacherHomeworkDate(item) || "-")}</td>
         <td>${getHomeworkAttachmentLink(item.attachment)}</td>
         <td><span class="status-pill stable">${escapeHtml(item.status || "Published")}</span></td>
       </tr>
-    `).join("") || `<tr><td colspan="7">No teacher homework submitted yet.</td></tr>`;
+    `).join("") || `<tr><td colspan="7">No teacher homework found for the selected filter.</td></tr>`;
   }
   if (!rows) return;
   rows.innerHTML = homework.map((item, index) => `
@@ -14217,6 +14250,18 @@ homeworkEntryForm?.addEventListener("submit", async event => {
 
 document.getElementById("homeworkClassSelect")?.addEventListener("change", () => {
   renderHomeworkSubjectOptions({ preserveSubject: false });
+});
+
+["teacherHomeworkTeacherFilter", "teacherHomeworkClassFilter", "teacherHomeworkDateFilter"].forEach(id => {
+  document.getElementById(id)?.addEventListener("change", renderHomeworkModule);
+});
+
+document.getElementById("teacherHomeworkClearFilters")?.addEventListener("click", () => {
+  ["teacherHomeworkTeacherFilter", "teacherHomeworkClassFilter", "teacherHomeworkDateFilter"].forEach(id => {
+    const input = document.getElementById(id);
+    if (input) input.value = "";
+  });
+  renderHomeworkModule();
 });
 
 document.getElementById("homeworkRows")?.addEventListener("click", event => {
