@@ -2874,36 +2874,19 @@ function renderDailyCashTrendChart() {
   const bankTotal = rows.reduce((sum, row) => sum + Number(row.bank || 0), 0);
   total.textContent = formatRs(cashTotal);
   note.textContent = `Last ${rows.length} collection day(s) | Bank ${formatRs(bankTotal)}`;
-  const highestRow = rows.reduce((best, row) => Number(row.cash || 0) > Number(best.cash || 0) ? row : best, rows[0]);
-  const latestRow = rows[rows.length - 1];
   chart.innerHTML = `
-    <div class="cash-flow-board">
-      <div class="cash-flow-hero">
-        <span>Latest Cash</span>
-        <strong>${escapeHtml(formatRs(Number(latestRow.cash || 0)))}</strong>
-        <small>${escapeHtml(latestRow.date || "-")} | Total ${escapeHtml(formatRs(Number(latestRow.total || 0)))}</small>
-      </div>
-      <div class="cash-flow-high">
-        <span>Highest Day</span>
-        <strong>${escapeHtml(formatRs(Number(highestRow.cash || 0)))}</strong>
-        <small>${escapeHtml(highestRow.date || "-")}</small>
-      </div>
-      <div class="cash-flow-list">
+    <div class="daily-cash-bars" role="img" aria-label="Daily cash collection bar graph">
       ${rows.map((row, index) => {
         const cash = Number(row.cash || 0);
-        const percent = Math.max(4, Math.round((cash / maxCash) * 100));
+        const height = Math.max(10, Math.round((cash / maxCash) * 100));
         return `
-        <div class="cash-flow-row ${index === rows.length - 1 ? "is-latest" : ""}" title="${escapeHtml(row.date)} | Cash ${escapeHtml(formatRs(cash))} | Total ${escapeHtml(formatRs(row.total))}">
-          <div>
-            <strong>${escapeHtml(shortCollectionDateLabel(row.date))}</strong>
-            <span>${escapeHtml(formatRs(cash))}</span>
-          </div>
-          <i><b style="width:${percent}%"></b></i>
-          <small>${escapeHtml(formatRs(Number(row.total || 0)))}</small>
+        <div class="daily-cash-bar ${index === rows.length - 1 ? "is-latest" : ""}" title="${escapeHtml(row.date)} | Cash ${escapeHtml(formatRs(cash))} | Total ${escapeHtml(formatRs(row.total))}">
+          <strong>${escapeHtml(formatRs(cash).replace("Rs. ", ""))}</strong>
+          <span style="height:${height}%"></span>
+          <small>${escapeHtml(shortCollectionDateLabel(row.date))}</small>
         </div>
       `;
       }).join("")}
-      </div>
     </div>
   `;
 }
