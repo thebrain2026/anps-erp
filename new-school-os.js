@@ -291,6 +291,7 @@ const titleMap = {
   teacherNoticeRequests: "Teacher Notice Requests",
   sendSms: "WhatsApp Message",
   addHomework: "Add Homework",
+  teacherHomework: "Teachers Homework",
   dailyAssignment: "Daily Assignment",
   reportStudentInformation: "Student Information Report",
   dailyCollectionReport: "Daily Collection Report",
@@ -339,7 +340,7 @@ const ACCESS_PERMISSION_GROUPS = [
   {name: "Fees Collection", modules: ["finance", "feeBook", "dueFeesSearch", "upiPaymentVerification", "feeMaster", "feeGroup", "addClassSection", "tuitionFineSetup", "feeReminder"]},
   {name: "Human Resources", modules: ["staffDetails", "staffAttendance", "applyLeave", "leaveType", "approveLeave", "teachersRating", "department", "designation", "disabledStaff"]},
   {name: "Communication", modules: ["noticeBoard", "teacherNoticeRequests", "sendSms"]},
-  {name: "Homework", modules: ["addHomework", "dailyAssignment"]},
+  {name: "Homework", modules: ["addHomework", "teacherHomework", "dailyAssignment"]},
   {name: "Reports", modules: ["reportStudentInformation", "dailyCollectionReport", "entireSchoolFeesReport"]},
   {name: "Academic", modules: ["classTimetable", "teacherTimetable", "classTeacherAssignment", "syllabus", "marksheet", "externalExamFees", "academicProfile", "teacherComplaint", "holidayReport", "annualCalendar"]},
   {name: "Certificate", modules: ["studentIdCard", "teacherIdCard"]},
@@ -1661,7 +1662,7 @@ function renderActiveView(viewName = document.querySelector(".view.active")?.id 
   if (viewName === "disableStudent") renderDisabledStudents();
   if (viewName === "noticeBoard") renderNoticeBoard();
   if (viewName === "teacherNoticeRequests") renderTeacherNoticeRequests();
-  if (viewName === "addHomework" || viewName === "dailyAssignment") renderHomeworkModule();
+  if (viewName === "addHomework" || viewName === "teacherHomework" || viewName === "dailyAssignment") renderHomeworkModule();
   if (viewName === "complaintsDesk") renderComplaintsDesk();
   if (viewName === "admissionEnquiry") renderAdmissionEnquiryModule();
   if (viewName === "classTimetable") renderClassTimetable();
