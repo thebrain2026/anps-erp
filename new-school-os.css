@@ -5984,6 +5984,28 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   align-items: end;
 }
 
+#dueFeesSearch .due-fees-head-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+#dueFeesSearch .due-fees-count-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(20, 121, 139, .22);
+  border-radius: 999px;
+  background: linear-gradient(135deg, #ecfdf5, #eef7ff);
+  color: #0f5f67;
+  font-size: .78rem;
+  font-weight: 950;
+  white-space: nowrap;
+}
+
 #dueFeesSearch .due-fees-month-filter select {
   min-width: 0;
 }

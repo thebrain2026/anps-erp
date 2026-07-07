@@ -6830,6 +6830,11 @@ function renderDueFeesSearch() {
   renderDueFeesFilterOptions();
   const selectedMonth = renderDueFeesMonthOptions();
   const rows = getDueFeesSearchRows(selectedMonth);
+  const dueStudentCount = new Set(rows.map(({student}) => student.admissionNo || student.name || "")).size;
+  const countChip = document.getElementById("dueFeesStudentCount");
+  if (countChip) {
+    countChip.textContent = `Due Students: ${dueStudentCount}`;
+  }
   const dueStudentGroups = new Map();
   document.getElementById("dueFeesSearchRows").innerHTML = rows.map(({student, row}) => {
     const studentKey = student.admissionNo || student.name || "";
