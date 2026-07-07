@@ -699,12 +699,19 @@
           </div>
           <div class="fee-filter-bar">
             <label>Class
-              <select><option>All Classes</option><option>I Amber</option><option>V B</option><option>IX IGCSE</option></select>
+              <select id="dueFeesClassFilter"><option value="">All Classes</option></select>
+            </label>
+            <label>Section
+              <select id="dueFeesSectionFilter"><option value="">All Sections</option></select>
             </label>
             <label>Status
-              <select><option>All Due</option><option>Overdue</option><option>Promise</option></select>
+              <select id="dueFeesStatusFilter">
+                <option value="">All Due</option>
+                <option value="fine">Fine Due</option>
+                <option value="fee">Fee Due Only</option>
+              </select>
             </label>
-            <label>Month
+            <label class="due-fees-month-filter">Month
               <select id="dueFeesMonthFilter">
                 <option value="">All Months</option>
                 <option>Apr</option>

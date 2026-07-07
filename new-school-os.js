@@ -6718,9 +6718,64 @@ function getSearchDueMonthItem(student, row, month) {
   return amount > 0 ? {month, amount, fine: 0, total: amount} : null;
 }
 
+function getDueFeesStudentClassSections() {
+  const classes = new Set(getAdmissionClassOptions());
+  const sections = new Set(getAdmissionSectionOptions());
+  const sectionsByClass = new Map();
+  getActiveStudents().forEach(student => {
+    const {klass, section} = splitStudentClassSection(student.klass || "");
+    if (klass) classes.add(klass);
+    if (section) sections.add(section);
+    if (klass) {
+      if (!sectionsByClass.has(klass)) sectionsByClass.set(klass, new Set());
+      if (section) sectionsByClass.get(klass).add(section);
+    }
+  });
+  return {
+    classes: [...classes].filter(Boolean).sort((a, b) => a.localeCompare(b, undefined, {numeric: true})),
+    sections: [...sections].filter(Boolean).sort((a, b) => a.localeCompare(b, undefined, {numeric: true})),
+    sectionsByClass
+  };
+}
+
+function renderDueFeesFilterOptions() {
+  const classSelect = document.getElementById("dueFeesClassFilter");
+  const sectionSelect = document.getElementById("dueFeesSectionFilter");
+  if (!classSelect && !sectionSelect) return {selectedClass: "", selectedSection: "", selectedStatus: ""};
+  const currentClass = String(classSelect?.value || "").trim();
+  const currentSection = String(sectionSelect?.value || "").trim();
+  const {classes, sections, sectionsByClass} = getDueFeesStudentClassSections();
+  const selectedClass = classes.includes(currentClass) ? currentClass : "";
+  const visibleSections = selectedClass
+    ? [...(sectionsByClass.get(selectedClass) || new Set())].sort((a, b) => a.localeCompare(b, undefined, {numeric: true}))
+    : sections;
+  const selectedSection = visibleSections.includes(currentSection) ? currentSection : "";
+  if (classSelect) {
+    classSelect.innerHTML = `<option value="">All Classes</option>${classes.map(className => `<option value="${escapeHtml(className)}">${escapeHtml(className)}</option>`).join("")}`;
+    classSelect.value = selectedClass;
+  }
+  if (sectionSelect) {
+    sectionSelect.innerHTML = `<option value="">All Sections</option>${visibleSections.map(section => `<option value="${escapeHtml(section)}">${escapeHtml(section)}</option>`).join("")}`;
+    sectionSelect.value = selectedSection;
+  }
+  return {
+    selectedClass,
+    selectedSection,
+    selectedStatus: String(document.getElementById("dueFeesStatusFilter")?.value || "").trim()
+  };
+}
+
 function getDueFeesSearchRows(selectedMonth = "") {
   const query = document.getElementById("dueFeesStudentSearch")?.value || "";
-  return getActiveStudents().filter(student => dueFeesStudentMatchesSearch(student, query)).flatMap(student => {
+  const selectedClass = String(document.getElementById("dueFeesClassFilter")?.value || "").trim();
+  const selectedSection = String(document.getElementById("dueFeesSectionFilter")?.value || "").trim();
+  const selectedStatus = String(document.getElementById("dueFeesStatusFilter")?.value || "").trim();
+  return getActiveStudents().filter(student => {
+    const {klass, section} = splitStudentClassSection(student.klass || "");
+    if (selectedClass && klass !== selectedClass) return false;
+    if (selectedSection && section !== selectedSection) return false;
+    return dueFeesStudentMatchesSearch(student, query);
+  }).flatMap(student => {
     if (selectedMonth) {
       return getLedgerRows(student)
         .filter(row => row.due > 0)
@@ -6732,10 +6787,18 @@ function getDueFeesSearchRows(selectedMonth = "") {
           const periodMonths = details.map(item => item.month);
           return details.length ? {student, row: {...row, period: formatMonthPeriod(periodMonths), due, fine, details}} : null;
         })
+        .filter(item => {
+          if (!item || !selectedStatus) return true;
+          return selectedStatus === "fine" ? Number(item.row.fine || 0) > 0 : Number(item.row.fine || 0) <= 0;
+        })
         .filter(Boolean);
     }
     return getLedgerRows(student)
       .filter(row => row.due > 0)
+      .filter(row => {
+        if (!selectedStatus) return true;
+        return selectedStatus === "fine" ? Number(row.fine || 0) > 0 : Number(row.fine || 0) <= 0;
+      })
       .map(row => ({student, row}));
   });
 }
@@ -6760,6 +6823,7 @@ function renderDueFeesMonthOptions() {
 }
 
 function renderDueFeesSearch() {
+  renderDueFeesFilterOptions();
   const selectedMonth = renderDueFeesMonthOptions();
   const rows = getDueFeesSearchRows(selectedMonth);
   const dueStudentGroups = new Map();
@@ -12003,6 +12067,9 @@ feeBookStudentSelect.addEventListener("change", () => {
 });
 
 document.getElementById("dueFeesMonthFilter").addEventListener("change", renderDueFeesSearch);
+document.getElementById("dueFeesClassFilter")?.addEventListener("change", renderDueFeesSearch);
+document.getElementById("dueFeesSectionFilter")?.addEventListener("change", renderDueFeesSearch);
+document.getElementById("dueFeesStatusFilter")?.addEventListener("change", renderDueFeesSearch);
 document.getElementById("dueFeesStudentSearch")?.addEventListener("input", renderDueFeesSearch);
 
 admissionForm.elements.klass.addEventListener("change", event => {
