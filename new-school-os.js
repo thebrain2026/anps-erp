@@ -5448,6 +5448,15 @@ function getHomeworkAttachmentLink(attachment = {}) {
   return `<a class="homework-attachment-link" href="${escapeHtml(attachment.url)}" target="_blank" rel="noopener" download="${escapeHtml(label)}">${escapeHtml(label)}</a>`;
 }
 
+function isTeacherHomeworkEntry(item = {}) {
+  const source = String(item.source || item.createdFrom || item.origin || "").toLowerCase();
+  return source.includes("teacher") || Boolean(item.teacherId || item.teacherName || item.teacher);
+}
+
+function getHomeworkTeacherName(item = {}) {
+  return item.teacherName || item.teacher || item.staffName || item.createdBy || "Teacher App";
+}
+
 function readHomeworkAttachment(file) {
   return new Promise((resolve, reject) => {
     if (!file) {
@@ -5483,6 +5492,8 @@ function renderHomeworkModule() {
   renderHomeworkSubjectOptions();
   pruneExpiredHomeworkAttachments();
   const rows = document.getElementById("homeworkRows");
+  const teacherRows = document.getElementById("teacherHomeworkRows");
+  const teacherCount = document.getElementById("teacherHomeworkCount");
   const preview = document.getElementById("homeworkPreviewBox");
   if (preview) {
     const latest = homework[0];
@@ -5492,6 +5503,25 @@ function renderHomeworkModule() {
       <p>${escapeHtml(latest.text || "-")}</p>
       <div>${getHomeworkAttachmentLink(latest.attachment)}</div>
     ` : "After selecting a class and subject, the homework will appear class-wise in the student app.";
+  }
+  const teacherHomework = homework
+    .map((item, index) => ({item, index}))
+    .filter(({item}) => isTeacherHomeworkEntry(item));
+  if (teacherCount) {
+    teacherCount.textContent = `${teacherHomework.length} Submitted`;
+  }
+  if (teacherRows) {
+    teacherRows.innerHTML = teacherHomework.map(({item}) => `
+      <tr>
+        <td><strong>${escapeHtml(getHomeworkTeacherName(item))}</strong><br><small>${escapeHtml(item.teacherId || item.staffId || item.source || "Teacher App")}</small></td>
+        <td><strong>${escapeHtml(item.className || item.class || "-")}</strong></td>
+        <td>${escapeHtml(item.subject || "-")}</td>
+        <td><div class="teacher-homework-text">${escapeHtml(item.text || item.homework || "-")}</div></td>
+        <td>${escapeHtml(item.due || item.dueDate || "-")}</td>
+        <td>${getHomeworkAttachmentLink(item.attachment)}</td>
+        <td><span class="status-pill stable">${escapeHtml(item.status || "Published")}</span></td>
+      </tr>
+    `).join("") || `<tr><td colspan="7">No teacher homework submitted yet.</td></tr>`;
   }
   if (!rows) return;
   rows.innerHTML = homework.map((item, index) => `
