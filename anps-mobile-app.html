@@ -1688,7 +1688,8 @@
       apiBaseUrl: "/api",
       tokenKey: "anps_mobile_token",
       roleKey: "anps_mobile_role",
-      userKey: "anps_mobile_user"
+      userKey: "anps_mobile_user",
+      sessionKey: "anps_mobile_saved_session"
     };
 
     const todayName = new Intl.DateTimeFormat("en-US", { weekday: "long" }).format(new Date());
@@ -2103,6 +2104,39 @@
         photo: "",
         subjects: []
       };
+    }
+
+    function savedSession() {
+      try {
+        const session = JSON.parse(localStorage.getItem(AppConfig.sessionKey) || "{}");
+        const token = localStorage.getItem(AppConfig.tokenKey) || session.token || "";
+        const role = session.role || localStorage.getItem(AppConfig.roleKey) || "";
+        const userId = session.userId || localStorage.getItem(AppConfig.userKey) || "";
+        if (!token || !role || !userId) return null;
+        if (!["student", "teacher"].includes(role)) return null;
+        return { token, role, userId };
+      } catch (error) {
+        return null;
+      }
+    }
+
+    function saveSession(role, user = {}, token = "") {
+      const session = {
+        role,
+        userId: user.id,
+        loginId: user.loginId || user.id,
+        name: user.name || "",
+        savedAt: new Date().toISOString(),
+        token
+      };
+      localStorage.setItem(AppConfig.sessionKey, JSON.stringify(session));
+    }
+
+    function clearSavedSession() {
+      localStorage.removeItem(AppConfig.tokenKey);
+      localStorage.removeItem(AppConfig.roleKey);
+      localStorage.removeItem(AppConfig.userKey);
+      localStorage.removeItem(AppConfig.sessionKey);
     }
 
     function mobileCollectionName(collection) {
@@ -3116,8 +3150,12 @@
     function startLiveWorkspaceSync() {
       clearInterval(liveSyncTimer);
       lastNoticeSignature = noticeSyncSignature(state.workspace?.notices || []);
-      window.setTimeout(() => refreshLiveWorkspace({ quiet: true }), 2500);
-      liveSyncTimer = setInterval(() => refreshLiveWorkspace({ quiet: false }), 10 * 1000);
+      window.setTimeout(() => {
+        if (!document.hidden) refreshLiveWorkspace({ quiet: true });
+      }, 2500);
+      liveSyncTimer = setInterval(() => {
+        if (!document.hidden) refreshLiveWorkspace({ quiet: false });
+      }, 30 * 1000);
     }
 
     function stopLiveWorkspaceSync() {
@@ -3139,6 +3177,30 @@
       $("#togglePassword").setAttribute("aria-label", "Show password");
       $("#togglePassword").setAttribute("aria-pressed", "false");
       showScreen("login");
+    }
+
+    async function restoreSavedLogin() {
+      const session = savedSession();
+      if (!session) return;
+      try {
+        localStorage.setItem(AppConfig.tokenKey, session.token);
+        localStorage.setItem(AppConfig.roleKey, session.role);
+        localStorage.setItem(AppConfig.userKey, session.userId);
+        state.role = session.role;
+        state.user = normalizeLoginUser({
+          username: session.userId,
+          loginId: session.loginId || session.userId,
+          name: session.name || "User",
+          role: session.role === "student" ? "Student" : "Staff"
+        }, session.role);
+        await enterApp(session.role, state.user, { restored: true });
+        toast("Welcome back");
+      } catch (error) {
+        console.warn("Saved login restore failed.", error);
+        clearSavedSession();
+        state = { role: null, user: null, workspace: null, attendanceClass: "", teacherTimetableClass: "", language: "en" };
+        showScreen("landing");
+      }
     }
 
     async function saveStudentActivity(status = "Active", quiet = true) {
@@ -3867,7 +3929,7 @@
       });
     }
 
-    async function enterApp(role, user) {
+    async function enterApp(role, user, options = {}) {
       state.role = role;
       state.user = user;
       duePopupOpenOnceShown = false;
@@ -3876,6 +3938,7 @@
       document.body.classList.toggle("teacher-theme", role === "teacher");
       localStorage.setItem(AppConfig.roleKey, role);
       localStorage.setItem(AppConfig.userKey, user.id);
+      if (!options.restored) saveSession(role, user, localStorage.getItem(AppConfig.tokenKey) || "");
       showScreen("app");
       renderDashboard();
       if (role === "student") renderStudentViews();
@@ -3903,6 +3966,7 @@
       try {
         const result = await AppApi.login(state.role, $("#loginId").value.trim(), $("#password").value);
         localStorage.setItem(AppConfig.tokenKey, result.token);
+        saveSession(state.role, result.user, result.token);
         await enterApp(state.role, result.user);
         toast("Login successful");
       } catch (error) {
@@ -3941,9 +4005,7 @@
       clearInterval(reminderTimer);
       hideReminderPopup();
       duePopupOpenOnceShown = false;
-      localStorage.removeItem(AppConfig.tokenKey);
-      localStorage.removeItem(AppConfig.roleKey);
-      localStorage.removeItem(AppConfig.userKey);
+      clearSavedSession();
       state = { role: null, user: null, workspace: null, attendanceClass: "", teacherTimetableClass: "", language: "en" };
       activeViewId = "dashboard";
       document.body.classList.remove("drawer-open", "student-theme", "teacher-theme");
@@ -3956,6 +4018,7 @@
         activitySession.startedAt = new Date().toISOString();
         activitySession.lastSavedAt = Date.now();
         saveStudentActivity("Active");
+        startLiveWorkspaceSync();
         refreshLiveWorkspace({ quiet: true });
       }
     });
@@ -3984,9 +4047,11 @@
     document.addEventListener("visibilitychange", () => {
       if (!document.hidden) {
         checkReminderPopup();
+        startLiveWorkspaceSync();
         refreshLiveWorkspace({ quiet: true });
       }
     });
+    restoreSavedLogin();
   </script>
 </body>
 </html>

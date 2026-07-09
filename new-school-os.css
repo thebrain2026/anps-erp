@@ -944,9 +944,20 @@ h2 { font-size: 1.15rem; }
   border-left: 4px solid #1f4d8f;
 }
 
-.kpi-card:nth-child(2) { border-left-color: var(--green); }
-.kpi-card:nth-child(3) { border-left-color: var(--amber); }
+.kpi-card:nth-child(2) { border-left-color: var(--amber); }
 .kpi-card.warning { border-left-color: var(--red); }
+
+.kpi-card.fees-kpi {
+  grid-column: span 2;
+  min-height: 136px;
+  background:
+    linear-gradient(135deg, rgba(245, 158, 11, .12), transparent 42%),
+    var(--paper);
+}
+
+.kpi-card.fees-kpi strong {
+  font-size: clamp(1.9rem, 3vw, 2.65rem);
+}
 
 .kpi-card span {
   color: var(--muted);
@@ -967,16 +978,16 @@ h2 { font-size: 1.15rem; }
 
 .monthly-fee-breakdown {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 6px;
-  margin-top: 4px;
+  grid-template-columns: repeat(6, minmax(72px, 1fr));
+  gap: 8px;
+  margin-top: 6px;
 }
 
 .monthly-fee-pill {
   display: grid;
   gap: 2px;
   min-width: 0;
-  padding: 6px 7px;
+  padding: 8px 9px;
   border: 1px solid rgba(245, 158, 11, .28);
   border-radius: 8px;
   background: linear-gradient(180deg, #fffaf0, #ffffff);
@@ -984,14 +995,14 @@ h2 { font-size: 1.15rem; }
 
 .monthly-fee-pill span {
   color: #92400e;
-  font-size: .66rem;
+  font-size: .72rem;
   font-weight: 950;
   line-height: 1;
 }
 
 .monthly-fee-pill strong {
   color: #1f2937;
-  font-size: .74rem;
+  font-size: .86rem;
   font-weight: 950;
   line-height: 1.15;
   white-space: nowrap;
@@ -9256,6 +9267,8 @@ body.modal-open {
   body.nav-open .rail { transform: translateX(0); }
   .menu-button { display: block; }
   .metrics, .control-strip, .kpi-grid, .cards { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .kpi-card.fees-kpi { grid-column: 1 / -1; }
+  .monthly-fee-breakdown { grid-template-columns: repeat(4, minmax(72px, 1fr)); }
   .hero-panel, .dashboard-grid, .operations-grid, .finance-grid, .fee-admin-grid { grid-template-columns: 1fr; }
   .class-fee-panel .fee-master-form { grid-template-columns: 1fr; }
   .class-fee-panel .fee-master-form label {
@@ -9307,6 +9320,7 @@ body.modal-open {
   .workspace { padding: 14px; }
   .topbar { grid-template-columns: auto 1fr; }
   .search, .topbar-system-strip { grid-column: 1 / -1; }
+  .monthly-fee-breakdown { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .topbar-system-strip { grid-row: auto; }
   .topbar-system-strip { justify-content: flex-start; }
   .hero-panel { padding: 18px; }
