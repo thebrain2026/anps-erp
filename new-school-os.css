@@ -2670,6 +2670,99 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   min-width: 140px;
 }
 
+.teacher-advisory-panel {
+  overflow: hidden;
+  border-color: #c5d9ff;
+  background:
+    radial-gradient(circle at top left, rgba(34, 197, 94, .15), transparent 32%),
+    radial-gradient(circle at bottom right, rgba(37, 99, 235, .14), transparent 32%),
+    linear-gradient(135deg, #ffffff 0%, #f8fbff 58%, #eef6ff 100%);
+  box-shadow: 0 18px 44px rgba(30, 64, 175, .1);
+}
+
+.teacher-advisory-panel .panel-head {
+  margin: -18px -18px 16px;
+  padding: 18px;
+  border-bottom: 1px solid rgba(197, 217, 255, .78);
+  background: linear-gradient(112deg, #0f766e 0%, #2563eb 58%, #7c3aed 100%);
+  color: #fff;
+}
+
+.teacher-advisory-panel .panel-head .eyebrow,
+.teacher-advisory-panel .panel-head h2,
+.teacher-advisory-panel .panel-head small {
+  color: #fff;
+}
+
+.teacher-advisory-form {
+  margin-bottom: 16px;
+  padding: 14px;
+  border: 1px solid #d6e4ff;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .84);
+}
+
+.teacher-advisory-form textarea {
+  min-height: 92px;
+}
+
+.teacher-advisory-list {
+  display: grid;
+  gap: 12px;
+}
+
+.teacher-advisory-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: start;
+  padding: 14px;
+  border: 1px solid #d8e5ff;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, .92);
+  box-shadow: 0 12px 30px rgba(37, 99, 235, .08);
+}
+
+.teacher-advisory-card h3 {
+  margin: 4px 0 6px;
+  color: #17337a;
+}
+
+.teacher-advisory-card p {
+  margin: 0 0 8px;
+  color: #263f5f;
+  font-weight: 760;
+  line-height: 1.45;
+}
+
+.teacher-advisory-explanation {
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid #bfe3d8;
+  border-radius: 8px;
+  background: #effdf7;
+  color: #134e4a;
+  font-weight: 750;
+}
+
+.teacher-advisory-explanation small {
+  display: block;
+  margin-bottom: 4px;
+  color: #0f766e;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+@media (max-width: 760px) {
+  .teacher-advisory-card {
+    grid-template-columns: 1fr;
+  }
+
+  .teacher-advisory-card .teacher-notice-actions {
+    justify-items: stretch;
+  }
+}
+
 .report-option-strip {
   display: flex;
   justify-content: flex-start;
@@ -6336,6 +6429,72 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
 #dueFeesSearch .fee-filter-bar {
   grid-template-columns: minmax(132px, .8fr) minmax(112px, .65fr) minmax(128px, .75fr) 108px minmax(230px, 1.4fr);
   align-items: end;
+}
+
+#dueFeesSearch .panel-head {
+  position: sticky;
+  top: 0;
+  z-index: 24;
+  margin: -20px -20px 0;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid rgba(216, 224, 234, .92);
+  background: rgba(255, 255, 255, .96);
+  backdrop-filter: blur(10px);
+}
+
+#dueFeesSearch .fee-filter-bar {
+  position: sticky;
+  top: 80px;
+  z-index: 23;
+  margin: 0 -20px 14px;
+  padding: 12px 20px;
+  border-bottom: 1px solid rgba(216, 224, 234, .92);
+  background: rgba(248, 251, 255, .97);
+  backdrop-filter: blur(10px);
+}
+
+#dueFeesSearch .fee-filter-bar .due-fees-student-search-label {
+  color: #0f5f67;
+  padding: 8px 10px;
+  border: 1px solid rgba(20, 121, 139, .26);
+  border-radius: 8px;
+  background: linear-gradient(135deg, #e8fbf7, #eef7ff);
+  box-shadow: 0 10px 22px rgba(20, 121, 139, .1);
+}
+
+#dueFeesSearch #dueFeesStudentSearch {
+  min-height: 44px;
+  border-color: rgba(20, 121, 139, .42);
+  background: #ffffff;
+  color: #0f172a;
+  font-weight: 850;
+  box-shadow: inset 0 0 0 1px rgba(20, 121, 139, .08);
+}
+
+#dueFeesSearch #dueFeesStudentSearch::placeholder {
+  color: #4d7382;
+  font-weight: 800;
+}
+
+#dueFeesSearch #dueFeesStudentSearch:focus {
+  outline: 3px solid rgba(20, 121, 139, .18);
+  border-color: #14798b;
+}
+
+#dueFeesSearch .table-wrap {
+  max-height: calc(100vh - 270px);
+  overflow: auto;
+  border: 1px solid rgba(216, 224, 234, .9);
+  border-radius: 8px;
+}
+
+#dueFeesSearch table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 12;
+  border-bottom: 1px solid rgba(190, 202, 218, .95);
+  background: #f7fbff;
+  box-shadow: 0 1px 0 rgba(216, 224, 234, .9);
 }
 
 #dueFeesSearch .due-fees-head-actions {

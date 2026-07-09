@@ -11,7 +11,7 @@
       location.replace("http://127.0.0.1:4174/anps-erp.html#dashboard");
     }
   </script>
-  <link rel="stylesheet" href="./new-school-os.css?v=20260709-dashboard-fees-permission" />
+  <link rel="stylesheet" href="./new-school-os.css?v=20260709-teacher-advisory" />
 </head>
 <body>
   <div class="shell">
@@ -71,6 +71,7 @@
             <button data-view="leaveType" type="button">Leave Type</button>
             <button data-view="approveLeave" type="button">Approval Leave Request</button>
             <button data-view="teachersRating" type="button">Teachers Rating</button>
+            <button data-view="teacherAdvisory" type="button">Teacher Advisory</button>
             <button data-view="department" type="button">HR Setup</button>
             <button data-view="disabledStaff" type="button">Disabled Staff</button>
           </div>
@@ -728,7 +729,7 @@
                 <option>Mar</option>
               </select>
             </label>
-            <label>Search Student
+            <label class="due-fees-student-search-label">Search Student
               <input id="dueFeesStudentSearch" placeholder="Admission last no., name, last name or village" />
             </label>
           </div>
@@ -1474,6 +1475,50 @@
           </div>
           <div class="teacher-notice-request-grid" id="teacherNoticeRequestRows">
             <article class="teacher-notice-empty">No teacher notice request yet.</article>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="teacherAdvisory">
+        <div class="panel teacher-advisory-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Staff Communication</p>
+              <h2>Teacher Advisory</h2>
+              <small>Send private advisories to teachers and review their explanations from the teacher app.</small>
+            </div>
+            <span class="status-pill live" id="teacherAdvisoryCount">0 open</span>
+          </div>
+          <form class="fee-form teacher-advisory-form" id="teacherAdvisoryForm">
+            <label>Teacher
+              <select id="teacherAdvisoryTeacher" required></select>
+            </label>
+            <label>Category
+              <select id="teacherAdvisoryCategory">
+                <option>Academic Conduct</option>
+                <option>Classroom Discipline</option>
+                <option>Teaching Quality</option>
+                <option>Parent Feedback</option>
+                <option>General Advisory</option>
+              </select>
+            </label>
+            <label>Priority
+              <select id="teacherAdvisoryPriority">
+                <option>Normal</option>
+                <option>Important</option>
+                <option>Urgent</option>
+              </select>
+            </label>
+            <label>Subject
+              <input id="teacherAdvisorySubject" placeholder="Advisory subject" required />
+            </label>
+            <label class="wide">Message
+              <textarea id="teacherAdvisoryMessage" placeholder="Write the advisory message for the teacher" required></textarea>
+            </label>
+            <button class="primary-action" type="submit">Send Advisory</button>
+          </form>
+          <div class="teacher-advisory-list" id="teacherAdvisoryRows">
+            <article class="teacher-notice-empty">No teacher advisory yet.</article>
           </div>
         </div>
       </section>
@@ -3603,6 +3648,6 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="./new-school-os.js?v=20260709-daily-collection-flow"></script>
+  <script src="./new-school-os.js?v=20260709-teacher-advisory"></script>
 </body>
 </html>

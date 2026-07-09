@@ -682,6 +682,50 @@ def send_birthday_push(payload, user):
     )
 
 
+def send_teacher_advisory_push(payload):
+    advisory = payload.get("advisory") if isinstance(payload.get("advisory"), dict) else payload
+    state = read_state() or {}
+    teacher_id = str(advisory.get("teacherId") or advisory.get("teacherLoginId") or "").strip().lower()
+    teacher_name = str(advisory.get("teacherName") or "").strip().lower()
+    tokens = []
+    matched_records = []
+    for item in state.get("mobilePushTokens", []) or []:
+        if not isinstance(item, dict) or not item.get("token"):
+            continue
+        if str(item.get("enabled", "true")).lower() in {"false", "0", "no", "disabled"}:
+            continue
+        role = str(item.get("role") or "").strip().lower()
+        user_id = str(item.get("userId") or "").strip().lower()
+        name = str(item.get("name") or "").strip().lower()
+        if role and role not in {"teacher", "staff", "admin", "master admin"}:
+            continue
+        if teacher_id and user_id == teacher_id:
+            tokens.append(item.get("token"))
+            matched_records.append(item)
+            continue
+        if teacher_name and name == teacher_name:
+            tokens.append(item.get("token"))
+            matched_records.append(item)
+    subject = str(advisory.get("subject") or "Teacher Advisory").strip()
+    body = str(advisory.get("message") or "A new advisory has been sent from the school ERP.").strip()
+    if len(body) > 160:
+        body = body[:157].rstrip() + "..."
+    result = send_fcm_notifications(
+        list(dict.fromkeys(tokens)),
+        subject,
+        body,
+        {
+            "type": "teacher_advisory",
+            "advisoryId": str(advisory.get("id") or ""),
+            "teacherId": str(advisory.get("teacherId") or ""),
+            "priority": str(advisory.get("priority") or "Normal"),
+        },
+    )
+    result["targetDeviceCount"] = len(list(dict.fromkeys(tokens)))
+    result["matchedUserCount"] = len(matched_records)
+    return result
+
+
 def icici_gateway_missing_fields():
     required = {
         "ANPS_ICICI_MERCHANT_ID": ICICI_MERCHANT_ID,
@@ -2877,6 +2921,7 @@ def fresh_state():
         "transportMonthlyFees": [],
         "teacherAttendance": [],
         "teacherLeaves": [],
+        "teacherAdvisories": [],
         "studentComplaints": [],
         "audit": [],
         "role": "Admin",
@@ -3180,6 +3225,8 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             return self.homework_push_request()
         if path == "/api/notifications/birthday":
             return self.birthday_push_request()
+        if path == "/api/notifications/teacher-advisory":
+            return self.teacher_advisory_push_request()
         if path == "/api/payments/icici/create":
             return self.icici_payment_create_request()
         if path == "/api/smart-bus/sync-master-data":
@@ -3296,6 +3343,18 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
             token = self.headers.get("Authorization", "").replace("Bearer ", "", 1).strip()
             result = send_birthday_push(payload, get_session_user(token) or {})
+            self.json_response(result, status=200 if result.get("ok") or not result.get("configured") else 400)
+        except Exception as exc:
+            self.json_response({"ok": False, "error": str(exc)}, status=400)
+
+    def teacher_advisory_push_request(self):
+        length = int(self.headers.get("Content-Length") or "0")
+        if length > MAX_BODY:
+            self.send_error(413, "Request body too large")
+            return
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+            result = send_teacher_advisory_push(payload)
             self.json_response(result, status=200 if result.get("ok") or not result.get("configured") else 400)
         except Exception as exc:
             self.json_response({"ok": False, "error": str(exc)}, status=400)

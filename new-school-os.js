@@ -13,6 +13,7 @@ const dues = [];
 const notices = [];
 const teacherNoticeRequests = [];
 const teacherLeaves = [];
+const teacherAdvisories = [];
 const homework = [];
 const admissionEnquiries = [];
 const complaintRecords = [];
@@ -286,6 +287,7 @@ const titleMap = {
   leaveType: "Leave Type",
   approveLeave: "Approval Leave Request",
   teachersRating: "Teachers Rating",
+  teacherAdvisory: "Teacher Advisory",
   department: "HR Setup",
   designation: "Designation",
   disabledStaff: "Disabled Staff",
@@ -340,7 +342,7 @@ const ACCESS_PERMISSION_GROUPS = [
   {name: "Front Office", modules: ["admissionEnquiry", "complaintRegister", "complaintsDesk"]},
   {name: "Student Information", modules: ["students", "studentAdmission", "disableStudent", "bulkDeleteStudent"]},
   {name: "Fees Collection", modules: ["finance", "feeBook", "dueFeesSearch", "upiPaymentVerification", "feeMaster", "feeGroup", "addClassSection", "tuitionFineSetup", "feeReminder"]},
-  {name: "Human Resources", modules: ["staffDetails", "staffAttendance", "applyLeave", "leaveType", "approveLeave", "teachersRating", "department", "designation", "disabledStaff"]},
+  {name: "Human Resources", modules: ["staffDetails", "staffAttendance", "applyLeave", "leaveType", "approveLeave", "teachersRating", "teacherAdvisory", "department", "designation", "disabledStaff"]},
   {name: "Communication", modules: ["noticeBoard", "teacherNoticeRequests", "sendSms"]},
   {name: "Homework", modules: ["addHomework", "teacherHomework", "dailyAssignment"]},
   {name: "Reports", modules: ["reportStudentInformation", "dailyCollectionReport", "entireSchoolFeesReport"]},
@@ -458,6 +460,7 @@ function getAppStateSnapshot() {
     notices,
     teacherNoticeRequests,
     teacherLeaves,
+    teacherAdvisories,
     homework,
     admissionEnquiries,
     complaintRecords,
@@ -753,7 +756,8 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
     transportRoutePickupPoints: ["routeName", "villageName", "shift"],
     notices: ["id", "title"],
     teacherNoticeRequests: ["id", "title", "teacherId"],
-    teacherLeaves: ["id", "teacherId", "from", "to", "type"]
+    teacherLeaves: ["id", "teacherId", "from", "to", "type"],
+    teacherAdvisories: ["id", "teacherId", "subject"]
   };
   merged.students = mergeStudentList(remoteState.students || [], localState.students || []);
   Object.entries(objectRules).forEach(([key, fields]) => {
@@ -1021,6 +1025,9 @@ function applySavedState(saved = {}) {
     if (Array.isArray(saved.teacherLeaves)) {
       teacherLeaves.splice(0, teacherLeaves.length, ...saved.teacherLeaves);
     }
+    if (Array.isArray(saved.teacherAdvisories)) {
+      teacherAdvisories.splice(0, teacherAdvisories.length, ...saved.teacherAdvisories);
+    }
     if (Array.isArray(saved.homework)) {
       homework.splice(0, homework.length, ...saved.homework);
       pruneExpiredHomeworkAttachments();
@@ -1253,6 +1260,7 @@ function applyProductionCleanSeedOnce() {
   notices.splice(0, notices.length);
   teacherNoticeRequests.splice(0, teacherNoticeRequests.length);
   teacherLeaves.splice(0, teacherLeaves.length);
+  teacherAdvisories.splice(0, teacherAdvisories.length);
   homework.splice(0, homework.length);
   admissionEnquiries.splice(0, admissionEnquiries.length);
   complaintRecords.splice(0, complaintRecords.length);
@@ -1667,6 +1675,7 @@ function renderActiveView(viewName = document.querySelector(".view.active")?.id 
   if (viewName === "department") renderHrSetup();
   if (viewName === "staffAttendance") renderStaffAttendance();
   if (viewName === "approveLeave") renderLeaveApprovalRequests();
+  if (viewName === "teacherAdvisory") renderTeacherAdvisory();
   if (viewName === "disableStudent") renderDisabledStudents();
   if (viewName === "noticeBoard") renderNoticeBoard();
   if (viewName === "teacherNoticeRequests") renderTeacherNoticeRequests();
@@ -2879,14 +2888,20 @@ function renderDailyCashTrendChart() {
   const total = document.getElementById("dailyCashTrendTotal");
   const note = document.getElementById("dailyCashTrendNote");
   if (!chart || !total || !note) return;
+  const today = parseDateDDMMYYYY(new Date());
   const rows = getDailyCollectionReportRows()
     .filter(row => Number(row.cash || 0) > 0 || Number(row.total || 0) > 0)
-    .slice(0, 14)
+    .filter(row => {
+      const date = parseDateDDMMYYYY(row.date);
+      return !Number.isNaN(date.getTime())
+        && date.getMonth() === today.getMonth()
+        && date.getFullYear() === today.getFullYear();
+    })
     .reverse();
   if (!rows.length) {
     chart.innerHTML = `<div class="empty-chart">No daily collection found yet.</div>`;
     total.textContent = "Rs. 0";
-    note.textContent = "Daily collections will appear here after fee entry.";
+    note.textContent = "This month's collections will appear here after fee entry.";
     return;
   }
   const maxTotal = Math.max(...rows.map(row => Number(row.total || 0)), 1);
@@ -2894,7 +2909,7 @@ function renderDailyCashTrendChart() {
   const bankTotal = rows.reduce((sum, row) => sum + Number(row.bank || 0), 0);
   const grandTotal = rows.reduce((sum, row) => sum + Number(row.total || 0), 0);
   total.textContent = formatRs(grandTotal);
-  note.textContent = `Last ${rows.length} collection day(s) | Cash ${formatRs(cashTotal)} | Bank ${formatRs(bankTotal)}`;
+  note.textContent = `This month | ${rows.length} collection day(s) | Cash ${formatRs(cashTotal)} | Bank ${formatRs(bankTotal)}`;
   chart.innerHTML = `
     <div class="daily-cash-bars" role="img" aria-label="Daily collection bar graph">
       ${rows.map((row, index) => {
@@ -5407,6 +5422,31 @@ async function sendHomeworkPushNotification(homeworkEntry = {}) {
   }
 }
 
+async function sendTeacherAdvisoryPushNotification(advisory = {}) {
+  try {
+    const response = await backendFetch("/api/notifications/teacher-advisory", {
+      method: "POST",
+      headers: backendHeaders({"Content-Type": "application/json"}),
+      body: JSON.stringify({advisory})
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!result.configured) {
+      showToast("Advisory saved. Firebase Cloud Messaging is not configured yet.");
+      return;
+    }
+    if (result.ok) {
+      const targetCount = Number(result.targetDeviceCount || 0);
+      const sentCount = Number(result.sent || 0);
+      showToast(targetCount ? `Teacher advisory notification sent to ${sentCount}/${targetCount} device(s).` : "Advisory saved. No registered teacher device found.");
+    } else {
+      showToast(result.error || "Advisory saved, but push notification failed.");
+    }
+  } catch (error) {
+    console.warn("Teacher advisory push notification failed.", error);
+    showToast("Advisory saved, but push notification could not be sent.");
+  }
+}
+
 function renderNoticeAudienceOptions() {
   const classSelect = document.getElementById("noticeClassSelect");
   const sectionSelect = document.getElementById("noticeSectionSelect");
@@ -5554,6 +5594,71 @@ function rejectTeacherNoticeRequest(requestId) {
   saveAppState();
   renderTeacherNoticeRequests();
   showToast("Teacher notice request rejected.");
+}
+
+function teacherAdvisoryStatusTone(status = "") {
+  const clean = String(status || "").trim().toLowerCase();
+  if (clean === "closed" || clean === "resolved") return "stable";
+  if (clean === "explained" || clean === "replied") return "pending";
+  if (clean === "urgent") return "due";
+  return "live";
+}
+
+function teacherAdvisoryTeacherOptions() {
+  const activeStaff = staffMembers.filter(staff => !["disabled", "inactive"].includes(String(staff.status || "").trim().toLowerCase()));
+  const teachers = activeStaff.filter(staff => {
+    const text = `${staff.role || ""} ${staff.designation || ""} ${staff.department || ""}`.toLowerCase();
+    return text.includes("teacher") || staff.teachingSubject || staff.assignedClass;
+  });
+  const list = teachers.length ? teachers : activeStaff;
+  return `<option value="">Select teacher</option>${list.map(staff => {
+    const value = staff.staffId || staff.loginId || staff.email || staff.name || "";
+    const label = `${staff.name || value}${staff.staffId ? ` (${staff.staffId})` : ""}${staff.designation ? ` - ${staff.designation}` : ""}`;
+    return `<option value="${escapeHtml(value)}">${escapeHtml(label)}</option>`;
+  }).join("")}`;
+}
+
+function getTeacherAdvisoryStaff(staffId = "") {
+  const clean = String(staffId || "").trim().toLowerCase();
+  return staffMembers.find(staff =>
+    String(staff.staffId || "").trim().toLowerCase() === clean
+    || String(staff.loginId || "").trim().toLowerCase() === clean
+    || String(staff.email || "").trim().toLowerCase() === clean
+    || String(staff.name || "").trim().toLowerCase() === clean
+  ) || {};
+}
+
+function renderTeacherAdvisory() {
+  const teacherSelect = document.getElementById("teacherAdvisoryTeacher");
+  const rows = document.getElementById("teacherAdvisoryRows");
+  const count = document.getElementById("teacherAdvisoryCount");
+  if (teacherSelect) {
+    const selected = teacherSelect.value;
+    teacherSelect.innerHTML = teacherAdvisoryTeacherOptions();
+    if (selected) teacherSelect.value = selected;
+  }
+  const open = teacherAdvisories.filter(item => !["Closed", "Resolved"].includes(item.status || ""));
+  if (count) count.textContent = `${open.length} open`;
+  if (!rows) return;
+  rows.innerHTML = teacherAdvisories.map(item => {
+    const status = item.status || "Sent";
+    const explanation = String(item.explanation || "").trim();
+    return `
+      <article class="teacher-advisory-card">
+        <div>
+          <span class="teacher-notice-meta">${escapeHtml(item.teacherName || "Teacher")} | ${escapeHtml(item.category || "Advisory")} | ${escapeHtml(item.date || "-")}</span>
+          <h3>${escapeHtml(item.subject || "-")}</h3>
+          <p>${escapeHtml(item.message || "-")}</p>
+          ${explanation ? `<div class="teacher-advisory-explanation"><strong>Teacher Explanation</strong><p>${escapeHtml(explanation)}</p><small>${escapeHtml(item.explainedAt || "")}</small></div>` : `<small>Teacher explanation pending.</small>`}
+        </div>
+        <div class="teacher-notice-actions">
+          <span class="status-pill ${teacherAdvisoryStatusTone(status)}">${escapeHtml(status)}</span>
+          <small>Priority: ${escapeHtml(item.priority || "Normal")}</small>
+          ${status !== "Closed" ? `<button class="ghost-action mini" type="button" data-close-teacher-advisory="${escapeHtml(item.id)}">Close</button>` : ""}
+        </div>
+      </article>
+    `;
+  }).join("") || `<article class="teacher-notice-empty">No teacher advisory yet.</article>`;
 }
 
 function renderHomeworkSubjectOptions({ preserveSubject = true } = {}) {
@@ -13021,6 +13126,53 @@ document.getElementById("teacherNoticeRequestRows")?.addEventListener("click", e
   if (rejectButton) {
     rejectTeacherNoticeRequest(rejectButton.dataset.rejectTeacherNotice);
   }
+});
+
+document.getElementById("teacherAdvisoryForm")?.addEventListener("submit", event => {
+  event.preventDefault();
+  const teacherId = String(document.getElementById("teacherAdvisoryTeacher")?.value || "").trim();
+  const staff = getTeacherAdvisoryStaff(teacherId);
+  if (!teacherId || !staff.name) {
+    showToast("Select a teacher first.");
+    return;
+  }
+  const advisory = {
+    id: `TADV-${Date.now()}`,
+    teacherId: staff.staffId || teacherId,
+    teacherLoginId: staff.loginId || staff.email || "",
+    teacherName: staff.name || teacherId,
+    teacherDesignation: staff.designation || staff.role || "",
+    category: document.getElementById("teacherAdvisoryCategory")?.value || "General Advisory",
+    priority: document.getElementById("teacherAdvisoryPriority")?.value || "Normal",
+    subject: String(document.getElementById("teacherAdvisorySubject")?.value || "").trim(),
+    message: String(document.getElementById("teacherAdvisoryMessage")?.value || "").trim(),
+    status: "Sent",
+    date: formatDateDDMMYYYY(new Date()),
+    sentBy: getCurrentTopbarRole(),
+    createdAt: new Date().toISOString()
+  };
+  if (!advisory.subject || !advisory.message) {
+    showToast("Subject and message are required.");
+    return;
+  }
+  teacherAdvisories.unshift(advisory);
+  saveAppState();
+  renderTeacherAdvisory();
+  event.target.reset();
+  sendTeacherAdvisoryPushNotification(advisory);
+});
+
+document.getElementById("teacherAdvisoryRows")?.addEventListener("click", event => {
+  const closeButton = event.target.closest("[data-close-teacher-advisory]");
+  if (!closeButton) return;
+  const item = teacherAdvisories.find(advisory => String(advisory.id || "") === closeButton.dataset.closeTeacherAdvisory);
+  if (!item) return;
+  item.status = "Closed";
+  item.closedAt = new Date().toISOString();
+  item.closedBy = getCurrentTopbarRole();
+  saveAppState();
+  renderTeacherAdvisory();
+  showToast("Teacher advisory closed.");
 });
 
 classTeacherAssignmentForm?.addEventListener("submit", event => {

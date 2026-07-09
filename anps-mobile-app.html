@@ -755,6 +755,12 @@
       font-size: .94rem;
       text-shadow: 0 2px 8px rgba(16,26,74,.22);
     }
+    .module[data-nav="advisory"] .module-icon {
+      background: linear-gradient(135deg, #40238f, #f06c9b 52%, #f8bd45);
+      color: #fff;
+      font-size: .94rem;
+      text-shadow: 0 2px 8px rgba(16,26,74,.22);
+    }
     .module[data-nav="calendar"] .module-icon {
       background: linear-gradient(135deg, #185ca8, #22c8a6 54%, #f8bd45);
       color: #fff;
@@ -1628,6 +1634,11 @@
           <div class="stack" id="teacherComplaintList"></div>
         </section>
 
+        <section class="view" id="advisoryView">
+          <div class="section-title"><h2>Teacher Advisory</h2><span id="advisoryTotal"></span></div>
+          <div class="stack" id="advisoryList"></div>
+        </section>
+
         <section class="view" id="ratingView">
           <div class="section-title"><h2 id="ratingTitle">Teacher Rating</h2><span id="ratingTotal"></span></div>
           <div class="stack" id="ratingFormHost"></div>
@@ -1926,6 +1937,43 @@
         state.erpState = saved.state || erpState;
         state.erpUpdatedAt = saved.updated_at || "";
         activitySession.lastSavedAt = now.getTime();
+      },
+      async submitTeacherAdvisoryExplanation(advisoryId, explanation) {
+        const applyExplanation = sourceState => {
+          const list = Array.isArray(sourceState.teacherAdvisories) ? [...sourceState.teacherAdvisories] : [];
+          const index = list.findIndex(item => normalizeText(item.id) === normalizeText(advisoryId));
+          if (index < 0) throw new Error("Teacher advisory not found.");
+          list[index] = {
+            ...list[index],
+            explanation: String(explanation || "").trim(),
+            explainedAt: new Date().toISOString(),
+            status: "Explained"
+          };
+          sourceState.teacherAdvisories = list;
+          return list[index];
+        };
+        const latest = await this.request("/state", { method: "GET" });
+        const erpState = latest.state || {};
+        const updatedRecord = applyExplanation(erpState);
+        const saved = await this.saveStateWithConflictRetry(erpState, latest.updated_at || "");
+        let savedState = saved.state || erpState;
+        const savedRecord = (savedState.teacherAdvisories || []).find(item => normalizeText(item.id) === normalizeText(advisoryId));
+        if (!normalizeText(savedRecord?.explanation)) {
+          const fresh = await this.request("/state", { method: "GET" });
+          const freshState = fresh.state || {};
+          const replayedRecord = applyExplanation(freshState);
+          const replayed = await this.request("/state", {
+            method: "POST",
+            body: JSON.stringify({state: freshState, base_updated_at: fresh.updated_at || ""})
+          });
+          savedState = replayed.state || freshState;
+          state.erpState = savedState;
+          state.erpUpdatedAt = replayed.updated_at || "";
+          return replayedRecord;
+        }
+        state.erpState = savedState;
+        state.erpUpdatedAt = saved.updated_at || "";
+        return updatedRecord;
       }
     }
 
@@ -2150,7 +2198,8 @@
         results: "marksheetEntries",
         ratings: "teacherRatings",
         leaves: "teacherLeaves",
-        timetable: "classTimetableEntries"
+        timetable: "classTimetableEntries",
+        advisories: "teacherAdvisories"
       };
       return map[collection] || collection;
     }
@@ -2561,6 +2610,11 @@
           normalizeText(item.teacherId) === normalizeText(state.user.id)
           || normalizeText(item.teacherName).toLowerCase() === normalizeText(state.user.name).toLowerCase()
         ),
+        teacherAdvisories: (erpState.teacherAdvisories || []).filter(item =>
+          normalizeText(item.teacherId) === normalizeText(state.user.id)
+          || normalizeText(item.teacherLoginId).toLowerCase() === normalizeText(userId).toLowerCase()
+          || normalizeText(item.teacherName).toLowerCase() === normalizeText(state.user.name).toLowerCase()
+        ),
         complaints: erpState.complaintRecords || [],
         teacherComplaints: [],
         ratings: (erpState.teacherRatings || []).filter(item => normalizeText(item.teacherId) === normalizeText(state.user.id)),
@@ -2595,6 +2649,7 @@
       { id: "homework", label: "Homework Entry", icon: "HW" },
       { id: "classwork", label: "Classwork Entry", icon: "CW" },
       { id: "notice", label: "Notice", icon: "NT" },
+      { id: "advisory", label: "Teacher Advisory", icon: "TA" },
       { id: "reminder", label: "Reminder", icon: "RM" },
       { id: "calendar", label: "Academic Calendar", icon: "AC" },
       { id: "complaints", label: "Complaints", icon: "CP" },
@@ -2612,6 +2667,30 @@
 
     function card({ title, meta, body, badge, status = "ok", className = "" }) {
       return `<article class="card ${className}"><div class="card-head"><div><h3>${title}</h3><p>${meta}</p></div>${badge ? `<span class="status ${status}">${badge}</span>` : ""}</div>${body ? `<p>${body}</p>` : ""}</article>`;
+    }
+
+    function teacherAdvisoryCard(item = {}) {
+      const status = item.status || "Sent";
+      const tone = status === "Closed" ? "ok" : status === "Explained" ? "warn" : "bad";
+      const explanation = normalizeText(item.explanation);
+      const explanationForm = status !== "Closed"
+        ? `<form class="form-grid teacher-advisory-explain-form" data-advisory-explain="${escapeHtml(item.id || "")}">
+            <label>Explanation<textarea name="explanation" placeholder="Write your explanation" required>${escapeHtml(explanation)}</textarea></label>
+            <button class="primary" type="submit">${explanation ? "Update Explanation" : "Submit Explanation"}</button>
+          </form>`
+        : "";
+      return `<article class="card notice-card">
+        <div class="card-head">
+          <div>
+            <h3>${escapeHtml(item.subject || "Teacher Advisory")}</h3>
+            <p>${escapeHtml(item.category || "Advisory")} | ${escapeHtml(item.date || "-")} | Priority: ${escapeHtml(item.priority || "Normal")}</p>
+          </div>
+          <span class="status ${tone}">${escapeHtml(status)}</span>
+        </div>
+        <p>${escapeHtml(item.message || "")}</p>
+        ${explanation ? `<p><strong>Your explanation:</strong> ${escapeHtml(explanation)}</p>` : ""}
+        ${explanationForm}
+      </article>`;
     }
 
     function reminderStorageKey() {
@@ -3601,6 +3680,10 @@
         : card({ title: "Complaint Entry Locked", meta: "No class assigned", body: "Students will appear here after class timetable or class assignment is available.", badge: "Restricted", status: "warn" });
       $("#complaintTotal").textContent = `${ws.complaints.length} records`;
       $("#complaintList").innerHTML = ws.complaints.map(item => card({ title: `${item.studentName} - ${item.type}`, meta: `${item.date}${item.scope === "education" ? " | Education" : ""}`, body: item.note, badge: item.source === "student" ? "Student" : "Logged", status: "warn" })).join("");
+      $("#advisoryTotal").textContent = `${(ws.teacherAdvisories || []).length} records`;
+      $("#advisoryList").innerHTML = (ws.teacherAdvisories || []).length
+        ? (ws.teacherAdvisories || []).map(item => teacherAdvisoryCard(item)).join("")
+        : card({ title: "No Teacher Advisory", meta: "No advisory has been sent to you.", body: "Private advisories from the school ERP will appear here.", badge: "Clear", status: "ok" });
       const summary = ratingSummary(ws.ratings);
       $("#ratingTitle").textContent = "My Ratings";
       $("#ratingTotal").textContent = `${summary.avg}/5`;
@@ -3629,6 +3712,34 @@
         state.teacherTimetableClass = event.target.value;
         renderTeacherViews();
       });
+      document.querySelectorAll("[data-advisory-explain]").forEach(form => form.addEventListener("submit", async event => {
+        event.preventDefault();
+        const advisoryId = form.dataset.advisoryExplain || "";
+        const explanation = form.elements.explanation?.value || "";
+        if (!explanation.trim()) {
+          toast("Explanation is required.");
+          return;
+        }
+        const button = form.querySelector("button[type='submit']");
+        if (button) {
+          button.disabled = true;
+          button.classList.add("clicked", "saving");
+          button.textContent = "Submitting...";
+        }
+        try {
+          await AppApi.submitTeacherAdvisoryExplanation(advisoryId, explanation);
+          state.workspace = await AppApi.workspace("teacher", state.user.id);
+          renderTeacherViews();
+          toast("Explanation sent to ERP.");
+        } catch (error) {
+          toast(error.message || "Explanation could not be submitted.");
+          if (button) {
+            button.disabled = false;
+            button.classList.remove("clicked", "saving");
+            button.textContent = "Submit Explanation";
+          }
+        }
+      }));
       document.querySelectorAll(".toggle button").forEach(btn => btn.addEventListener("click", () => {
         btn.parentElement.querySelectorAll("button").forEach(item => item.classList.remove("active"));
         btn.classList.add("active");
