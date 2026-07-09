@@ -2884,24 +2884,27 @@ function renderDailyCashTrendChart() {
     .slice(0, 14)
     .reverse();
   if (!rows.length) {
-    chart.innerHTML = `<div class="empty-chart">No daily cash collection found yet.</div>`;
+    chart.innerHTML = `<div class="empty-chart">No daily collection found yet.</div>`;
     total.textContent = "Rs. 0";
-    note.textContent = "Cash collections will appear here after fee entry.";
+    note.textContent = "Daily collections will appear here after fee entry.";
     return;
   }
-  const maxCash = Math.max(...rows.map(row => Number(row.cash || 0)), 1);
+  const maxTotal = Math.max(...rows.map(row => Number(row.total || 0)), 1);
   const cashTotal = rows.reduce((sum, row) => sum + Number(row.cash || 0), 0);
   const bankTotal = rows.reduce((sum, row) => sum + Number(row.bank || 0), 0);
-  total.textContent = formatRs(cashTotal);
-  note.textContent = `Last ${rows.length} collection day(s) | Bank ${formatRs(bankTotal)}`;
+  const grandTotal = rows.reduce((sum, row) => sum + Number(row.total || 0), 0);
+  total.textContent = formatRs(grandTotal);
+  note.textContent = `Last ${rows.length} collection day(s) | Cash ${formatRs(cashTotal)} | Bank ${formatRs(bankTotal)}`;
   chart.innerHTML = `
-    <div class="daily-cash-bars" role="img" aria-label="Daily cash collection bar graph">
+    <div class="daily-cash-bars" role="img" aria-label="Daily collection bar graph">
       ${rows.map((row, index) => {
         const cash = Number(row.cash || 0);
-        const height = Math.max(10, Math.round((cash / maxCash) * 100));
+        const bank = Number(row.bank || 0);
+        const dayTotal = Number(row.total || 0);
+        const height = Math.max(10, Math.round((dayTotal / maxTotal) * 100));
         return `
-        <div class="daily-cash-bar ${index === rows.length - 1 ? "is-latest" : ""}" title="${escapeHtml(row.date)} | Cash ${escapeHtml(formatRs(cash))} | Total ${escapeHtml(formatRs(row.total))}">
-          <strong>${escapeHtml(formatRs(cash).replace("Rs. ", ""))}</strong>
+        <div class="daily-cash-bar ${index === rows.length - 1 ? "is-latest" : ""}" title="${escapeHtml(row.date)} | Total ${escapeHtml(formatRs(dayTotal))} | Cash ${escapeHtml(formatRs(cash))} | Bank ${escapeHtml(formatRs(bank))}">
+          <strong>${escapeHtml(formatRs(dayTotal).replace("Rs. ", ""))}</strong>
           <span style="height:${height}%"></span>
           <small>${escapeHtml(shortCollectionDateLabel(row.date))}</small>
         </div>
