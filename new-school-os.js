@@ -263,6 +263,7 @@ const classSubjectAssignments = {};
 
 const titleMap = {
   dashboard: "Dashboard",
+  dashboardFeesCollection: "Dashboard Fees Collection",
   admissionEnquiry: "Admission Enquiry",
   complaintRegister: "Complaint Register",
   complaintsDesk: "Complaint Book",
@@ -335,7 +336,7 @@ const ACCESS_PERMISSION_MODULES = Object.keys(titleMap);
 
 const ACCESS_ACTIONS = ["view", "add", "edit", "delete", "print"];
 const ACCESS_PERMISSION_GROUPS = [
-  {name: "Dashboard", modules: ["dashboard"]},
+  {name: "Dashboard", modules: ["dashboard", "dashboardFeesCollection"]},
   {name: "Front Office", modules: ["admissionEnquiry", "complaintRegister", "complaintsDesk"]},
   {name: "Student Information", modules: ["students", "studentAdmission", "disableStudent", "bulkDeleteStudent"]},
   {name: "Fees Collection", modules: ["finance", "feeBook", "dueFeesSearch", "upiPaymentVerification", "feeMaster", "feeGroup", "addClassSection", "tuitionFineSetup", "feeReminder"]},
@@ -1524,6 +1525,12 @@ function canCurrentRoleAccessView(viewName = "") {
   if (!viewName || viewName === "dashboard" || isCurrentRoleAdmin()) return true;
   const permissions = normalizeRolePermission(getCurrentTopbarRole());
   return permissions?.[viewName]?.view !== false;
+}
+
+function canCurrentRoleAccessModule(moduleId = "", action = "view") {
+  if (!moduleId || isCurrentRoleAdmin()) return true;
+  const permissions = normalizeRolePermission(getCurrentTopbarRole());
+  return permissions?.[moduleId]?.[action] === true;
 }
 
 function updateRoleBasedNavigation() {
@@ -7029,10 +7036,12 @@ function renderFinanceSession(includeTables = true) {
   const dashboardMonthly = getDashboardMonthlyFeeCollectionSummary();
   const dashboardFollowUps = getDashboardDueFollowUps();
   const dashboardHighPriority = dashboardFollowUps.filter(item => item.status === "High Priority").length;
+  const feesKpiCard = document.querySelector(".kpi-card.fees-kpi");
+  if (feesKpiCard) feesKpiCard.hidden = !canCurrentRoleAccessModule("dashboardFeesCollection");
   document.getElementById("academicYearText").textContent = `Academic year ${activeSession}`;
   document.getElementById("sessionSummaryText").textContent = session.summary;
   document.getElementById("kpiFeesCollected").textContent = formatRs(dashboardMonthly.collected);
-  document.getElementById("kpiFeesNote").textContent = `${dashboardMonthly.percent}% monthly fees collected, Annual Fee excluded`;
+  document.getElementById("kpiFeesNote").textContent = `${dashboardMonthly.percent}% monthly fees collected, yearly fees excluded`;
   const monthlyBreakdown = document.getElementById("kpiFeesMonthlyBreakdown");
   if (monthlyBreakdown) {
     monthlyBreakdown.innerHTML = dashboardMonthly.monthlyBreakdown.map(item => `
@@ -7056,7 +7065,9 @@ function renderFinanceSession(includeTables = true) {
 
 function isDashboardMonthlyFeeHead(head = "") {
   const clean = String(head || "").trim();
-  if (!clean || clean === "Annual Fee") return false;
+  const normalized = clean.toLowerCase();
+  const yearlyHeads = ["admission fee", "annual fee", "form fee"];
+  if (!clean || yearlyHeads.includes(normalized)) return false;
   if (["Tuition Late Fine", "Transport Late Fine"].includes(clean)) return false;
   return true;
 }
