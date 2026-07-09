@@ -5196,14 +5196,86 @@ function renderDues() {
       <td><strong>${formatRs(item.totalDue)}</strong><small>${escapeHtml(item.summary)}</small></td>
       <td><span class="badge ${item.priorityClass}">${escapeHtml(item.status)}</span></td>
     </tr>
-  `).join("") || `<tr><td colspan="4">No active fee follow-ups. Paid students will stay clear here.</td></tr>`;
+  `).join("") || `<tr><td colspan="4">No active due or late-payment follow-up found.</td></tr>`;
+}
+
+function getLateFinePaymentProfile(student = {}) {
+  const payments = getSessionPayments(student.admissionNo);
+  const monthProfile = ACADEMIC_MONTHS.reduce((profile, month) => {
+    profile[month] = {lateFine: 0, onTimePaid: false, latestLateDate: null};
+    return profile;
+  }, {});
+  payments.forEach(payment => {
+    const paymentDate = parseDateDDMMYYYY(payment.date || new Date());
+    (payment.allocations || []).forEach(allocation => {
+      const head = String(allocation.head || "");
+      const amount = Number(allocation.amount || 0);
+      const month = String(allocation.month || "");
+      if (!ACADEMIC_MONTHS.includes(month) || amount <= 0) return;
+      const appliedDate = parseDateDDMMYYYY(allocation.date || payment.date || new Date());
+      if (["Tuition Late Fine", "Transport Late Fine"].includes(head)) {
+        if (appliedDate.getDate() <= 15 && paymentDate.getDate() <= 15) return;
+        monthProfile[month].lateFine += amount;
+        if (!monthProfile[month].latestLateDate || appliedDate > monthProfile[month].latestLateDate) {
+          monthProfile[month].latestLateDate = appliedDate;
+        }
+      }
+      if (["Tuition Fee", "Transport Fees"].includes(head) && appliedDate.getDate() <= 15 && paymentDate.getDate() <= 15) {
+        monthProfile[month].onTimePaid = true;
+      }
+    });
+  });
+  const today = parseDateDDMMYYYY(new Date());
+  let consecutiveLate = 0;
+  let maxConsecutiveLate = 0;
+  let recoveryStreak = 0;
+  let isLatePayer = false;
+  const lateMonths = [];
+  let latestDate = null;
+  ACADEMIC_MONTHS.forEach(month => {
+    if (getAcademicMonthDate(month, 1) > today) return;
+    const profile = monthProfile[month];
+    if (profile.lateFine > 0) {
+      consecutiveLate += 1;
+      maxConsecutiveLate = Math.max(maxConsecutiveLate, consecutiveLate);
+      recoveryStreak = 0;
+      lateMonths.push(month);
+      if (profile.latestLateDate && (!latestDate || profile.latestLateDate > latestDate)) latestDate = profile.latestLateDate;
+      if (consecutiveLate >= 3) isLatePayer = true;
+      return;
+    }
+    if (profile.onTimePaid) {
+      consecutiveLate = 0;
+      if (isLatePayer) {
+        recoveryStreak += 1;
+        if (recoveryStreak >= 2) isLatePayer = false;
+      }
+      return;
+    }
+    consecutiveLate = 0;
+    if (isLatePayer) recoveryStreak = 0;
+  });
+  const totalFinePaid = Object.values(monthProfile).reduce((sum, profile) => sum + Number(profile.lateFine || 0), 0);
+  return {
+    count: lateMonths.length,
+    isLatePayer,
+    maxConsecutiveLate,
+    recoveryStreak,
+    totalFinePaid,
+    latestDate,
+    lateMonths
+  };
 }
 
 function getDashboardDueFollowUps() {
   return getActiveStudents().map(student => {
+    const lateProfile = getLateFinePaymentProfile(student);
     const dueRows = getLedgerRows(student).map(row => {
       if (Array.isArray(row.months) && row.months.length) {
-        const details = getSearchDueMonthDetails(student, row);
+        const details = getSearchDueMonthDetails(student, row).filter(item => {
+          if (!item?.month) return true;
+          return getAcademicMonthDate(item.month, 16) <= new Date() || Number(item.fine || 0) > 0;
+        });
         const due = details.reduce((sum, item) => sum + Number(item.total || 0), 0);
         const fine = details.reduce((sum, item) => sum + Number(item.fine || 0), 0);
         const months = details.map(item => item.month);
@@ -5212,11 +5284,14 @@ function getDashboardDueFollowUps() {
       return Number(row.due || 0) > 0 ? row : null;
     }).filter(Boolean);
     const totalDue = dueRows.reduce((sum, row) => sum + Number(row.due || 0), 0);
-    if (totalDue <= 0) return null;
+    if (totalDue <= 0 && !lateProfile.isLatePayer) return null;
     const fineDue = dueRows.reduce((sum, row) => sum + Number(row.fine || 0), 0);
     const heads = dueRows.map(row => row.name).filter(Boolean);
     const periods = dueRows.flatMap(row => row.details?.map(item => item.month) || [row.period]).filter(Boolean);
-    const status = fineDue > 0 ? "High Priority" : totalDue >= 5000 ? "Call Today" : "Pending";
+    const status = fineDue > 0 ? "High Priority" : totalDue >= 5000 ? "Call Today" : lateProfile.isLatePayer ? "Late Payer" : "Pending";
+    const summary = totalDue > 0
+      ? `${[...new Set(heads)].slice(0, 2).join(", ")}${heads.length > 2 ? " +" : ""}${periods.length ? ` | ${[...new Set(periods)].slice(0, 3).join(", ")}` : ""}${lateProfile.isLatePayer ? ` | 3-month late pattern` : ""}`
+      : `3 consecutive late-fine months${lateProfile.latestDate ? ` | Last ${formatDateDDMMYYYY(lateProfile.latestDate)}` : ""}`;
     return {
       admissionNo: student.admissionNo || "",
       studentName: student.name || "Student",
@@ -5224,12 +5299,14 @@ function getDashboardDueFollowUps() {
       mobile: student.mobile || student.fatherMobile || student.motherMobile || "",
       totalDue,
       fineDue,
+      lateFineCount: lateProfile.count,
+      lateFinePaid: lateProfile.totalFinePaid,
       status,
-      priorityClass: status === "High Priority" ? "red" : status === "Call Today" ? "amber" : "blue",
-      summary: `${[...new Set(heads)].slice(0, 2).join(", ")}${heads.length > 2 ? " +" : ""}${periods.length ? ` | ${[...new Set(periods)].slice(0, 3).join(", ")}` : ""}`
+      priorityClass: status === "High Priority" ? "red" : status === "Call Today" || status === "Late Payer" ? "amber" : "blue",
+      summary
     };
   }).filter(Boolean)
-    .sort((a, b) => b.fineDue - a.fineDue || b.totalDue - a.totalDue)
+    .sort((a, b) => b.fineDue - a.fineDue || b.totalDue - a.totalDue || b.lateFineCount - a.lateFineCount || b.lateFinePaid - a.lateFinePaid)
     .slice(0, 8);
 }
 
