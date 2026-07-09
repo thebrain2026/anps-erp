@@ -7061,6 +7061,16 @@ function isDashboardMonthlyFeeHead(head = "") {
   return true;
 }
 
+function getDashboardPaymentMonth(payment = {}, allocation = {}) {
+  const allocationMonth = String(allocation.month || "").trim();
+  if (ACADEMIC_MONTHS.includes(allocationMonth)) return allocationMonth;
+  const dateValue = allocation.date || payment.date;
+  if (!dateValue) return "";
+  const date = parseDateDDMMYYYY(dateValue);
+  const month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][date.getMonth()];
+  return ACADEMIC_MONTHS.includes(month) ? month : "";
+}
+
 function getDashboardMonthlyFeeCollectionSummary() {
   const activeStudents = getActiveStudents();
   const expected = activeStudents.reduce((sum, student) => {
@@ -7076,10 +7086,11 @@ function getDashboardMonthlyFeeCollectionSummary() {
   const collected = Object.values(sessionPayments).reduce((sum, payments) => {
     return sum + (payments || []).reduce((paymentSum, payment) => {
       return paymentSum + (payment.allocations || []).reduce((allocationSum, allocation) => {
-        if (!allocation.month || !isDashboardMonthlyFeeHead(allocation.head)) return allocationSum;
+        if (!isDashboardMonthlyFeeHead(allocation.head)) return allocationSum;
         const amount = Number(allocation.amount || 0);
-        if (Object.prototype.hasOwnProperty.call(monthlyTotals, allocation.month)) {
-          monthlyTotals[allocation.month] += amount;
+        const dashboardMonth = getDashboardPaymentMonth(payment, allocation);
+        if (dashboardMonth && Object.prototype.hasOwnProperty.call(monthlyTotals, dashboardMonth)) {
+          monthlyTotals[dashboardMonth] += amount;
         }
         return allocationSum + amount;
       }, 0);
