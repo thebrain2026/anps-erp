@@ -7038,7 +7038,7 @@ function renderFinanceSession(includeTables = true) {
     monthlyBreakdown.innerHTML = dashboardMonthly.monthlyBreakdown.map(item => `
       <div class="monthly-fee-pill">
         <span>${item.month}</span>
-        <strong>${formatRs(item.amount)}</strong>
+        <strong>${Number(item.amount || 0).toLocaleString("en-IN")}</strong>
       </div>
     `).join("");
   }

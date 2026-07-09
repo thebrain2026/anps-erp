@@ -978,8 +978,8 @@ h2 { font-size: 1.15rem; }
 
 .monthly-fee-breakdown {
   display: grid;
-  grid-template-columns: repeat(6, minmax(72px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(4, minmax(92px, 1fr));
+  gap: 7px;
   margin-top: 6px;
 }
 
@@ -987,25 +987,28 @@ h2 { font-size: 1.15rem; }
   display: grid;
   gap: 2px;
   min-width: 0;
-  padding: 8px 9px;
+  padding: 7px 8px;
   border: 1px solid rgba(245, 158, 11, .28);
   border-radius: 8px;
   background: linear-gradient(180deg, #fffaf0, #ffffff);
+  overflow: hidden;
 }
 
-.monthly-fee-pill span {
+.kpi-card.fees-kpi .monthly-fee-pill span {
   color: #92400e;
-  font-size: .72rem;
+  font-size: .72rem !important;
   font-weight: 950;
   line-height: 1;
 }
 
-.monthly-fee-pill strong {
+.kpi-card.fees-kpi .monthly-fee-pill strong {
   color: #1f2937;
-  font-size: .86rem;
-  font-weight: 950;
+  font-size: .78rem !important;
+  font-weight: 800;
   line-height: 1.15;
   white-space: nowrap;
+  overflow: hidden;
+  text-overflow: clip;
 }
 
 .control-card {
