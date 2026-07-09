@@ -89,6 +89,7 @@
           <div class="nav-sub">
             <button data-view="addHomework" type="button">Add Homework</button>
             <button data-view="teacherHomework" type="button">Teachers Homework</button>
+            <button data-view="homeworkDoubts" type="button">Homework Doubts</button>
             <button data-view="dailyAssignment" type="button">Daily Assignment</button>
           </div>
         </div>
@@ -1613,6 +1614,45 @@
                   <tr><td colspan="7">No teacher homework submitted yet.</td></tr>
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="homeworkDoubts">
+        <div class="panel homework-panel homework-doubts-panel">
+          <div class="teacher-homework-review">
+            <div class="teacher-homework-review-head">
+              <div>
+                <p class="eyebrow">Homework Support</p>
+                <h3>Homework Chat Monitor</h3>
+                <small>Class-wise student homework doubts and teacher replies from the mobile app.</small>
+              </div>
+              <span class="teacher-homework-count" id="homeworkDoubtCount">0 Chats</span>
+            </div>
+            <div class="teacher-homework-filters">
+              <label>Class
+                <select id="homeworkDoubtClassFilter">
+                  <option value="">Select Class</option>
+                </select>
+              </label>
+              <label>Section
+                <select id="homeworkDoubtSectionFilter">
+                  <option value="">All Sections</option>
+                </select>
+              </label>
+              <label>Status
+                <select id="homeworkDoubtStatusFilter">
+                  <option value="">All Status</option>
+                  <option>Open</option>
+                  <option>Replied</option>
+                  <option>Closed</option>
+                </select>
+              </label>
+              <button class="ghost-action" id="homeworkDoubtClearFilters" type="button">Clear</button>
+            </div>
+            <div class="homework-doubt-list" id="homeworkDoubtRows">
+              <article class="teacher-notice-empty">Select a class to view homework chats.</article>
             </div>
           </div>
         </div>

@@ -658,6 +658,98 @@ def send_homework_push(payload):
     )
 
 
+def shorten_push_body(text, fallback):
+    body = str(text or fallback).strip()
+    if len(body) > 160:
+        body = body[:157].rstrip() + "..."
+    return body
+
+
+def send_homework_doubt_push(payload):
+    doubt = payload.get("doubt") if isinstance(payload.get("doubt"), dict) else payload
+    state = read_state() or {}
+    teacher_id = str(doubt.get("teacherId") or doubt.get("teacherLoginId") or "").strip().lower()
+    teacher_login = str(doubt.get("teacherLoginId") or "").strip().lower()
+    teacher_name = str(doubt.get("teacherName") or "").strip().lower()
+    matched_records = []
+    tokens = []
+    for item in state.get("mobilePushTokens", []) or []:
+        if not isinstance(item, dict) or not item.get("token"):
+            continue
+        if str(item.get("enabled", "true")).lower() in {"false", "0", "no", "disabled"}:
+            continue
+        role = str(item.get("role") or "").strip().lower()
+        user_id = str(item.get("userId") or "").strip().lower()
+        name = str(item.get("name") or "").strip().lower()
+        if role and role not in {"teacher", "staff", "admin", "master admin"}:
+            continue
+        if teacher_id and user_id == teacher_id:
+            tokens.append(item.get("token"))
+            matched_records.append(item)
+            continue
+        if teacher_login and user_id == teacher_login:
+            tokens.append(item.get("token"))
+            matched_records.append(item)
+            continue
+        if teacher_name and name == teacher_name:
+            tokens.append(item.get("token"))
+            matched_records.append(item)
+    student_name = str(doubt.get("studentName") or "Student").strip()
+    subject = str(doubt.get("subject") or "Homework").strip()
+    result = send_fcm_notifications(
+        list(dict.fromkeys(tokens)),
+        f"Homework Doubt: {student_name}",
+        shorten_push_body(doubt.get("message"), f"{student_name} asked a question about {subject}."),
+        {
+            "type": "homework_doubt",
+            "doubtId": str(doubt.get("id") or ""),
+            "studentAdmissionNo": str(doubt.get("studentAdmissionNo") or ""),
+            "className": str(doubt.get("className") or ""),
+            "subject": subject,
+        },
+    )
+    result["targetDeviceCount"] = len(list(dict.fromkeys(tokens)))
+    result["matchedUserCount"] = len(matched_records)
+    return result
+
+
+def send_homework_doubt_reply_push(payload):
+    doubt = payload.get("doubt") if isinstance(payload.get("doubt"), dict) else payload
+    state = read_state() or {}
+    student_id = str(doubt.get("studentAdmissionNo") or doubt.get("studentId") or "").strip().lower()
+    matched_records = []
+    tokens = []
+    for item in state.get("mobilePushTokens", []) or []:
+        if not isinstance(item, dict) or not item.get("token"):
+            continue
+        if str(item.get("enabled", "true")).lower() in {"false", "0", "no", "disabled"}:
+            continue
+        role = str(item.get("role") or "").strip().lower()
+        user_id = str(item.get("userId") or "").strip().lower()
+        if role and role != "student":
+            continue
+        if student_id and user_id == student_id:
+            tokens.append(item.get("token"))
+            matched_records.append(item)
+    replies = doubt.get("replies") if isinstance(doubt.get("replies"), list) else []
+    last_reply = replies[-1] if replies else {}
+    teacher_name = str(last_reply.get("teacherName") or doubt.get("teacherName") or "Teacher").strip()
+    result = send_fcm_notifications(
+        list(dict.fromkeys(tokens)),
+        f"{teacher_name} replied",
+        shorten_push_body(last_reply.get("message"), "Your homework doubt has a new reply."),
+        {
+            "type": "homework_doubt_reply",
+            "doubtId": str(doubt.get("id") or ""),
+            "homeworkId": str(doubt.get("homeworkId") or ""),
+            "subject": str(doubt.get("subject") or "Homework"),
+        },
+    )
+    result["targetDeviceCount"] = len(list(dict.fromkeys(tokens)))
+    result["matchedUserCount"] = len(matched_records)
+    return result
+
+
 def send_birthday_push(payload, user):
     state = read_state() or {}
     user_id = str(payload.get("userId") or user.get("username") or "").strip()
@@ -2889,6 +2981,7 @@ def fresh_state():
         "assets": [],
         "lessons": [],
         "homework": [],
+        "homeworkDoubts": [],
         "substitutions": [],
         "payroll": [],
         "vendors": [],
@@ -3223,6 +3316,10 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             return self.notice_push_request()
         if path == "/api/notifications/homework":
             return self.homework_push_request()
+        if path == "/api/notifications/homework-doubt":
+            return self.homework_doubt_push_request()
+        if path == "/api/notifications/homework-doubt-reply":
+            return self.homework_doubt_reply_push_request()
         if path == "/api/notifications/birthday":
             return self.birthday_push_request()
         if path == "/api/notifications/teacher-advisory":
@@ -3330,6 +3427,30 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
         try:
             payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
             result = send_homework_push(payload)
+            self.json_response(result, status=200 if result.get("ok") or not result.get("configured") else 400)
+        except Exception as exc:
+            self.json_response({"ok": False, "error": str(exc)}, status=400)
+
+    def homework_doubt_push_request(self):
+        length = int(self.headers.get("Content-Length") or "0")
+        if length > MAX_BODY:
+            self.send_error(413, "Request body too large")
+            return
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+            result = send_homework_doubt_push(payload)
+            self.json_response(result, status=200 if result.get("ok") or not result.get("configured") else 400)
+        except Exception as exc:
+            self.json_response({"ok": False, "error": str(exc)}, status=400)
+
+    def homework_doubt_reply_push_request(self):
+        length = int(self.headers.get("Content-Length") or "0")
+        if length > MAX_BODY:
+            self.send_error(413, "Request body too large")
+            return
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+            result = send_homework_doubt_reply_push(payload)
             self.json_response(result, status=200 if result.get("ok") or not result.get("configured") else 400)
         except Exception as exc:
             self.json_response({"ok": False, "error": str(exc)}, status=400)

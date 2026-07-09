@@ -602,6 +602,84 @@
       text-decoration: none;
     }
 
+    .homework-doubt-thread {
+      margin-top: 12px;
+      padding: 12px;
+      border: 1px solid rgba(15, 118, 110, .18);
+      border-radius: 16px;
+      background: rgba(255, 255, 255, .76);
+    }
+
+    .homework-doubt-thread strong {
+      display: block;
+      color: #0f766e;
+      font-size: .78rem;
+      font-weight: 950;
+      text-transform: uppercase;
+    }
+
+    .homework-doubt-thread p {
+      margin: 5px 0 0;
+      color: #10233f;
+      font-size: .86rem;
+      line-height: 1.42;
+    }
+
+    .homework-doubt-thread small {
+      display: block;
+      margin-top: 5px;
+      color: #64748b;
+      font-weight: 850;
+    }
+
+    .homework-doubt-form {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .homework-doubt-form textarea {
+      min-height: 76px;
+      border: 1px solid rgba(15, 118, 110, .24);
+      border-radius: 14px;
+      padding: 11px 12px;
+      background: rgba(255,255,255,.92);
+      color: #10233f;
+      font-weight: 850;
+      line-height: 1.42;
+      resize: vertical;
+    }
+
+    .homework-doubt-form button,
+    .homework-doubt-reply-form button {
+      justify-self: start;
+      min-height: 36px;
+      border: 0;
+      border-radius: 12px;
+      padding: 0 14px;
+      color: #fff;
+      background: linear-gradient(135deg, #0f766e, #f59e0b);
+      font-weight: 950;
+      box-shadow: 0 12px 24px rgba(15, 118, 110, .18);
+    }
+
+    .homework-doubt-reply-form {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    .homework-doubt-reply-form textarea {
+      min-height: 82px;
+      border: 1px solid rgba(37, 99, 235, .24);
+      border-radius: 14px;
+      padding: 11px 12px;
+      background: rgba(255,255,255,.94);
+      color: #10233f;
+      font-weight: 850;
+      resize: vertical;
+    }
+
     .bengali-translate-action {
       justify-self: start;
       margin-top: 10px;
@@ -757,6 +835,12 @@
     }
     .module[data-nav="advisory"] .module-icon {
       background: linear-gradient(135deg, #40238f, #f06c9b 52%, #f8bd45);
+      color: #fff;
+      font-size: .94rem;
+      text-shadow: 0 2px 8px rgba(16,26,74,.22);
+    }
+    .module[data-nav="homeworkDoubts"] .module-icon {
+      background: linear-gradient(135deg, #7c2d12, #f97316 50%, #facc15);
       color: #fff;
       font-size: .94rem;
       text-shadow: 0 2px 8px rgba(16,26,74,.22);
@@ -1583,6 +1667,11 @@
           <div class="stack" id="homeworkList"></div>
         </section>
 
+        <section class="view" id="homeworkDoubtsView">
+          <div class="section-title"><h2>Homework Doubts</h2><span id="homeworkDoubtTotal"></span></div>
+          <div class="stack" id="homeworkDoubtList"></div>
+        </section>
+
         <section class="view" id="classworkView">
           <div class="section-title"><h2 id="classworkTitle">Classwork</h2><span id="classworkTotal"></span></div>
           <div class="stack" id="classworkFormHost"></div>
@@ -1857,6 +1946,105 @@
         state.erpUpdatedAt = saved.updated_at || "";
         return entry;
       },
+      async saveMutatedState(mutator) {
+        const latest = await this.request("/state", { method: "GET" });
+        const firstState = latest.state || {};
+        const result = mutator(firstState);
+        let saved;
+        try {
+          saved = await this.request("/state", {
+            method: "POST",
+            body: JSON.stringify({state: firstState, base_updated_at: latest.updated_at || ""})
+          });
+        } catch (error) {
+          if (!error.message || !error.message.includes("conflict")) throw error;
+          const fresh = await this.request("/state", { method: "GET" });
+          const freshState = fresh.state || {};
+          mutator(freshState);
+          saved = await this.request("/state", {
+            method: "POST",
+            body: JSON.stringify({state: freshState, base_updated_at: fresh.updated_at || ""})
+          });
+        }
+        state.erpState = saved.state || firstState;
+        state.erpUpdatedAt = saved.updated_at || "";
+        return result;
+      },
+      async submitHomeworkDoubt(homework, message) {
+        const text = normalizeText(message);
+        if (!text) throw new Error("Write your homework doubt first.");
+        let record = null;
+        await this.saveMutatedState(erpState => {
+          erpState.homeworkDoubts = Array.isArray(erpState.homeworkDoubts) ? erpState.homeworkDoubts : [];
+          const key = homeworkKey(homework);
+          const existingIndex = erpState.homeworkDoubts.findIndex(item =>
+            normalizeText(item.homeworkId) === normalizeText(key)
+            && normalizeAdmission(item.studentAdmissionNo || item.studentId) === normalizeAdmission(state.user.id)
+          );
+          const teacher = resolveHomeworkTeacher(erpState, homework, state.user);
+          const baseRecord = existingIndex >= 0 ? erpState.homeworkDoubts[existingIndex] : {};
+          record = {
+            ...baseRecord,
+            id: baseRecord.id || `HD-${Date.now()}`,
+            homeworkId: key,
+            subject: homework.subject || "Homework",
+            homeworkText: homework.text || "",
+            homeworkDue: homework.due || "",
+            className: homework.className || state.user.className || "",
+            section: state.user.section || "",
+            studentId: state.user.id || "",
+            studentAdmissionNo: state.user.admissionNo || state.user.id || "",
+            studentName: state.user.name || "Student",
+            teacherId: teacher.id || homework.teacherId || "",
+            teacherLoginId: teacher.loginId || homework.teacherLoginId || "",
+            teacherName: teacher.name || homework.teacherName || "Teacher",
+            message: text,
+            replies: Array.isArray(baseRecord.replies) ? baseRecord.replies : [],
+            status: "Open",
+            createdAt: baseRecord.createdAt || new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          if (existingIndex >= 0) erpState.homeworkDoubts[existingIndex] = record;
+          else erpState.homeworkDoubts.unshift(record);
+          return record;
+        });
+        this.request("/notifications/homework-doubt", {
+          method: "POST",
+          body: JSON.stringify({doubt: record})
+        }).catch(error => console.warn("Homework doubt notification failed", error));
+        return record;
+      },
+      async replyHomeworkDoubt(doubtId, message) {
+        const text = normalizeText(message);
+        if (!text) throw new Error("Write a reply first.");
+        let updatedRecord = null;
+        await this.saveMutatedState(erpState => {
+          erpState.homeworkDoubts = Array.isArray(erpState.homeworkDoubts) ? erpState.homeworkDoubts : [];
+          const index = erpState.homeworkDoubts.findIndex(item => normalizeText(item.id) === normalizeText(doubtId));
+          if (index < 0) throw new Error("Homework doubt not found.");
+          const replies = Array.isArray(erpState.homeworkDoubts[index].replies) ? [...erpState.homeworkDoubts[index].replies] : [];
+          replies.push({
+            id: `HDR-${Date.now()}`,
+            teacherId: state.user.id || "",
+            teacherName: state.user.name || "Teacher",
+            message: text,
+            createdAt: new Date().toISOString()
+          });
+          updatedRecord = {
+            ...erpState.homeworkDoubts[index],
+            replies,
+            status: "Replied",
+            updatedAt: new Date().toISOString()
+          };
+          erpState.homeworkDoubts[index] = updatedRecord;
+          return updatedRecord;
+        });
+        this.request("/notifications/homework-doubt-reply", {
+          method: "POST",
+          body: JSON.stringify({doubt: updatedRecord})
+        }).catch(error => console.warn("Homework reply notification failed", error));
+        return updatedRecord;
+      },
       async markComplaintSatisfied(complaintId) {
         const latest = await this.request("/state", { method: "GET" });
         const erpState = latest.state || {};
@@ -2048,6 +2236,64 @@
       return `<a class="homework-attachment-link" href="${escapeHtml(attachment.url)}" target="_blank" rel="noopener" download="${escapeHtml(label)}">Open Attachment: ${escapeHtml(label)}</a>`;
     }
 
+    function homeworkKey(item = {}) {
+      return normalizeText(item.id || item.homeworkId || [item.className || "", item.subject || "", item.due || "", item.text || ""].join("|"));
+    }
+
+    function resolveHomeworkTeacher(erpState = {}, homework = {}, user = {}) {
+      const directName = normalizeText(homework.teacherName);
+      const directId = normalizeText(homework.teacherId);
+      const directLogin = normalizeText(homework.teacherLoginId);
+      const staffList = erpState.staffMembers || erpState.staff || [];
+      const className = normalizeText(homework.className || user.className).toLowerCase();
+      const subject = normalizeText(homework.subject).toLowerCase();
+      const timetable = (erpState.classTimetableEntries || []).find(item => {
+        const itemClass = normalizeText(item.className || item.class).toLowerCase();
+        const itemSubject = normalizeText(item.subject).toLowerCase();
+        return itemClass === className && itemSubject === subject && normalizeText(item.teacher || item.teacherName);
+      }) || {};
+      const teacherName = directName || normalizeText(timetable.teacherName || timetable.teacher);
+      const staff = staffList.find(item =>
+        (directId && normalizeText(item.staffId || item.id).toLowerCase() === directId.toLowerCase())
+        || (teacherName && normalizeText(item.name || item.staffName).toLowerCase() === teacherName.toLowerCase())
+      ) || {};
+      const account = (erpState.userAccessAccounts || []).find(item =>
+        normalizeText(item.staffId).toLowerCase() === normalizeText(staff.staffId || staff.id).toLowerCase()
+        || normalizeText(item.staffName || item.name).toLowerCase() === normalizeText(staff.name || staff.staffName || teacherName).toLowerCase()
+      ) || {};
+      return {
+        id: directId || normalizeText(staff.staffId || staff.id || account.staffId),
+        loginId: directLogin || normalizeText(account.loginId || account.username || account.id),
+        name: teacherName || normalizeText(staff.name || staff.staffName || account.staffName || account.name)
+      };
+    }
+
+    function homeworkDoubtThreadFor(homework = {}) {
+      const key = homeworkKey(homework);
+      return (state.workspace?.homeworkDoubts || []).find(item =>
+        normalizeText(item.homeworkId) === normalizeText(key)
+        || (
+          normalizeText(item.subject).toLowerCase() === normalizeText(homework.subject).toLowerCase()
+          && normalizeText(item.homeworkDue) === normalizeText(homework.due)
+        )
+      );
+    }
+
+    function homeworkDoubtThreadMarkup(thread = null) {
+      if (!thread) return "";
+      const replies = Array.isArray(thread.replies) ? thread.replies : [];
+      return `<div class="homework-doubt-thread">
+        <strong>Your question</strong>
+        <p>${escapeHtml(thread.message || "")}</p>
+        <small>Status: ${escapeHtml(thread.status || "Open")}</small>
+        ${replies.map(reply => `<div class="homework-doubt-thread">
+          <strong>${escapeHtml(reply.teacherName || thread.teacherName || "Teacher")}</strong>
+          <p>${escapeHtml(reply.message || "")}</p>
+          <small>${escapeHtml(reply.createdAt ? new Date(reply.createdAt).toLocaleString() : "")}</small>
+        </div>`).join("")}
+      </div>`;
+    }
+
     function readLeaveAttachmentInput(input) {
       const file = input?.files?.[0];
       return new Promise((resolve, reject) => {
@@ -2199,7 +2445,8 @@
         ratings: "teacherRatings",
         leaves: "teacherLeaves",
         timetable: "classTimetableEntries",
-        advisories: "teacherAdvisories"
+        advisories: "teacherAdvisories",
+        homeworkDoubts: "homeworkDoubts"
       };
       return map[collection] || collection;
     }
@@ -2488,6 +2735,9 @@
         timetable: timetableForStudent(erpState, student),
         syllabus: (erpState.syllabusEntries || []).filter(item => !item.className || className.includes(item.className)),
         homework: (erpState.homework || []).filter(item => !item.className || className.includes(item.className)),
+        homeworkDoubts: (erpState.homeworkDoubts || []).filter(item =>
+          normalizeAdmission(item.studentAdmissionNo || item.studentId) === normalizeAdmission(student.admissionNo)
+        ),
         classwork: (erpState.classworkEntries || []).filter(item => !item.className || className.includes(item.className)),
         notices: visibleNotices(erpState, className),
         calendar: (erpState.holidayReports || []).slice().sort((a, b) => parseCalendarDate(a.date) - parseCalendarDate(b.date)),
@@ -2604,6 +2854,11 @@
           }),
         syllabus: erpState.syllabusEntries || [],
         homework: erpState.homework || [],
+        homeworkDoubts: (erpState.homeworkDoubts || []).filter(item =>
+          normalizeText(item.teacherId) === normalizeText(state.user.id)
+          || normalizeText(item.teacherLoginId).toLowerCase() === normalizeText(userId).toLowerCase()
+          || normalizeText(item.teacherName).toLowerCase() === normalizeText(state.user.name).toLowerCase()
+        ),
         classwork: erpState.classworkEntries || [],
         notices: erpState.notices || [],
         teacherNoticeRequests: (erpState.teacherNoticeRequests || []).filter(item =>
@@ -2647,6 +2902,7 @@
       { id: "result", label: "Result Entry", icon: "RS" },
       { id: "syllabus", label: "Syllabus Entry", icon: "SY" },
       { id: "homework", label: "Homework Entry", icon: "HW" },
+      { id: "homeworkDoubts", label: "Homework Doubts", icon: "HD" },
       { id: "classwork", label: "Classwork Entry", icon: "CW" },
       { id: "notice", label: "Notice", icon: "NT" },
       { id: "advisory", label: "Teacher Advisory", icon: "TA" },
@@ -2835,6 +3091,8 @@
       const translated = bengaliHomeworkText(body);
       const translator = showTranslator ? `<button class="bengali-translate-action" type="button" data-bengali-homework>View Bengali translation</button><div class="bengali-homework-text">${translated || "Bengali translation is not available."}</div>` : "";
       const attachment = homeworkAttachmentLink(item.attachment);
+      const key = homeworkKey(item);
+      const thread = homeworkDoubtThreadFor(item);
       return `<article class="card homework-card">
         <div class="card-head">
           <div><h3>${item.subject || "Homework"}</h3><p>${className} | Due ${item.due || "-"}</p></div>
@@ -2843,6 +3101,11 @@
         ${body ? `<p>${body}</p>` : ""}
         ${attachment}
         ${translator}
+        ${homeworkDoubtThreadMarkup(thread)}
+        <form class="homework-doubt-form" data-homework-doubt="${escapeHtml(key)}">
+          <textarea name="message" placeholder="Ask your teacher if you do not understand this homework" required></textarea>
+          <button type="submit">${thread ? "Send Another Question" : "Ask Teacher"}</button>
+        </form>
       </article>`;
     }
 
@@ -3604,6 +3867,33 @@
       meta.textContent = admissionNo ? `Selected: ${studentName || "Student"} | Admission No: ${admissionNo} | ${className || "-"}` : "No assigned student found.";
     }
 
+    function teacherHomeworkDoubtCard(item = {}) {
+      const replies = Array.isArray(item.replies) ? item.replies : [];
+      return `<article class="card homework-card">
+        <div class="card-head">
+          <div>
+            <h3>${escapeHtml(item.studentName || "Student")}</h3>
+            <p>Admission No: ${escapeHtml(item.studentAdmissionNo || "-")} | ${escapeHtml(item.className || "-")} | ${escapeHtml(item.subject || "Homework")}</p>
+          </div>
+          <span class="status ${item.status === "Replied" ? "ok" : "warn"}">${escapeHtml(item.status || "Open")}</span>
+        </div>
+        <div class="homework-doubt-thread">
+          <strong>Student question</strong>
+          <p>${escapeHtml(item.message || "-")}</p>
+          <small>${escapeHtml(item.createdAt ? new Date(item.createdAt).toLocaleString() : "")}</small>
+        </div>
+        ${replies.map(reply => `<div class="homework-doubt-thread">
+          <strong>${escapeHtml(reply.teacherName || "Teacher reply")}</strong>
+          <p>${escapeHtml(reply.message || "")}</p>
+          <small>${escapeHtml(reply.createdAt ? new Date(reply.createdAt).toLocaleString() : "")}</small>
+        </div>`).join("")}
+        <form class="homework-doubt-reply-form" data-homework-doubt-reply="${escapeHtml(item.id || "")}">
+          <textarea name="message" placeholder="Reply to this student's homework doubt" required></textarea>
+          <button type="submit">Send Reply</button>
+        </form>
+      </article>`;
+    }
+
     function renderTeacherViews() {
       const user = state.user;
       const ws = state.workspace;
@@ -3684,6 +3974,10 @@
       $("#advisoryList").innerHTML = (ws.teacherAdvisories || []).length
         ? (ws.teacherAdvisories || []).map(item => teacherAdvisoryCard(item)).join("")
         : card({ title: "No Teacher Advisory", meta: "No advisory has been sent to you.", body: "Private advisories from the school ERP will appear here.", badge: "Clear", status: "ok" });
+      $("#homeworkDoubtTotal").textContent = `${(ws.homeworkDoubts || []).length} chats`;
+      $("#homeworkDoubtList").innerHTML = (ws.homeworkDoubts || []).length
+        ? (ws.homeworkDoubts || []).map(item => teacherHomeworkDoubtCard(item)).join("")
+        : card({ title: "No Homework Doubt", meta: "Student questions will appear here.", body: "When a student asks about homework, you can reply from this page.", badge: "Clear", status: "ok" });
       const summary = ratingSummary(ws.ratings);
       $("#ratingTitle").textContent = "My Ratings";
       $("#ratingTotal").textContent = `${summary.avg}/5`;
@@ -3737,6 +4031,34 @@
             button.disabled = false;
             button.classList.remove("clicked", "saving");
             button.textContent = "Submit Explanation";
+          }
+        }
+      }));
+      document.querySelectorAll("[data-homework-doubt-reply]").forEach(form => form.addEventListener("submit", async event => {
+        event.preventDefault();
+        const doubtId = form.dataset.homeworkDoubtReply || "";
+        const message = form.elements.message?.value || "";
+        const button = form.querySelector("button[type='submit']");
+        if (!message.trim()) {
+          toast("Reply is required.");
+          return;
+        }
+        if (button) {
+          button.disabled = true;
+          button.classList.add("clicked", "saving");
+          button.textContent = "Sending...";
+        }
+        try {
+          await AppApi.replyHomeworkDoubt(doubtId, message);
+          state.workspace = await AppApi.workspace("teacher", state.user.id);
+          renderTeacherViews();
+          toast("Reply sent to student.");
+        } catch (error) {
+          toast(error.message || "Reply could not be sent.");
+          if (button) {
+            button.disabled = false;
+            button.classList.remove("clicked", "saving");
+            button.textContent = "Send Reply";
           }
         }
       }));
@@ -3943,6 +4265,41 @@
           const target = button.nextElementSibling;
           target?.classList.toggle("show");
           button.textContent = target?.classList.contains("show") ? "Hide Bengali translation" : "View Bengali translation";
+        });
+      });
+      document.querySelectorAll("[data-homework-doubt]").forEach(form => {
+        form.addEventListener("submit", async event => {
+          event.preventDefault();
+          const key = form.dataset.homeworkDoubt || "";
+          const homework = (state.workspace.homework || []).find(item => normalizeText(homeworkKey(item)) === normalizeText(key));
+          const message = form.elements.message?.value || "";
+          const button = form.querySelector("button[type='submit']");
+          if (!homework) {
+            toast("Homework record not found.");
+            return;
+          }
+          if (!message.trim()) {
+            toast("Write your homework doubt first.");
+            return;
+          }
+          if (button) {
+            button.disabled = true;
+            button.classList.add("clicked", "saving");
+            button.textContent = "Sending...";
+          }
+          try {
+            await AppApi.submitHomeworkDoubt(homework, message);
+            state.workspace = await AppApi.workspace("student", state.user.id);
+            renderStudentViews();
+            toast("Question sent to teacher.");
+          } catch (error) {
+            toast(error.message || "Question could not be sent.");
+            if (button) {
+              button.disabled = false;
+              button.classList.remove("clicked", "saving");
+              button.textContent = "Ask Teacher";
+            }
+          }
         });
       });
       document.querySelectorAll("[data-bengali-notice]").forEach(button => {

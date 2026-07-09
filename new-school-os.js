@@ -15,6 +15,7 @@ const teacherNoticeRequests = [];
 const teacherLeaves = [];
 const teacherAdvisories = [];
 const homework = [];
+const homeworkDoubts = [];
 const admissionEnquiries = [];
 const complaintRecords = [];
 
@@ -296,6 +297,7 @@ const titleMap = {
   sendSms: "WhatsApp Message",
   addHomework: "Add Homework",
   teacherHomework: "Teachers Homework",
+  homeworkDoubts: "Homework Doubts",
   dailyAssignment: "Daily Assignment",
   reportStudentInformation: "Student Information Report",
   dailyCollectionReport: "Daily Collection Report",
@@ -344,7 +346,7 @@ const ACCESS_PERMISSION_GROUPS = [
   {name: "Fees Collection", modules: ["finance", "feeBook", "dueFeesSearch", "upiPaymentVerification", "feeMaster", "feeGroup", "addClassSection", "tuitionFineSetup", "feeReminder"]},
   {name: "Human Resources", modules: ["staffDetails", "staffAttendance", "applyLeave", "leaveType", "approveLeave", "teachersRating", "teacherAdvisory", "department", "designation", "disabledStaff"]},
   {name: "Communication", modules: ["noticeBoard", "teacherNoticeRequests", "sendSms"]},
-  {name: "Homework", modules: ["addHomework", "teacherHomework", "dailyAssignment"]},
+  {name: "Homework", modules: ["addHomework", "teacherHomework", "homeworkDoubts", "dailyAssignment"]},
   {name: "Reports", modules: ["reportStudentInformation", "dailyCollectionReport", "entireSchoolFeesReport"]},
   {name: "Academic", modules: ["classTimetable", "teacherTimetable", "classTeacherAssignment", "syllabus", "marksheet", "externalExamFees", "academicProfile", "teacherComplaint", "holidayReport", "annualCalendar"]},
   {name: "Certificate", modules: ["studentIdCard", "teacherIdCard"]},
@@ -462,6 +464,7 @@ function getAppStateSnapshot() {
     teacherLeaves,
     teacherAdvisories,
     homework,
+    homeworkDoubts,
     admissionEnquiries,
     complaintRecords,
     staffMembers,
@@ -757,7 +760,8 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
     notices: ["id", "title"],
     teacherNoticeRequests: ["id", "title", "teacherId"],
     teacherLeaves: ["id", "teacherId", "from", "to", "type"],
-    teacherAdvisories: ["id", "teacherId", "subject"]
+    teacherAdvisories: ["id", "teacherId", "subject"],
+    homeworkDoubts: ["id", "homeworkId", "studentAdmissionNo"]
   };
   merged.students = mergeStudentList(remoteState.students || [], localState.students || []);
   Object.entries(objectRules).forEach(([key, fields]) => {
@@ -1032,6 +1036,9 @@ function applySavedState(saved = {}) {
       homework.splice(0, homework.length, ...saved.homework);
       pruneExpiredHomeworkAttachments();
     }
+    if (Array.isArray(saved.homeworkDoubts)) {
+      homeworkDoubts.splice(0, homeworkDoubts.length, ...saved.homeworkDoubts);
+    }
     if (Array.isArray(saved.admissionEnquiries)) {
       admissionEnquiries.splice(0, admissionEnquiries.length, ...saved.admissionEnquiries);
     }
@@ -1262,6 +1269,7 @@ function applyProductionCleanSeedOnce() {
   teacherLeaves.splice(0, teacherLeaves.length);
   teacherAdvisories.splice(0, teacherAdvisories.length);
   homework.splice(0, homework.length);
+  homeworkDoubts.splice(0, homeworkDoubts.length);
   admissionEnquiries.splice(0, admissionEnquiries.length);
   complaintRecords.splice(0, complaintRecords.length);
   mobileAppActivity.splice(0, mobileAppActivity.length);
@@ -1679,7 +1687,7 @@ function renderActiveView(viewName = document.querySelector(".view.active")?.id 
   if (viewName === "disableStudent") renderDisabledStudents();
   if (viewName === "noticeBoard") renderNoticeBoard();
   if (viewName === "teacherNoticeRequests") renderTeacherNoticeRequests();
-  if (viewName === "addHomework" || viewName === "teacherHomework" || viewName === "dailyAssignment") renderHomeworkModule();
+  if (viewName === "addHomework" || viewName === "teacherHomework" || viewName === "dailyAssignment" || viewName === "homeworkDoubts") renderHomeworkModule();
   if (viewName === "complaintsDesk") renderComplaintsDesk();
   if (viewName === "admissionEnquiry") renderAdmissionEnquiryModule();
   if (viewName === "classTimetable") renderClassTimetable();
@@ -5752,6 +5760,72 @@ function setTeacherHomeworkFilterOptions(select, values = [], placeholder = "All
   if (uniqueValues.includes(current)) select.value = current;
 }
 
+function setHomeworkDoubtFilterOptions(select, values = [], placeholder = "All") {
+  if (!select) return;
+  const current = select.value;
+  const uniqueValues = [...new Set(values.map(value => String(value || "").trim()).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, undefined, {numeric: true, sensitivity: "base"}));
+  select.innerHTML = `<option value="">${escapeHtml(placeholder)}</option>${uniqueValues
+    .map(value => `<option value="${escapeHtml(value)}">${escapeHtml(value)}</option>`)
+    .join("")}`;
+  if (uniqueValues.includes(current)) select.value = current;
+}
+
+function renderHomeworkDoubts() {
+  const classFilter = document.getElementById("homeworkDoubtClassFilter");
+  const sectionFilter = document.getElementById("homeworkDoubtSectionFilter");
+  const statusFilter = document.getElementById("homeworkDoubtStatusFilter");
+  const count = document.getElementById("homeworkDoubtCount");
+  const rows = document.getElementById("homeworkDoubtRows");
+  if (!rows) return;
+  setHomeworkDoubtFilterOptions(classFilter, homeworkDoubts.map(item => item.className), "Select Class");
+  const selectedClass = String(classFilter?.value || "").trim();
+  const classDoubts = homeworkDoubts.filter(item => !selectedClass || String(item.className || "").trim() === selectedClass);
+  setHomeworkDoubtFilterOptions(sectionFilter, classDoubts.map(item => item.section), "All Sections");
+  const selectedSection = String(sectionFilter?.value || "").trim();
+  const selectedStatus = String(statusFilter?.value || "").trim();
+  const filtered = homeworkDoubts.filter(item => {
+    const classOk = selectedClass && String(item.className || "").trim() === selectedClass;
+    const sectionOk = !selectedSection || String(item.section || "").trim() === selectedSection;
+    const statusOk = !selectedStatus || String(item.status || "Open").trim() === selectedStatus;
+    return classOk && sectionOk && statusOk;
+  });
+  if (count) {
+    count.textContent = selectedClass ? `${filtered.length} Chats` : `${homeworkDoubts.length} Total`;
+  }
+  if (!selectedClass) {
+    rows.innerHTML = `<article class="teacher-notice-empty">Select a class to view homework chats.</article>`;
+    return;
+  }
+  rows.innerHTML = filtered.map(item => {
+    const replies = Array.isArray(item.replies) ? item.replies : [];
+    return `
+      <article class="homework-doubt-card">
+        <div class="homework-doubt-head">
+          <div>
+            <span class="teacher-notice-meta">${escapeHtml(item.className || "-")} ${item.section ? `| ${escapeHtml(item.section)}` : ""} | ${escapeHtml(item.subject || "Homework")}</span>
+            <h3>${escapeHtml(item.studentName || "Student")} <small>Admission No: ${escapeHtml(item.studentAdmissionNo || "-")}</small></h3>
+            <p>${escapeHtml(item.message || "-")}</p>
+          </div>
+          <span class="status-pill ${String(item.status || "Open") === "Replied" ? "stable" : "live"}">${escapeHtml(item.status || "Open")}</span>
+        </div>
+        <div class="homework-doubt-meta">
+          <span>Teacher: ${escapeHtml(item.teacherName || "-")}</span>
+          <span>Due: ${escapeHtml(item.homeworkDue || "-")}</span>
+          <span>Sent: ${escapeHtml(item.createdAt || "-")}</span>
+        </div>
+        ${replies.length ? `<div class="homework-doubt-replies">${replies.map(reply => `
+          <div class="homework-doubt-reply">
+            <strong>${escapeHtml(reply.teacherName || item.teacherName || "Teacher")}</strong>
+            <p>${escapeHtml(reply.message || "")}</p>
+            <small>${escapeHtml(reply.createdAt || "")}</small>
+          </div>
+        `).join("")}</div>` : `<small>No teacher reply yet.</small>`}
+      </article>
+    `;
+  }).join("") || `<article class="teacher-notice-empty">No homework chat found for this filter.</article>`;
+}
+
 function readHomeworkAttachment(file) {
   return new Promise((resolve, reject) => {
     if (!file) {
@@ -5836,6 +5910,7 @@ function renderHomeworkModule() {
       </tr>
     `).join("") || `<tr><td colspan="7">No teacher homework found for the selected filter.</td></tr>`;
   }
+  renderHomeworkDoubts();
   if (!rows) return;
   rows.innerHTML = homework.map((item, index) => `
     <tr>
@@ -14635,8 +14710,20 @@ document.getElementById("homeworkClassSelect")?.addEventListener("change", () =>
   document.getElementById(id)?.addEventListener("change", renderHomeworkModule);
 });
 
+["homeworkDoubtClassFilter", "homeworkDoubtSectionFilter", "homeworkDoubtStatusFilter"].forEach(id => {
+  document.getElementById(id)?.addEventListener("change", renderHomeworkModule);
+});
+
 document.getElementById("teacherHomeworkClearFilters")?.addEventListener("click", () => {
   ["teacherHomeworkTeacherFilter", "teacherHomeworkClassFilter", "teacherHomeworkDateFilter"].forEach(id => {
+    const input = document.getElementById(id);
+    if (input) input.value = "";
+  });
+  renderHomeworkModule();
+});
+
+document.getElementById("homeworkDoubtClearFilters")?.addEventListener("click", () => {
+  ["homeworkDoubtClassFilter", "homeworkDoubtSectionFilter", "homeworkDoubtStatusFilter"].forEach(id => {
     const input = document.getElementById(id);
     if (input) input.value = "";
   });

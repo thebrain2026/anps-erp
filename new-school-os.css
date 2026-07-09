@@ -2604,6 +2604,106 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   white-space: normal;
 }
 
+.homework-doubts-panel .teacher-homework-review {
+  border-color: #f1d2a7;
+  background:
+    radial-gradient(circle at 96% 0%, rgba(249, 115, 22, .18), transparent 28%),
+    linear-gradient(180deg, #fff 0%, #fff8ed 48%, #f7fbff 100%);
+}
+
+.homework-doubt-list {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px 18px;
+  background: rgba(255,255,255,.82);
+}
+
+.homework-doubt-card {
+  border: 1px solid #f0d2a5;
+  border-radius: 8px;
+  padding: 14px;
+  background:
+    linear-gradient(135deg, rgba(255,255,255,.96), rgba(255,247,237,.9)),
+    radial-gradient(circle at 100% 0%, rgba(24, 92, 168, .12), transparent 32%);
+  box-shadow: 0 12px 28px rgba(102, 62, 18, .08);
+}
+
+.homework-doubt-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+
+.homework-doubt-head h3 {
+  margin: 4px 0 6px;
+  color: #10233f;
+  font-size: 1rem;
+  line-height: 1.22;
+}
+
+.homework-doubt-head h3 small {
+  display: block;
+  margin-top: 3px;
+  color: #64748b;
+  font-size: .76rem;
+  font-weight: 850;
+}
+
+.homework-doubt-head p {
+  margin: 0;
+  color: #253f5c;
+  font-weight: 850;
+  line-height: 1.4;
+}
+
+.homework-doubt-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.homework-doubt-meta span {
+  border: 1px solid #d9e7f6;
+  border-radius: 999px;
+  padding: 6px 9px;
+  background: #f8fbff;
+  color: #15395f;
+  font-size: .74rem;
+  font-weight: 900;
+}
+
+.homework-doubt-replies {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.homework-doubt-reply {
+  border: 1px solid #d6e9df;
+  border-radius: 8px;
+  padding: 10px 11px;
+  background: #f5fff9;
+}
+
+.homework-doubt-reply strong {
+  color: #116b4e;
+  font-size: .8rem;
+}
+
+.homework-doubt-reply p {
+  margin: 4px 0;
+  color: #213b56;
+  font-weight: 850;
+}
+
+.homework-doubt-reply small,
+.homework-doubt-card > small {
+  color: #64748b;
+  font-weight: 850;
+}
+
 .teacher-notice-panel {
   overflow: hidden;
   border-color: #d8c7ff;
