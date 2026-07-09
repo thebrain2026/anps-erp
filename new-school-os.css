@@ -965,6 +965,38 @@ h2 { font-size: 1.15rem; }
   font-weight: 750;
 }
 
+.monthly-fee-breakdown {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.monthly-fee-pill {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 6px 7px;
+  border: 1px solid rgba(245, 158, 11, .28);
+  border-radius: 8px;
+  background: linear-gradient(180deg, #fffaf0, #ffffff);
+}
+
+.monthly-fee-pill span {
+  color: #92400e;
+  font-size: .66rem;
+  font-weight: 950;
+  line-height: 1;
+}
+
+.monthly-fee-pill strong {
+  color: #1f2937;
+  font-size: .74rem;
+  font-weight: 950;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
 .control-card {
   display: grid;
   gap: 7px;
@@ -5500,7 +5532,7 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   display: grid;
   gap: 8px;
   width: max-content;
-  max-width: 430px;
+  max-width: min(660px, calc(100vw - 42px));
 }
 
 #ledgerFeeRows td {
@@ -5537,7 +5569,7 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
 }
 
 .period-breakdown {
-  width: min(420px, 82vw);
+  width: min(640px, calc(100vw - 42px));
   padding: 8px;
   border: 1px solid #cfe2d6;
   border-radius: 8px;
@@ -5549,7 +5581,7 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
 .period-breakdown-head,
 .period-breakdown-row {
   display: grid;
-  grid-template-columns: .8fr 1fr 1fr 1fr 30px;
+  grid-template-columns: .8fr 1fr 1fr 1fr 58px;
   gap: 6px;
   align-items: center;
   padding: 6px 5px;
@@ -5579,6 +5611,17 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   cursor: pointer;
 }
 
+.month-collect-action {
+  grid-auto-flow: column;
+  gap: 4px;
+  width: auto;
+  min-width: 52px;
+  padding: 0 8px;
+  font-size: .72rem;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
 .month-collect-action svg,
 .month-preview-action svg,
 .payment-receipt-action svg,
@@ -5587,6 +5630,11 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   width: 16px;
   height: 16px;
   fill: currentColor;
+}
+
+.month-collect-action svg {
+  width: 13px;
+  height: 13px;
 }
 
 .month-collect-action:hover {
@@ -5639,8 +5687,8 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
 }
 
 .ledger-payment-breakdown {
-  width: min(500px, calc(100vw - 48px));
-  overflow-x: auto;
+  width: min(640px, calc(100vw - 42px));
+  overflow-x: visible;
 }
 
 .ledger-payment-title {
@@ -5740,8 +5788,8 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
 }
 
 .ledger-payment-breakdown .period-month-row {
-  grid-template-columns: .9fr .95fr 1fr .75fr .95fr 64px;
-  min-width: 580px;
+  grid-template-columns: minmax(46px, .72fr) minmax(58px, .86fr) minmax(76px, 1fr) minmax(46px, .72fr) minmax(58px, .86fr) minmax(52px, 54px);
+  min-width: 0;
 }
 
 .paid-chip {

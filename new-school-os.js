@@ -6783,6 +6783,7 @@ function renderPeriodCell(row, student = {}) {
             <span>${formatRs(total)}</span>
             <button class="month-collect-action" type="button" data-student-fees="${student.admissionNo || ""}" data-due-amount="${total}" data-fee-head="${row.name}" data-fine-amount="${fine}" data-fee-month="${item.month}" title="Collect ${item.month}" aria-label="Collect ${item.month} ${row.name} for ${student.name || "student"}">
               <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5C4 5.1 5.1 4 6.5 4h11C18.9 4 20 5.1 20 6.5v11c0 1.4-1.1 2.5-2.5 2.5h-11C5.1 20 4 18.9 4 17.5v-11ZM6.5 6a.5.5 0 0 0-.5.5V8h12V6.5a.5.5 0 0 0-.5-.5h-11ZM6 10v7.5c0 .3.2.5.5.5h11c.3 0 .5-.2.5-.5V10H6Zm6.8 6.7h-1.6v-1.1c-1-.2-1.8-.8-2.2-1.6l1.5-.8c.3.5.8.8 1.6.8.7 0 1-.2 1-.6s-.4-.5-1.4-.8c-1.4-.4-2.4-.9-2.4-2.2 0-1.1.8-1.9 1.9-2.1V7.3h1.6v1c.8.2 1.5.7 1.9 1.5l-1.4.8c-.3-.5-.7-.7-1.2-.7-.6 0-.9.2-.9.5 0 .4.4.5 1.4.8 1.4.4 2.4.9 2.4 2.2 0 1.2-.8 2-2.2 2.2v1.1Z"/></svg>
+              <span>Pay</span>
             </button>
           </div>
         `;
@@ -7032,6 +7033,15 @@ function renderFinanceSession(includeTables = true) {
   document.getElementById("sessionSummaryText").textContent = session.summary;
   document.getElementById("kpiFeesCollected").textContent = formatRs(dashboardMonthly.collected);
   document.getElementById("kpiFeesNote").textContent = `${dashboardMonthly.percent}% monthly fees collected, Annual Fee excluded`;
+  const monthlyBreakdown = document.getElementById("kpiFeesMonthlyBreakdown");
+  if (monthlyBreakdown) {
+    monthlyBreakdown.innerHTML = dashboardMonthly.monthlyBreakdown.map(item => `
+      <div class="monthly-fee-pill">
+        <span>${item.month}</span>
+        <strong>${formatRs(item.amount)}</strong>
+      </div>
+    `).join("");
+  }
   document.getElementById("kpiFollowUps").textContent = String(dashboardFollowUps.length).padStart(2, "0");
   document.getElementById("kpiFollowUpsNote").textContent = `${dashboardHighPriority} high priority`;
   document.getElementById("studentCount").textContent = getActiveStudents().length.toLocaleString("en-IN");
@@ -7059,18 +7069,30 @@ function getDashboardMonthlyFeeCollectionSummary() {
       .reduce((itemSum, item) => itemSum + Number(item.total || 0), 0);
   }, 0);
   const sessionPayments = collectedPayments[activeSession] || {};
+  const monthlyTotals = ACADEMIC_MONTHS.reduce((totals, month) => {
+    totals[month] = 0;
+    return totals;
+  }, {});
   const collected = Object.values(sessionPayments).reduce((sum, payments) => {
     return sum + (payments || []).reduce((paymentSum, payment) => {
       return paymentSum + (payment.allocations || []).reduce((allocationSum, allocation) => {
         if (!allocation.month || !isDashboardMonthlyFeeHead(allocation.head)) return allocationSum;
-        return allocationSum + Number(allocation.amount || 0);
+        const amount = Number(allocation.amount || 0);
+        if (Object.prototype.hasOwnProperty.call(monthlyTotals, allocation.month)) {
+          monthlyTotals[allocation.month] += amount;
+        }
+        return allocationSum + amount;
       }, 0);
     }, 0);
   }, 0);
   return {
     expected,
     collected,
-    percent: expected > 0 ? Math.min(100, Math.round((collected / expected) * 100)) : 0
+    percent: expected > 0 ? Math.min(100, Math.round((collected / expected) * 100)) : 0,
+    monthlyBreakdown: ACADEMIC_MONTHS.map(month => ({
+      month,
+      amount: monthlyTotals[month] || 0
+    }))
   };
 }
 
@@ -8115,6 +8137,7 @@ function renderLedgerPeriodCell(student, row) {
               <span class="month-row-actions">
                 <button class="month-collect-action" type="button" data-student-fees="${student.admissionNo || ""}" data-due-amount="${collectTotal}" data-fee-head="${row.name}" data-fine-amount="${monthFine}" data-fee-month="${month}" ${isPaid ? "disabled" : ""} title="${isPaid ? `${month} paid` : `Collect ${month}`}" aria-label="${isPaid ? `${month} paid` : `Collect ${month} ${row.name} for ${student.name || "student"}`}">
                   <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 6.5C4 5.1 5.1 4 6.5 4h11C18.9 4 20 5.1 20 6.5v11c0 1.4-1.1 2.5-2.5 2.5h-11C5.1 20 4 18.9 4 17.5v-11ZM6.5 6a.5.5 0 0 0-.5.5V8h12V6.5a.5.5 0 0 0-.5-.5h-11ZM6 10v7.5c0 .3.2.5.5.5h11c.3 0 .5-.2.5-.5V10H6Zm6.8 6.7h-1.6v-1.1c-1-.2-1.8-.8-2.2-1.6l1.5-.8c.3.5.8.8 1.6.8.7 0 1-.2 1-.6s-.4-.5-1.4-.8c-1.4-.4-2.4-.9-2.4-2.2 0-1.1.8-1.9 1.9-2.1V7.3h1.6v1c.8.2 1.5.7 1.9 1.5l-1.4.8c-.3-.5-.7-.7-1.2-.7-.6 0-.9.2-.9.5 0 .4.4.5 1.4.8 1.4.4 2.4.9 2.4 2.2 0 1.2-.8 2-2.2 2.2v1.1Z"/></svg>
+                  <span>${isPaid ? "Paid" : "Pay"}</span>
                 </button>
               </span>
             </div>
