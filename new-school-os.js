@@ -133,11 +133,12 @@ let backendLastLocalSaveAt = 0;
 let backendNetworkFailCount = 0;
 let backendLastHealthOkAt = 0;
 const BACKEND_SAVE_DEBOUNCE_MS = 250;
-const BACKEND_AUTO_SYNC_INTERVAL_MS = 3000;
+const BACKEND_AUTO_SYNC_INTERVAL_MS = 30000;
 const BACKEND_LOCAL_SAVE_GUARD_MS = 5000;
 const BACKEND_OFFLINE_FAIL_THRESHOLD = 5;
 const BACKEND_HEALTH_GRACE_MS = 60000;
 const BACKEND_FETCH_TIMEOUT_MS = 25000;
+const MONTHLY_FINE_PAID_SMALL_DUE_LIMIT = 500;
 const ACADEMIC_MONTHS = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
 const DEFAULT_ADMISSION_CLASSES = ["Nursery", "Class I", "Class II", "Class III", "Class IV", "Class V", "Class VI", "Class VII", "Class VIII", "Class IX", "Class X", "Class XI", "Class XII"];
 const DEFAULT_ADMISSION_SECTIONS = ["Amber", "Ruby", "A", "B", "C", "IGCSE", "IB", "Science", "Commerce"];
@@ -7061,7 +7062,9 @@ function getTuitionSearchDueRow(student) {
     const fine = calculateTuitionFineForMonth(month, new Date());
     const paid = monthPayments[month] || {tuition: 0, fine: 0};
     const tuitionDue = Math.max(monthlyFee - paid.tuition, 0);
-    const fineDue = Math.max(fine - paid.fine, 0);
+    const fineDue = shouldWaiveRepeatFineAfterFinePaid({...paid, monthlyAmount: monthlyFee}, "tuition", monthlyFee, student.admissionNo, month)
+      ? 0
+      : Math.max(fine - paid.fine, 0);
     return {month, tuition: tuitionDue, fine: fineDue, total: tuitionDue + fineDue};
   }).filter(item => item.total > 0);
   const due = monthDetails.reduce((sum, item) => sum + item.tuition, 0);
@@ -7804,6 +7807,22 @@ function getTuitionMonthPaidInfo(student, row, month) {
   };
 }
 
+function hasAnyFinePaidForMonth(admissionNo = "", month = "") {
+  if (!admissionNo || !month) return false;
+  return getSessionPayments(admissionNo).some(payment => (payment.allocations || []).some(allocation => (
+    allocation.month === month &&
+    /fine/i.test(String(allocation.head || "")) &&
+    Number(allocation.amount || 0) > 0
+  )));
+}
+
+function shouldWaiveRepeatFineAfterFinePaid(paid = {}, paidKey = "", monthlyAmount = 0, admissionNo = "", month = "") {
+  const feePaid = Number(paid[paidKey] || 0);
+  const finePaid = Number(paid.fine || 0);
+  const dueBalance = Math.max(Number(monthlyAmount || 0) - feePaid, 0);
+  return (finePaid > 0 || hasAnyFinePaidForMonth(admissionNo, month)) && dueBalance > 0 && dueBalance <= MONTHLY_FINE_PAID_SMALL_DUE_LIMIT;
+}
+
 function getTransportMonthPayments(admissionNo) {
   return getSessionPayments(admissionNo).reduce((months, payment) => {
     payment.allocations.forEach(allocation => {
@@ -7831,24 +7850,28 @@ function getTransportMonthPaidInfo(student, row, month) {
 function getTuitionMonthFineDue(student, row, month, paymentDate = new Date()) {
   const paid = getTuitionMonthPaidInfo(student, row, month);
   if (paid.isSettled) return 0;
+  if (shouldWaiveRepeatFineAfterFinePaid(paid, "tuition", paid.monthlyAmount, student.admissionNo, month)) return 0;
   return Math.max(calculateTuitionFineForMonth(month, paymentDate) - Number(paid.fine || 0), 0);
 }
 
 function getTuitionMonthCollectFineDue(student, row, month, paymentDate = new Date()) {
   const paid = getTuitionMonthPaidInfo(student, row, month);
   if (paid.isSettled) return 0;
+  if (shouldWaiveRepeatFineAfterFinePaid(paid, "tuition", paid.monthlyAmount, student.admissionNo, month)) return 0;
   return Math.max(calculateTuitionFineForMonth(month, paymentDate) - Number(paid.fine || 0), 0);
 }
 
 function getTransportMonthFineDue(student, row, month, paymentDate = new Date()) {
   const paid = getTransportMonthPaidInfo(student, row, month);
   if (paid.isSettled) return 0;
+  if (shouldWaiveRepeatFineAfterFinePaid(paid, "transport", paid.monthlyAmount, student.admissionNo, month)) return 0;
   return Math.max(calculateTransportFineForMonth(month, paymentDate) - Number(paid.fine || 0), 0);
 }
 
 function getTransportMonthCollectFineDue(student, row, month, paymentDate = new Date()) {
   const paid = getTransportMonthPaidInfo(student, row, month);
   if (paid.isSettled) return 0;
+  if (shouldWaiveRepeatFineAfterFinePaid(paid, "transport", paid.monthlyAmount, student.admissionNo, month)) return 0;
   return Math.max(calculateTransportFineForMonth(month, paymentDate) - Number(paid.fine || 0), 0);
 }
 
@@ -11862,13 +11885,26 @@ function showSecurityBackupReminder() {
 }
 
 function refreshAllAfterSecurityClean() {
-  setNextReceiptNo();
-  renderDashboardOnly();
-  renderActiveView();
-  renderStaffTeachingSubjectField();
-  renderStaffBiometricDevice();
-  setNextStaffId();
-  renderStaffPhotoPreview();
+  try {
+    if (!document.querySelector(".view.active")) {
+      views.forEach(view => view.classList.toggle("active", view.id === "dashboard"));
+      navButtons.forEach(button => button.classList.toggle("active", button.dataset.view === "dashboard"));
+      pageTitle.textContent = titleMap.dashboard || "Dashboard";
+    }
+    setNextReceiptNo();
+    renderDashboardOnly();
+    renderActiveView();
+    renderStaffTeachingSubjectField();
+    renderStaffBiometricDevice();
+    setNextStaffId();
+    renderStaffPhotoPreview();
+  } catch (error) {
+    console.warn("ERP refresh recovered after sync.", error);
+    views.forEach(view => view.classList.toggle("active", view.id === "dashboard"));
+    navButtons.forEach(button => button.classList.toggle("active", button.dataset.view === "dashboard"));
+    pageTitle.textContent = titleMap.dashboard || "Dashboard";
+    renderDashboardOnly();
+  }
 }
 
 function isBackendAutoSyncPaused() {
