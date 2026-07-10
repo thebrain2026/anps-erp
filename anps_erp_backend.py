@@ -1471,11 +1471,49 @@ def merge_payment_lists(server_payments, incoming_payments):
     return merged
 
 
-def merge_collected_payments(server_collected, incoming_collected):
+def deleted_payment_receipt_map(*maps):
+    merged = {}
+    for map_value in maps:
+        if not isinstance(map_value, dict):
+            continue
+        for session, session_rows in map_value.items():
+            if not isinstance(session_rows, dict):
+                continue
+            merged.setdefault(str(session), {})
+            for admission_no, receipts in session_rows.items():
+                if not isinstance(receipts, dict):
+                    continue
+                normalized_admission_no = "".join(ch.lower() for ch in str(admission_no or "") if ch.isalnum()) or str(admission_no or "").strip()
+                if not normalized_admission_no:
+                    continue
+                merged[str(session)].setdefault(normalized_admission_no, {})
+                for receipt_no, deleted_at in receipts.items():
+                    normalized_receipt = str(receipt_no or "").strip().lower()
+                    if normalized_receipt:
+                        merged[str(session)][normalized_admission_no][normalized_receipt] = deleted_at or datetime.now().isoformat(timespec="seconds")
+    return merged
+
+
+def is_deleted_payment_receipt(deleted_map, session, admission_no, receipt_no):
+    normalized_admission_no = "".join(ch.lower() for ch in str(admission_no or "") if ch.isalnum()) or str(admission_no or "").strip()
+    normalized_receipt = str(receipt_no or "").strip().lower()
+    return bool(normalized_receipt and isinstance(deleted_map, dict) and deleted_map.get(str(session), {}).get(normalized_admission_no, {}).get(normalized_receipt))
+
+
+def live_payment_list(payments, deleted_map, session, admission_no):
+    return [
+        payment
+        for payment in (payments or [])
+        if isinstance(payment, dict) and not is_deleted_payment_receipt(deleted_map, session, admission_no, payment.get("receipt"))
+    ]
+
+
+def merge_collected_payments(server_collected, incoming_collected, deleted_map=None):
     if not isinstance(server_collected, dict):
         server_collected = {}
     if not isinstance(incoming_collected, dict):
         incoming_collected = {}
+    deleted_map = deleted_map if isinstance(deleted_map, dict) else {}
     merged = {}
     for session in sorted(set(server_collected) | set(incoming_collected)):
         server_session = server_collected.get(session) if isinstance(server_collected.get(session), dict) else {}
@@ -1483,8 +1521,8 @@ def merge_collected_payments(server_collected, incoming_collected):
         merged[session] = {}
         for admission_no in sorted(set(server_session) | set(incoming_session)):
             merged[session][admission_no] = merge_payment_lists(
-                server_session.get(admission_no) or [],
-                incoming_session.get(admission_no) or [],
+                live_payment_list(server_session.get(admission_no) or [], deleted_map, session, admission_no),
+                live_payment_list(incoming_session.get(admission_no) or [], deleted_map, session, admission_no),
             )
     return merged
 
@@ -1499,9 +1537,14 @@ def merge_state_without_losing_receipts(server_state, incoming_state):
         server_state.get("students") or [],
         incoming_state.get("students") or [],
     )
+    merged["deletedPaymentReceipts"] = deleted_payment_receipt_map(
+        server_state.get("deletedPaymentReceipts") or {},
+        incoming_state.get("deletedPaymentReceipts") or {},
+    )
     merged["collectedPayments"] = merge_collected_payments(
         server_state.get("collectedPayments") or {},
         incoming_state.get("collectedPayments") or {},
+        merged["deletedPaymentReceipts"],
     )
     merged["mobileAppSettings"] = {
         **(server_state.get("mobileAppSettings") if isinstance(server_state.get("mobileAppSettings"), dict) else {}),

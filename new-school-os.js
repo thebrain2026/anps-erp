@@ -97,6 +97,7 @@ let feeBookReturnStudentAdmissionNo = "";
 let activeDailyCollectionDate = "";
 const viewHistoryStack = [];
 const collectedPayments = {};
+const deletedPaymentReceipts = {};
 const selectedHistoryPayments = new Set();
 let receiptSerial = 1;
 let currentAdmissionPhoto = "";
@@ -458,6 +459,7 @@ function getAppStateSnapshot() {
     financeSessions,
     activeSession,
     collectedPayments,
+    deletedPaymentReceipts,
     receiptSerial,
     notices,
     teacherNoticeRequests,
@@ -668,6 +670,44 @@ function mergePaymentList(remotePayments = [], localPayments = []) {
   return merged;
 }
 
+function getDeletedPaymentReceiptMap(...maps) {
+  const merged = {};
+  maps.forEach(map => {
+    if (!map || typeof map !== "object") return;
+    Object.entries(map).forEach(([session, sessionRows]) => {
+      if (!sessionRows || typeof sessionRows !== "object") return;
+      if (!merged[session]) merged[session] = {};
+      Object.entries(sessionRows).forEach(([admissionNo, receipts]) => {
+        if (!receipts || typeof receipts !== "object") return;
+        const normalizedAdmissionNo = normalizeAdmissionNo(admissionNo) || String(admissionNo || "").trim();
+        if (!normalizedAdmissionNo) return;
+        if (!merged[session][normalizedAdmissionNo]) merged[session][normalizedAdmissionNo] = {};
+        Object.entries(receipts).forEach(([receipt, deletedAt]) => {
+          const normalizedReceipt = String(receipt || "").trim().toLowerCase();
+          if (!normalizedReceipt) return;
+          merged[session][normalizedAdmissionNo][normalizedReceipt] = deletedAt || new Date().toISOString();
+        });
+      });
+    });
+  });
+  return merged;
+}
+
+function isPaymentReceiptDeleted(deletedMap = {}, session = activeSession, admissionNo = "", receiptNo = "") {
+  const normalizedAdmissionNo = normalizeAdmissionNo(admissionNo) || String(admissionNo || "").trim();
+  const normalizedReceipt = String(receiptNo || "").trim().toLowerCase();
+  return Boolean(normalizedReceipt && deletedMap?.[session]?.[normalizedAdmissionNo]?.[normalizedReceipt]);
+}
+
+function markPaymentReceiptDeleted(admissionNo, receiptNo, session = activeSession) {
+  const normalizedAdmissionNo = normalizeAdmissionNo(admissionNo) || String(admissionNo || "").trim();
+  const normalizedReceipt = String(receiptNo || "").trim().toLowerCase();
+  if (!session || !normalizedAdmissionNo || !normalizedReceipt) return;
+  if (!deletedPaymentReceipts[session]) deletedPaymentReceipts[session] = {};
+  if (!deletedPaymentReceipts[session][normalizedAdmissionNo]) deletedPaymentReceipts[session][normalizedAdmissionNo] = {};
+  deletedPaymentReceipts[session][normalizedAdmissionNo][normalizedReceipt] = new Date().toISOString();
+}
+
 function getNextAvailableReceiptForMerge(session = activeSession, usedReceipts = new Set(), nextSerialRef = {value: 1}) {
   const receiptYear = String(session || new Date().getFullYear()).split("-")[0] || String(new Date().getFullYear());
   let candidate = "";
@@ -679,7 +719,7 @@ function getNextAvailableReceiptForMerge(session = activeSession, usedReceipts =
   return candidate;
 }
 
-function mergeCollectedPayments(remoteCollected = {}, localCollected = {}) {
+function mergeCollectedPayments(remoteCollected = {}, localCollected = {}, deletedMap = {}) {
   const merged = {};
   const sessions = new Set([...Object.keys(remoteCollected || {}), ...Object.keys(localCollected || {})]);
   sessions.forEach(session => {
@@ -719,7 +759,9 @@ function mergeCollectedPayments(remoteCollected = {}, localCollected = {}) {
     const admissionNos = new Set([...Object.keys(remoteSession || {}), ...Object.keys(localSession || {})]);
     merged[session] = {};
     admissionNos.forEach(admissionNo => {
-      merged[session][admissionNo] = mergePaymentList(remoteSession[admissionNo] || [], prepareLocalPayments(admissionNo, localSession[admissionNo] || []));
+      const liveRemotePayments = (remoteSession[admissionNo] || []).filter(payment => !isPaymentReceiptDeleted(deletedMap, session, admissionNo, payment?.receipt));
+      const liveLocalPayments = (localSession[admissionNo] || []).filter(payment => !isPaymentReceiptDeleted(deletedMap, session, admissionNo, payment?.receipt));
+      merged[session][admissionNo] = mergePaymentList(liveRemotePayments, prepareLocalPayments(admissionNo, liveLocalPayments));
     });
   });
   return merged;
@@ -775,7 +817,8 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
   merged.classTimetableEntries = Array.isArray(remoteState.classTimetableEntries)
     ? remoteState.classTimetableEntries
     : [];
-  merged.collectedPayments = mergeCollectedPayments(remoteState.collectedPayments || {}, localState.collectedPayments || {});
+  merged.deletedPaymentReceipts = getDeletedPaymentReceiptMap(remoteState.deletedPaymentReceipts, localState.deletedPaymentReceipts);
+  merged.collectedPayments = mergeCollectedPayments(remoteState.collectedPayments || {}, localState.collectedPayments || {}, merged.deletedPaymentReceipts);
   merged.financeSessions = {...(remoteState.financeSessions || {}), ...(localState.financeSessions || {})};
   return merged;
 }
@@ -1015,7 +1058,12 @@ function applySavedState(saved = {}) {
       Object.assign(financeSessions, saved.financeSessions);
     }
     if (saved.collectedPayments && typeof saved.collectedPayments === "object") {
+      Object.keys(collectedPayments).forEach(session => delete collectedPayments[session]);
       Object.assign(collectedPayments, saved.collectedPayments);
+    }
+    if (saved.deletedPaymentReceipts && typeof saved.deletedPaymentReceipts === "object") {
+      Object.keys(deletedPaymentReceipts).forEach(session => delete deletedPaymentReceipts[session]);
+      Object.assign(deletedPaymentReceipts, getDeletedPaymentReceiptMap(saved.deletedPaymentReceipts));
     }
     if (Number(saved.receiptSerial) > 0) {
       receiptSerial = Number(saved.receiptSerial);
@@ -8170,12 +8218,15 @@ function resetFeeDateToToday() {
 function deletePaymentByReceipt(admissionNo, receiptNo, paymentId = "") {
   const payments = getSessionPayments(admissionNo);
   const before = payments.length;
+  const targetReceipt = String(receiptNo || "");
+  const targetPaymentId = String(paymentId || "");
   for (let index = payments.length - 1; index >= 0; index -= 1) {
-    if (paymentId && payments[index].id === paymentId) {
+    const payment = payments[index] || {};
+    if (targetPaymentId && String(payment.id || "") === targetPaymentId) {
       payments.splice(index, 1);
       continue;
     }
-    if (!paymentId && payments[index].receipt === receiptNo) payments.splice(index, 1);
+    if (!targetPaymentId && String(payment.receipt || "") === targetReceipt) payments.splice(index, 1);
   }
   return payments.length !== before;
 }
@@ -15499,9 +15550,9 @@ document.body.addEventListener("click", event => {
   if (deletePayment) {
     const admissionNo = deletePayment.dataset.deletePayment;
     const receiptNo = deletePayment.dataset.paymentReceipt;
-    const paymentId = deletePayment.dataset.paymentId || "";
     if (receiptNo && confirm(`Delete receipt ${receiptNo}?`)) {
-      if (deletePaymentByReceipt(admissionNo, receiptNo, paymentId)) {
+      if (deletePaymentByReceipt(admissionNo, receiptNo)) {
+        markPaymentReceiptDeleted(admissionNo, receiptNo);
         saveAppState();
         renderStudentFeeCounter(admissionNo);
         renderFeeBook(admissionNo);
