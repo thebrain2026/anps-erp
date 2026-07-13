@@ -2897,6 +2897,7 @@ function getDailyCollectionReportRows() {
           date: dateLabel,
           receipts: new Set(),
           students: new Set(),
+          roles: new Set(),
           details: [],
           bank: 0,
           cash: 0,
@@ -2915,10 +2916,12 @@ function getDailyCollectionReportRows() {
         .reduce((sum, allocation) => sum + Number(allocation.amount || 0), 0);
       row.receipts.add(payment.receipt || "-");
       row.students.add(student?.name || admissionNo || "-");
+      row.roles.add(payment.by || payment.entryRole || payment.role || "-");
       row.details.push({
         admissionNo,
         studentName: student?.name || "-",
         receipt: payment.receipt || "-",
+        role: payment.by || payment.entryRole || payment.role || "-",
         bank: split.bank,
         cash: split.cash,
         fine,
@@ -3017,6 +3020,7 @@ function renderDailyCollectionReport() {
         <td><button class="daily-collection-date-action" type="button" data-open-daily-collection="${encodeURIComponent(row.date)}" aria-expanded="${isOpen ? "true" : "false"}">${escapeHtml(row.date)}</button></td>
         <td>${row.receipts.size}</td>
         <td>${row.students.size}</td>
+        <td>${escapeHtml([...row.roles].filter(Boolean).join(", ") || "-")}</td>
         <td>${formatRs(row.bank)}</td>
         <td>${formatRs(row.cash)}</td>
         <td>${formatRs(row.fine)}</td>
@@ -3024,7 +3028,7 @@ function renderDailyCollectionReport() {
       </tr>
       ${isOpen ? renderDailyCollectionDropdown(row) : ""}
     `;
-  }).join("") || `<tr><td colspan="7">${selectedDateLabel ? "No collection found for selected date." : "No daily collection found yet."}</td></tr>`;
+  }).join("") || `<tr><td colspan="8">${selectedDateLabel ? "No collection found for selected date." : "No daily collection found yet."}</td></tr>`;
 }
 
 function renderDailyCollectionDropdown(reportRow = {}) {
@@ -3034,7 +3038,7 @@ function renderDailyCollectionDropdown(reportRow = {}) {
   const remarks = [...new Set(details.map(item => String(item.remarks || "").trim()).filter(item => item && item !== "-"))];
   return `
     <tr class="daily-collection-dropdown-row">
-      <td colspan="7">
+      <td colspan="8">
         <div class="daily-collection-detail-card">
           <div class="daily-collection-detail-head">
             <div>
@@ -3052,7 +3056,7 @@ function renderDailyCollectionDropdown(reportRow = {}) {
           <div class="table-wrap daily-collection-detail-table">
             <table>
               <thead>
-                <tr><th>Student</th><th>Admission No.</th><th>Receipt</th><th>Bank</th><th>Cash</th><th>Total</th><th>Remarks</th></tr>
+                <tr><th>Student</th><th>Admission No.</th><th>Receipt</th><th>Bank</th><th>Cash</th><th>Total</th><th>Remarks</th><th>Entry Role</th></tr>
               </thead>
               <tbody>
                 ${details.map(item => `
@@ -3064,8 +3068,9 @@ function renderDailyCollectionDropdown(reportRow = {}) {
                     <td>${formatRs(item.cash || 0)}</td>
                     <td><strong>${formatRs(item.total || 0)}</strong></td>
                     <td>${escapeHtml(item.remarks || "-")}</td>
+                    <td>${escapeHtml(item.role || "-")}</td>
                   </tr>
-                `).join("") || `<tr><td colspan="7">No student payments found for this date.</td></tr>`}
+                `).join("") || `<tr><td colspan="8">No student payments found for this date.</td></tr>`}
               </tbody>
             </table>
           </div>
