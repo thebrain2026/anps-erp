@@ -2623,6 +2623,28 @@
               </div>
             </form>
           </section>
+
+          <section class="panel role-permission-panel student-app-global-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Student App</p>
+                <h2>Global App Controls</h2>
+                <small>Turn shared student app features on or off for every student login.</small>
+              </div>
+              <span class="status-pill stable" id="studentAppGlobalSummary">Bus Location ON</span>
+            </div>
+            <form id="studentAppGlobalForm" class="student-app-global-form">
+              <label class="switch-line">
+                <i>BUS</i>
+                <span>
+                  <strong>Bus Location</strong>
+                  <small>When ON, every student can see Bus Location. When OFF, Bus Location is hidden from all student apps.</small>
+                </span>
+                <input name="busLocationEnabled" type="checkbox" />
+              </label>
+              <button class="primary-action" type="submit">Save App Control</button>
+            </form>
+          </section>
         </div>
       </section>
 
@@ -3688,6 +3710,6 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="./new-school-os.js?v=20260709-teacher-advisory"></script>
+  <script src="./new-school-os.js?v=20260716-bus-location-control"></script>
 </body>
 </html>

@@ -873,6 +873,10 @@
       background: linear-gradient(135deg, #14b8a6, #246bfe 58%, #101a4a);
       color: #fff;
     }
+    .module[data-nav="busLocation"] .module-icon {
+      background: linear-gradient(135deg, #0f766e, #1bb6d9 58%, #246bfe);
+      color: #fff;
+    }
     .module[data-nav="leave"] .module-icon {
       background: linear-gradient(135deg, #f8bd45, #f06c9b 58%, #7659ff);
       color: #fff;
@@ -890,6 +894,317 @@
     .card-head { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
     .card h3 { margin-bottom: 4px; font-size: 1rem; }
     .card p { margin-bottom: 0; color: var(--muted); font-weight: 650; }
+
+    .bus-location-card {
+      position: relative;
+      overflow: hidden;
+      padding: 0;
+      min-height: calc(100dvh - 178px);
+      border-color: rgba(36, 107, 254, .18);
+      background:
+        radial-gradient(circle at 92% 8%, rgba(34, 200, 166, .32), transparent 30%),
+        radial-gradient(circle at 10% 0%, rgba(36, 107, 254, .24), transparent 30%),
+        linear-gradient(145deg, rgba(255,255,255,.98), rgba(235, 247, 255, .94));
+      box-shadow: 0 22px 48px rgba(16, 26, 74, .14);
+    }
+
+    .bus-location-card::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      height: 5px;
+      background: linear-gradient(90deg, #20a064, #1bb6d9, #246bfe, #f8bd45);
+    }
+
+    .bus-location-card.bus-map-full .bus-location-meta {
+      display: none;
+    }
+
+    .bus-location-card.bus-map-full .bus-location-map-shell {
+      min-height: calc(100dvh - 292px);
+    }
+
+    .bus-location-hero {
+      display: grid;
+      grid-template-rows: auto auto auto 1fr;
+      gap: 13px;
+      min-height: calc(100dvh - 178px);
+      padding: 18px 16px 14px;
+    }
+
+    .bus-location-top {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .bus-location-title {
+      display: flex;
+      align-items: center;
+      gap: 11px;
+      min-width: 0;
+    }
+
+    .bus-location-badge {
+      flex: 0 0 auto;
+      display: grid;
+      place-items: center;
+      width: 44px;
+      height: 44px;
+      border-radius: 16px;
+      color: #fff;
+      background: linear-gradient(135deg, #0f766e, #1bb6d9 52%, #246bfe);
+      font-size: .78rem;
+      font-weight: 950;
+      box-shadow: 0 13px 26px rgba(36, 107, 254, .2);
+    }
+
+    .bus-location-card h3 {
+      margin: 0 0 3px;
+      color: #10233f;
+      font-size: 1.08rem;
+      line-height: 1.12;
+    }
+
+    .bus-location-card p {
+      color: #526079;
+      font-size: .82rem;
+      line-height: 1.38;
+      font-weight: 760;
+    }
+
+    .bus-location-live {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 7px 10px;
+      border-radius: 999px;
+      color: #075985;
+      background: rgba(224, 242, 254, .86);
+      border: 1px solid rgba(14, 165, 233, .2);
+      font-size: .68rem;
+      font-weight: 950;
+      white-space: nowrap;
+    }
+
+    .bus-location-live::before {
+      content: "";
+      width: 7px;
+      height: 7px;
+      border-radius: 999px;
+      background: #20a064;
+      box-shadow: 0 0 0 5px rgba(32, 160, 100, .12);
+    }
+
+    .bus-location-meta {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .bus-location-chip {
+      min-width: 0;
+      padding: 10px 11px;
+      border: 1px solid rgba(36, 107, 254, .13);
+      border-radius: 14px;
+      background: rgba(255,255,255,.78);
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.56);
+    }
+
+    .bus-location-chip span {
+      display: block;
+      color: #7b8499;
+      font-size: .62rem;
+      font-weight: 950;
+      text-transform: uppercase;
+    }
+
+    .bus-location-chip b {
+      display: block;
+      margin-top: 2px;
+      color: #10233f;
+      font-size: .82rem;
+      line-height: 1.15;
+      font-weight: 950;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .bus-location-actions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .bus-location-open,
+    .bus-location-refresh {
+      flex: 1 1 145px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 42px;
+      padding: 0 14px;
+      border: 0;
+      border-radius: 14px;
+      color: #fff;
+      background: linear-gradient(135deg, #101a4a, #246bfe 54%, #1bb6d9);
+      font-size: .76rem;
+      font-weight: 950;
+      text-decoration: none;
+      box-shadow: 0 13px 26px rgba(36, 107, 254, .2);
+    }
+
+    .bus-location-refresh {
+      color: #0f3d91;
+      background: rgba(255,255,255,.86);
+      border: 1px solid rgba(36, 107, 254, .2);
+      box-shadow: none;
+    }
+
+    .bus-location-preview-label {
+      display: none;
+    }
+
+    .bus-location-map-shell {
+      margin-top: 3px;
+      min-height: clamp(360px, 58dvh, 560px);
+      height: 100%;
+      border: 1px solid rgba(36, 107, 254, .16);
+      border-radius: 18px;
+      background:
+        linear-gradient(24deg, transparent 45%, rgba(255,255,255,.82) 45% 48%, transparent 48%),
+        linear-gradient(114deg, transparent 38%, rgba(255,255,255,.72) 38% 41%, transparent 41%),
+        linear-gradient(156deg, transparent 52%, rgba(255,255,255,.76) 52% 55%, transparent 55%),
+        radial-gradient(circle at 20% 18%, rgba(52, 168, 83, .28), transparent 22%),
+        radial-gradient(circle at 74% 76%, rgba(251, 188, 5, .3), transparent 24%),
+        radial-gradient(circle at 92% 18%, rgba(66, 133, 244, .16), transparent 24%),
+        linear-gradient(135deg, #dff4e7 0%, #e8f3ff 38%, #fff3ce 72%, #eaf7ef 100%);
+      position: relative;
+      overflow: hidden;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,.55);
+    }
+
+    .bus-location-map-shell::before {
+      content: "";
+      position: absolute;
+      left: 20px;
+      right: 26px;
+      top: 52%;
+      height: 7px;
+      border-radius: 999px;
+      background:
+        linear-gradient(90deg, #34a853 0 24%, #4285f4 24% 62%, #fbbc05 62% 78%, #ea4335 78% 100%);
+      transform: rotate(-11deg);
+      box-shadow: 0 12px 24px rgba(36, 107, 254, .14);
+    }
+
+    .bus-location-map-shell::after {
+      content: "BUS";
+      position: absolute;
+      right: 32px;
+      top: 62px;
+      display: grid;
+      place-items: center;
+      width: 48px;
+      height: 32px;
+      border-radius: 12px;
+      color: #fff;
+      background: linear-gradient(135deg, #101a4a, #4285f4);
+      font-size: .68rem;
+      font-weight: 950;
+      box-shadow: 0 12px 24px rgba(16, 26, 74, .22);
+    }
+
+    .bus-location-map-copy {
+      position: relative;
+      z-index: 2;
+      max-width: 78%;
+      padding: 16px 15px;
+    }
+
+    .bus-location-map-copy b {
+      display: block;
+      color: #10233f;
+      font-size: .9rem;
+      line-height: 1.18;
+    }
+
+    .bus-location-map-copy span {
+      display: block;
+      margin-top: 5px;
+      color: #526079;
+      font-size: .72rem;
+      line-height: 1.35;
+      font-weight: 850;
+    }
+
+    .bus-location-map-pin {
+      position: absolute;
+      z-index: 2;
+      display: grid;
+      place-items: center;
+      width: 34px;
+      height: 34px;
+      border-radius: 999px 999px 999px 8px;
+      color: #fff;
+      background: #ea4335;
+      border: 3px solid #fff;
+      box-shadow: 0 12px 22px rgba(16, 26, 74, .2);
+      transform: rotate(-45deg);
+      font-size: .68rem;
+      font-weight: 950;
+    }
+
+    .bus-location-map-pin span {
+      transform: rotate(45deg);
+    }
+
+    .bus-location-map-pin.pickup {
+      left: 28px;
+      bottom: 28px;
+      background: #34a853;
+    }
+
+    .bus-location-map-pin.school {
+      right: 74px;
+      top: 28px;
+      background: #4285f4;
+    }
+
+    .bus-location-google-tag {
+      position: absolute;
+      right: 10px;
+      bottom: 10px;
+      z-index: 2;
+      display: inline-flex;
+      align-items: center;
+      gap: 2px;
+      padding: 6px 8px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.9);
+      color: #334155;
+      font-size: .62rem;
+      font-weight: 950;
+      box-shadow: 0 8px 18px rgba(16,26,74,.12);
+    }
+
+    .bus-location-google-tag b:nth-child(1) { color: #4285f4; }
+    .bus-location-google-tag b:nth-child(2) { color: #ea4335; }
+    .bus-location-google-tag b:nth-child(3) { color: #fbbc05; }
+    .bus-location-google-tag b:nth-child(4) { color: #4285f4; }
+    .bus-location-google-tag b:nth-child(5) { color: #34a853; }
+    .bus-location-google-tag b:nth-child(6) { color: #ea4335; }
+
+    @media (max-width: 390px) {
+      .bus-location-meta { grid-template-columns: 1fr; }
+      .bus-location-top { align-items: stretch; }
+      .bus-location-live { align-self: start; }
+      .bus-location-card,
+      .bus-location-hero { min-height: calc(100dvh - 150px); }
+      .bus-location-map-shell { min-height: clamp(340px, 54dvh, 520px); }
+    }
 
     .academic-calendar-hero {
       margin: 0 12px 12px;
@@ -1639,6 +1954,11 @@
           <div class="stack" id="feesList"></div>
         </section>
 
+        <section class="view" id="busLocationView">
+          <div class="section-title"><h2>Bus Location</h2><span id="busLocationTotal">Live tracking</span></div>
+          <div class="stack" id="busLocationHost"></div>
+        </section>
+
         <section class="view" id="receiptView">
           <div class="section-title"><h2>Receipt</h2><span>Paid records</span></div>
           <div class="stack" id="receiptList"></div>
@@ -1783,13 +2103,21 @@
   </div>
 
   <script>
+    const isLocalPreview = window.location.protocol === "file:"
+      || window.location.hostname === "127.0.0.1"
+      || window.location.hostname === "localhost";
+    const apiBaseUrl = isLocalPreview
+      ? "https://anps.thebrainerp.com/api"
+      : "/api";
+
     const AppConfig = {
       mode: "api",
-      apiBaseUrl: "/api",
+      apiBaseUrl,
       tokenKey: "anps_mobile_token",
       roleKey: "anps_mobile_role",
       userKey: "anps_mobile_user",
-      sessionKey: "anps_mobile_saved_session"
+      sessionKey: "anps_mobile_saved_session",
+      smartBusStudentPath: "./smart-bus-tracking/student-bus-location.html"
     };
 
     const todayName = new Intl.DateTimeFormat("en-US", { weekday: "long" }).format(new Date());
@@ -1917,6 +2245,9 @@
             name: state.user.name
           })
         });
+      },
+      async smartBusConfig() {
+        return this.request("/smart-bus/config");
       },
       async create(collection, record) {
         const latest = await this.request("/state", { method: "GET" });
@@ -2749,6 +3080,7 @@
         ratings: [],
         complaints: (erpState.complaintRecords || []).filter(item => normalizeAdmission(item.studentId) === normalizeAdmission(student.admissionNo)),
         dueSummary,
+        mobileAppSettings: {...(erpState.mobileAppSettings || {})},
         subjects: []
       };
     }
@@ -2879,6 +3211,7 @@
 
     const studentModules = [
       { id: "fees", label: "Fees", icon: "₹" },
+      { id: "busLocation", label: "Bus Location", icon: "BUS" },
       { id: "receipt", label: "Receipt", icon: "RC" },
       { id: "result", label: "Result", icon: "RS" },
       { id: "timetable", label: "Timetable", icon: "TT" },
@@ -3660,6 +3993,10 @@
     }
 
     function openView(id) {
+      if (state.role === "student" && id === "busLocation" && !studentBusLocationEnabled()) {
+        toast("Bus Location is currently turned off by the school.");
+        id = "dashboard";
+      }
       if (dueAccessLocked() && id !== "fees") {
         toast("App services will resume after fees are cleared.");
         showDueAccessPopup(true);
@@ -3670,6 +4007,15 @@
       document.querySelectorAll("[data-nav]").forEach(btn => btn.classList.toggle("active", btn.dataset.nav === id));
       document.body.classList.remove("drawer-open");
       window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function studentBusLocationEnabled() {
+      return state.role !== "student" || state.workspace?.mobileAppSettings?.busLocationEnabled !== false;
+    }
+
+    function visibleModulesForCurrentUser(modules) {
+      if (state.role !== "student") return modules;
+      return modules.filter(item => item.id !== "busLocation" || studentBusLocationEnabled());
     }
 
     function renderNav(modules) {
@@ -3685,7 +4031,7 @@
       const user = state.user;
       const ws = state.workspace;
       const isTeacher = state.role === "teacher";
-      const modules = isTeacher ? teacherModules : studentModules;
+      const modules = visibleModulesForCurrentUser(isTeacher ? teacherModules : studentModules);
       const todays = todayTimetableEntries(ws.timetable);
       $("#appTitle").textContent = "Alfred Nobel Public School";
       $("#appSubtitle").textContent = isTeacher ? `Teacher Portal | ${user.role} - ${user.department}` : `Student Portal | ${user.className} - Roll ${user.roll}`;
@@ -3726,6 +4072,102 @@
       renderNav(modules);
     }
 
+    function buildStudentBusLocationUrl(user = {}, baseUrl = AppConfig.smartBusStudentPath) {
+      const params = new URLSearchParams();
+      const admissionNo = normalizeText(user.admissionNo || user.id || user.admissionNumber);
+      if (admissionNo) params.set("admission_no", admissionNo);
+      if (normalizeText(user.name)) params.set("student", normalizeText(user.name));
+      if (normalizeText(user.className)) params.set("class", normalizeText(user.className));
+      if (normalizeText(user.section)) params.set("section", normalizeText(user.section));
+      params.set("source", "student-app");
+      try {
+        const url = new URL(baseUrl || AppConfig.smartBusStudentPath, window.location.href);
+        params.forEach((value, key) => url.searchParams.set(key, value));
+        return url.href;
+      } catch (error) {
+        const query = params.toString();
+        return `${AppConfig.smartBusStudentPath}${query ? `?${query}` : ""}`;
+      }
+    }
+
+    function setBusLocationUrl(url) {
+      const link = $("#busLocationOpenLink");
+      const frame = $("#busLocationFrame");
+      if (link) {
+        if (link.tagName === "A") link.href = url;
+        link.dataset.mapUrl = url;
+      }
+      if (frame) frame.src = url;
+    }
+
+    function renderBusLocationView(user = {}) {
+      const fallbackUrl = buildStudentBusLocationUrl(user);
+      $("#busLocationTotal").textContent = "Live tracking";
+      $("#busLocationHost").innerHTML = `
+        <article class="card bus-location-card">
+          <div class="bus-location-hero">
+            <div class="bus-location-top">
+              <div class="bus-location-title">
+                <span class="bus-location-badge">BUS</span>
+                <div>
+                  <h3>Student Bus Location</h3>
+                  <p id="busLocationStatus">Opening student-wise live bus tracking.</p>
+                </div>
+              </div>
+              <span class="bus-location-live">Live GPS</span>
+            </div>
+            <div class="bus-location-meta">
+              <div class="bus-location-chip"><span>Admission No</span><b>${escapeHtml(user.id || user.admissionNo || "-")}</b></div>
+              <div class="bus-location-chip"><span>Class</span><b>${escapeHtml(user.className || "Class")}</b></div>
+            </div>
+            <div class="bus-location-actions">
+              <button class="bus-location-open" id="busLocationOpenLink" type="button" data-map-url="${escapeHtml(fallbackUrl)}">Full Map View</button>
+              <button class="bus-location-refresh" id="busLocationRefreshBtn" type="button">Refresh Location</button>
+            </div>
+            <div class="bus-location-map-shell">
+              <div class="bus-location-map-copy">
+                <b>Track the assigned school bus</b>
+                <span>Open the full map only when live location is needed.</span>
+              </div>
+              <div class="bus-location-map-pin pickup"><span>P</span></div>
+              <div class="bus-location-map-pin school"><span>S</span></div>
+              <div class="bus-location-google-tag" aria-label="Google Map style preview">
+                <b>G</b><b>o</b><b>o</b><b>g</b><b>l</b><b>e</b> Map
+              </div>
+            </div>
+          </div>
+        </article>`;
+      $("#busLocationOpenLink")?.addEventListener("click", () => {
+        const card = $("#busLocationHost")?.querySelector(".bus-location-card");
+        const isFull = card?.classList.toggle("bus-map-full");
+        const button = $("#busLocationOpenLink");
+        if (button) button.textContent = isFull ? "Compact View" : "Full Map View";
+        const status = $("#busLocationStatus");
+        if (status) status.textContent = isFull ? "Showing the bus map in full page view." : "Opening student-wise live bus tracking.";
+      });
+      $("#busLocationRefreshBtn")?.addEventListener("click", () => {
+        const status = $("#busLocationStatus");
+        if (status) status.textContent = "Bus location link refreshed.";
+      });
+      AppApi.smartBusConfig()
+        .then(config => {
+          if (!config?.studentUrl) return;
+          const liveUrl = buildStudentBusLocationUrl(user, config.studentUrl);
+          setBusLocationUrl(liveUrl);
+          const status = $("#busLocationStatus");
+          if (status) {
+            status.textContent = config.configured
+              ? "Connected to the Smart Bus Tracking service."
+              : "Using the local Smart Bus Tracking preview.";
+          }
+        })
+        .catch(error => {
+          const status = $("#busLocationStatus");
+          if (status) status.textContent = "Tracking page is available. Live service will connect when the Smart Bus server is configured.";
+          console.warn("Smart Bus student config unavailable.", error);
+        });
+    }
+
     function renderStudentViews() {
       const user = state.user;
       const ws = state.workspace;
@@ -3737,6 +4179,7 @@
       renderDashboardLatestNotice(ws.notices);
       $("#feesTotal").textContent = user.feesDue ? `₹${user.feesDue} due` : "Clear";
       $("#feesList").innerHTML = feeStatusCard(user);
+      renderBusLocationView(user);
       $("#receiptList").innerHTML = ws.receipts.map(item => card({ title: item.receiptNo, meta: `${item.date} | ${item.mode}`, body: `Amount paid: ₹${item.amount}`, badge: "Paid" })).join("");
       $("#resultTotal").textContent = ws.results.length ? `${ws.results.length} published` : "Not published";
       $("#resultSummary").innerHTML = ws.results.length

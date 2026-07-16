@@ -871,14 +871,31 @@ def create_icici_payment_order(payload, user):
 
 
 def smart_bus_config():
-    base_url = SMART_BUS_TRACKING_BASE_URL or "http://127.0.0.1:4190"
+    base_url = smart_bus_base_url()
     dashboard_url = SMART_BUS_TRACKING_DASHBOARD_URL or f"{base_url.rstrip('/')}/office-live-map.html"
+    student_url = f"{base_url.rstrip('/')}/student-bus-location.html"
+    token = smart_bus_erp_token(base_url)
     return {
         "baseUrl": base_url,
         "dashboardUrl": dashboard_url,
-        "configured": bool(SMART_BUS_TRACKING_BASE_URL and SMART_BUS_ERP_TOKEN),
-        "tokenConfigured": bool(SMART_BUS_ERP_TOKEN),
+        "studentUrl": student_url,
+        "configured": bool(base_url and token),
+        "tokenConfigured": bool(token),
+        "usingLocalDefault": bool(not SMART_BUS_TRACKING_BASE_URL and token),
     }
+
+
+def smart_bus_base_url():
+    return (SMART_BUS_TRACKING_BASE_URL or "http://127.0.0.1:4190").strip().rstrip("/")
+
+
+def smart_bus_erp_token(base_url=None):
+    if SMART_BUS_ERP_TOKEN:
+        return SMART_BUS_ERP_TOKEN
+    clean_base = (base_url or smart_bus_base_url()).strip().lower()
+    if clean_base.startswith("http://127.0.0.1") or clean_base.startswith("http://localhost"):
+        return "change-this-erp-sync-token"
+    return ""
 
 
 def normalize_lookup(value=""):
@@ -967,7 +984,9 @@ def build_smart_bus_master_payload(state):
 
 def sync_smart_bus_master_data():
     config = smart_bus_config()
-    if not SMART_BUS_TRACKING_BASE_URL or not SMART_BUS_ERP_TOKEN:
+    base_url = smart_bus_base_url()
+    token = smart_bus_erp_token(base_url)
+    if not base_url or not token:
         return {
             "ok": False,
             "configured": False,
@@ -980,14 +999,14 @@ def sync_smart_bus_master_data():
             **config,
         }
     payload = build_smart_bus_master_payload(read_state() or {})
-    endpoint = f"{SMART_BUS_TRACKING_BASE_URL}/api/erp/sync-master-data"
+    endpoint = f"{base_url}/api/erp/sync-master-data"
     body = json.dumps(payload).encode("utf-8")
     request = urllib.request.Request(
         endpoint,
         data=body,
         method="POST",
         headers={
-            "Authorization": f"Bearer {SMART_BUS_ERP_TOKEN}",
+            "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
         },
     )
@@ -3106,6 +3125,10 @@ def reset_live_data():
 
 
 def origin_allowed(origin):
+    if origin == "null":
+        return True
+    if origin.startswith("http://127.0.0.1:") or origin.startswith("http://localhost:"):
+        return True
     if not origin or "*" in ALLOWED_ORIGINS:
         return True
     return origin.rstrip("/") in ALLOWED_ORIGINS

@@ -4182,6 +4182,26 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   accent-color: #0f766e;
 }
 
+.student-app-global-panel {
+  border-top: 4px solid #2563eb;
+}
+
+.student-app-global-form {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 12px;
+  align-items: center;
+}
+
+.student-app-global-form .switch-line {
+  margin: 0;
+}
+
+.student-app-global-form button {
+  min-height: 42px;
+  white-space: nowrap;
+}
+
 .student-user-panel {
   overflow: hidden;
 }

@@ -37,7 +37,8 @@ const upiPaymentRequests = [];
 const mobileAppSettings = {
   duePopupEnabled: true,
   dueLockEnabled: true,
-  dueLockDays: 75
+  dueLockDays: 75,
+  busLocationEnabled: true
 };
 const rolePermissions = {};
 const rolePermissionAudit = {};
@@ -1128,6 +1129,7 @@ function applySavedState(saved = {}) {
       mobileAppSettings.duePopupEnabled = saved.mobileAppSettings.duePopupEnabled !== false;
       mobileAppSettings.dueLockEnabled = saved.mobileAppSettings.dueLockEnabled !== false;
       mobileAppSettings.dueLockDays = Math.max(1, Number(saved.mobileAppSettings.dueLockDays || 75));
+      mobileAppSettings.busLocationEnabled = saved.mobileAppSettings.busLocationEnabled !== false;
     }
     if (saved.rolePermissions && typeof saved.rolePermissions === "object") {
       Object.keys(rolePermissions).forEach(role => delete rolePermissions[role]);
@@ -2183,6 +2185,19 @@ function renderStudentDueAccessSettings() {
       <span>App lock ${lockText}</span>
       <small>The student app unlocks automatically after the payment is cleared and the app is synced or reopened.</small>
     `;
+  }
+}
+
+function renderStudentAppGlobalControls() {
+  const form = document.getElementById("studentAppGlobalForm");
+  const summary = document.getElementById("studentAppGlobalSummary");
+  if (!form) return;
+  const enabled = mobileAppSettings.busLocationEnabled !== false;
+  form.elements.busLocationEnabled.checked = enabled;
+  if (summary) {
+    summary.textContent = enabled ? "Bus Location ON" : "Bus Location OFF";
+    summary.classList.toggle("stable", enabled);
+    summary.classList.toggle("danger", !enabled);
   }
 }
 
@@ -6651,6 +6666,7 @@ function renderUserAccessSettings() {
   if (permissionRole && !permissionRole.value && selectedRole) permissionRole.value = selectedRole;
   renderPermissionRows(document.getElementById("accessPermissionRole")?.value || "");
   renderUserAccessRows();
+  renderStudentAppGlobalControls();
 }
 
 function getMasterAdminAccount() {
@@ -14742,6 +14758,15 @@ document.getElementById("studentDueAccessForm")?.addEventListener("submit", even
   saveAppState();
   renderStudentDueAccessSettings();
   showToast("Student app due popup control saved.");
+});
+
+document.getElementById("studentAppGlobalForm")?.addEventListener("submit", event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  mobileAppSettings.busLocationEnabled = Boolean(form.elements.busLocationEnabled.checked);
+  saveAppState();
+  renderStudentAppGlobalControls();
+  showToast(mobileAppSettings.busLocationEnabled !== false ? "Bus Location enabled for student app." : "Bus Location disabled for student app.");
 });
 
 document.querySelector("#studentDueAccessForm [name='dueLockDays']")?.addEventListener("input", syncDueLockTitleFromInput);
