@@ -1584,6 +1584,44 @@ def normalize_admission_no(value):
     return "".join(ch.lower() for ch in str(value or "") if ch.isalnum())
 
 
+def student_login_candidates(student):
+    admission_no = str(student.get("admissionNo") or student.get("id") or student.get("admission_no") or "").strip()
+    normalized = normalize_admission_no(admission_no)
+    candidates = {admission_no.lower(), normalized}
+    if normalized:
+        candidates.add(f"anps{normalized[-3:]}")
+        candidates.add(f"anps{normalized[-4:]}")
+    return {item for item in candidates if item}
+
+
+def student_password_candidates(student):
+    return {
+        str(student.get("mobile") or "").strip(),
+        str(student.get("fatherMobile") or "").strip(),
+        str(student.get("motherMobile") or "").strip(),
+        str(student.get("guardianMobile") or "").strip(),
+        str(student.get("emergencyContact") or student.get("emergencyMobile") or "").strip(),
+    } - {""}
+
+
+def staff_login_candidates(staff):
+    staff_id = str(staff.get("staffId") or staff.get("id") or staff.get("staff_id") or "").strip()
+    return {
+        staff_id.lower(),
+        str(staff.get("loginId") or staff.get("username") or "").strip().lower(),
+        str(staff.get("email") or "").strip().lower(),
+        str(staff.get("phone") or staff.get("mobile") or "").strip().lower(),
+    } - {""}
+
+
+def staff_password_candidates(staff):
+    return {
+        str(staff.get("password") or "").strip(),
+        str(staff.get("phone") or staff.get("mobile") or "").strip(),
+        str(staff.get("emergencyPhone") or "").strip(),
+    } - {""}
+
+
 def record_updated_time(item):
     raw = ""
     if isinstance(item, dict):
@@ -2377,6 +2415,40 @@ def verify_login(username, password):
                 "role_name": "Student",
                 "school_id": normalize_school_id(user.get("school_id") or user.get("schoolId") or school_id),
                 "school_name": user.get("schoolName") or DEFAULT_SCHOOL_NAME,
+            }
+    for student in state.get("students", []) or []:
+        if not isinstance(student, dict):
+            continue
+        status = str(student.get("status") or "").strip().lower()
+        if status in {"disabled", "inactive"}:
+            continue
+        if wanted_lower not in student_login_candidates(student):
+            continue
+        if any(hmac.compare_digest(candidate, supplied) for candidate in student_password_candidates(student)):
+            admission_no = str(student.get("admissionNo") or student.get("id") or wanted).strip()
+            return {
+                "username": wanted or admission_no,
+                "full_name": student.get("name") or student.get("studentName") or admission_no,
+                "role_name": "Student",
+                "school_id": normalize_school_id(student.get("school_id") or student.get("schoolId") or school_id),
+                "school_name": student.get("schoolName") or DEFAULT_SCHOOL_NAME,
+            }
+    for staff in [*(state.get("staffMembers") or []), *(state.get("staff") or [])]:
+        if not isinstance(staff, dict):
+            continue
+        status = str(staff.get("status") or "").strip().lower()
+        if status in {"disabled", "inactive"}:
+            continue
+        if wanted_lower not in staff_login_candidates(staff):
+            continue
+        if any(hmac.compare_digest(candidate, supplied) for candidate in staff_password_candidates(staff)):
+            staff_id = str(staff.get("staffId") or staff.get("id") or wanted).strip()
+            return {
+                "username": staff_id or wanted,
+                "full_name": staff.get("name") or staff.get("staffName") or staff_id or wanted,
+                "role_name": staff.get("role") or "Staff",
+                "school_id": normalize_school_id(staff.get("school_id") or staff.get("schoolId") or school_id),
+                "school_name": staff.get("schoolName") or DEFAULT_SCHOOL_NAME,
             }
     return None
 
