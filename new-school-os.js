@@ -530,6 +530,63 @@ async function backendFetch(path, options = {}, timeoutMs = BACKEND_FETCH_TIMEOU
   }
 }
 
+function parseBackendRawJson(value) {
+  if (!value) return {};
+  if (typeof value === "object") return value;
+  try {
+    const parsed = JSON.parse(String(value));
+    return parsed && typeof parsed === "object" ? parsed : {};
+  } catch (error) {
+    return {};
+  }
+}
+
+function mapBackendStaffRow(row = {}) {
+  const raw = parseBackendRawJson(row.raw_json);
+  const staffId = raw.staffId || row.staff_id || row.staffId || "";
+  const phone = raw.phone || raw.mobile || row.mobile || "";
+  return {
+    ...raw,
+    staffId,
+    name: raw.name || row.name || "",
+    role: raw.role || row.role || "",
+    designation: raw.designation || row.designation || "",
+    department: raw.department || row.department || "",
+    teachingSubject: raw.teachingSubject || row.teaching_subject || row.subject || "",
+    assignedClass: raw.assignedClass || row.assigned_class || "",
+    phone,
+    mobile: raw.mobile || phone,
+    email: raw.email || row.email || "",
+    address: raw.address || row.address || "",
+    emergencyPhone: raw.emergencyPhone || row.emergency_phone || "",
+    status: raw.status || row.status || "Active"
+  };
+}
+
+async function hydrateStaffFromBackendModule({persist = false} = {}) {
+  if (staffMembers.length || !localStorage.getItem(BACKEND_TOKEN_KEY)) return false;
+  try {
+    const response = await backendFetch(`/api/module/staff?limit=500&v=${Date.now()}`, {
+      cache: "no-store",
+      headers: backendHeaders()
+    });
+    if (!response.ok) return false;
+    const payload = await response.json();
+    const rows = payload?.rows || payload?.items || payload?.staff || [];
+    const mappedStaff = rows
+      .map(mapBackendStaffRow)
+      .filter(staff => String(staff.staffId || staff.name || "").trim());
+    if (!mappedStaff.length) return false;
+    staffMembers.splice(0, staffMembers.length, ...mappedStaff);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(getAppStateSnapshot()));
+    if (persist) queueBackendSave(getAppStateSnapshot());
+    return true;
+  } catch (error) {
+    console.warn("Could not restore staff details from backend staff table.", error);
+    return false;
+  }
+}
+
 function mergePrimitiveList(remoteList = [], localList = []) {
   const merged = [];
   [...remoteList, ...localList].forEach(item => {
@@ -12003,8 +12060,10 @@ async function pullBackendStateIfChanged(showMessage = false) {
     backendLastUpdatedAt = payload?.updated_at || serverUpdatedAt || backendLastUpdatedAt;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(backendState));
     applySavedState(backendState);
+    const restoredStaff = await hydrateStaffFromBackendModule();
     refreshAllAfterSecurityClean();
     backendHydrating = false;
+    if (restoredStaff) queueBackendSave(getAppStateSnapshot());
     if (showMessage) showToast("Latest database data synced.");
   } catch (error) {
     markBackendConnectionIssue();
@@ -12042,8 +12101,10 @@ async function initializeBackendSync() {
       backendHydrating = true;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(backendState));
       applySavedState(backendState);
+      const restoredStaff = await hydrateStaffFromBackendModule();
       refreshAllAfterSecurityClean();
       backendHydrating = false;
+      if (restoredStaff) queueBackendSave(getAppStateSnapshot());
       showToast("Backend database connected.");
     } else if (!backendState || !Object.keys(backendState).length) {
       queueBackendSave(getAppStateSnapshot());
