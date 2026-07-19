@@ -62,6 +62,8 @@ ALLOWED_ORIGINS = [
 STATE_KEY = "anps_erp_state_v1"
 MAX_BODY = 20 * 1024 * 1024
 DB_SCHEMA_VERSION = 4
+BACKUP_RETENTION_DAYS = int(os.environ.get("ANPS_BACKUP_RETENTION_DAYS", "90") or "90")
+DB_BACKUP_MINUTES = int(os.environ.get("ANPS_DB_BACKUP_MINUTES", "15") or "15")
 DEFAULT_SCHOOL_ID = os.environ.get("ANPS_DEFAULT_SCHOOL_ID", "anps").strip() or "anps"
 DEFAULT_SCHOOL_NAME = os.environ.get("ANPS_DEFAULT_SCHOOL_NAME", "Alfred Nobel Public School").strip() or "Alfred Nobel Public School"
 SESSION_TTL_DAYS = 7
@@ -2800,6 +2802,13 @@ def write_state(value):
                 f"{len(raw)} bytes synced",
             ),
         )
+    try:
+        write_disk_backup_bundle(value, "auto-save")
+    except Exception as exc:
+        try:
+            record_audit("Backup Warning", "state_backup", "disk", "system", str(exc))
+        except Exception:
+            pass
     return state_row["updated_at"] if state_row else None
 
 
@@ -3371,7 +3380,150 @@ def backup_state(reason="manual"):
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     target = BACKUP_DIR / f"anps-state-{stamp}-{backup_id}.json"
     target.write_text(json.dumps({"state": state, "backup_id": backup_id, "reason": reason}, ensure_ascii=False, indent=2))
+    write_disk_backup_bundle(state, reason, force_db=True)
     return {"ok": True, "backup_id": backup_id, "file": str(target), "created_at": datetime.now().isoformat(timespec="seconds")}
+
+
+def atomic_write_text(path, text):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = path.with_suffix(path.suffix + ".tmp")
+    tmp_path.write_text(text, encoding="utf-8")
+    tmp_path.replace(path)
+
+
+def state_backup_payload(state, reason):
+    state = ensure_state_school(state if isinstance(state, dict) else {})
+    return {
+        "created_at": datetime.now().isoformat(timespec="seconds"),
+        "reason": reason,
+        "school_id": school_id_from_state(state),
+        "counts": {
+            "students": len(state.get("students") or []),
+            "staffMembers": len(state.get("staffMembers") or []),
+            "fees": len(state.get("fees") or []),
+            "feeReceipts": len(state.get("feeReceipts") or state.get("fees") or []),
+            "userAccessAccounts": len(state.get("userAccessAccounts") or []),
+        },
+        "state": state,
+    }
+
+
+def write_sqlite_db_snapshot(target):
+    target.parent.mkdir(parents=True, exist_ok=True)
+    tmp_path = target.with_suffix(target.suffix + ".tmp")
+    try:
+        if tmp_path.exists():
+            tmp_path.unlink()
+    except OSError:
+        pass
+    source = sqlite3.connect(DB_PATH, timeout=20)
+    dest = sqlite3.connect(tmp_path)
+    try:
+        source.backup(dest)
+    finally:
+        dest.close()
+        source.close()
+    tmp_path.replace(target)
+
+
+def file_is_recent(path, minutes):
+    if not path.exists():
+        return False
+    age = datetime.now().timestamp() - path.stat().st_mtime
+    return age < max(1, minutes) * 60
+
+
+def prune_backup_files():
+    cutoff = datetime.now().timestamp() - max(1, BACKUP_RETENTION_DAYS) * 24 * 60 * 60
+    for root in (BACKUP_DIR / "daily", BACKUP_DIR / "critical", BACKUP_DIR / "latest"):
+        if not root.exists():
+            continue
+        for path in root.rglob("*"):
+            if path.is_file() and path.stat().st_mtime < cutoff:
+                try:
+                    path.unlink()
+                except OSError:
+                    pass
+
+
+def write_disk_backup_bundle(state, reason="auto-save", force_db=False):
+    if not isinstance(state, dict):
+        return {"ok": False, "error": "State is empty"}
+    stamp = datetime.now().strftime("%Y%m%d")
+    payload = state_backup_payload(state, reason)
+    raw = json.dumps(payload, ensure_ascii=False, indent=2)
+    written = []
+    for target in (
+        BACKUP_DIR / "latest" / "anps-state-latest.json",
+        BACKUP_DIR / "daily" / f"anps-state-{stamp}.json",
+    ):
+        atomic_write_text(target, raw)
+        written.append(str(target))
+    staff_payload = {
+        "created_at": payload["created_at"],
+        "reason": reason,
+        "school_id": payload["school_id"],
+        "staffMembers": state.get("staffMembers") or [],
+        "staff": state.get("staff") or [],
+        "roles": state.get("roles") or [],
+        "departments": state.get("departments") or [],
+        "designations": state.get("designations") or [],
+        "userAccessAccounts": state.get("userAccessAccounts") or [],
+    }
+    staff_target = BACKUP_DIR / "critical" / f"staff-{stamp}.json"
+    atomic_write_text(staff_target, json.dumps(staff_payload, ensure_ascii=False, indent=2))
+    written.append(str(staff_target))
+    db_target = BACKUP_DIR / "daily" / f"anps-db-{stamp}.db"
+    if force_db or not file_is_recent(db_target, DB_BACKUP_MINUTES):
+        write_sqlite_db_snapshot(db_target)
+        written.append(str(db_target))
+    prune_backup_files()
+    return {"ok": True, "files": written}
+
+
+def backup_file_staff_count(path):
+    try:
+        if path.suffix.lower() == ".json":
+            data = json.loads(path.read_text(encoding="utf-8"))
+            state = data.get("state") if isinstance(data, dict) and isinstance(data.get("state"), dict) else data
+            return len(state.get("staffMembers") or []) if isinstance(state, dict) else 0
+        if path.suffix.lower() in {".db", ".sqlite", ".sqlite3"}:
+            conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+            try:
+                row = conn.execute("SELECT COUNT(*) FROM staff_members").fetchone()
+                return row[0] if row else 0
+            finally:
+                conn.close()
+    except Exception:
+        return 0
+    return 0
+
+
+def list_disk_backups():
+    files = []
+    for root in (BACKUP_DIR,):
+        if not root.exists():
+            continue
+        for path in root.rglob("*"):
+            if not path.is_file() or path.name.endswith(".tmp"):
+                continue
+            if path.suffix.lower() not in {".json", ".db", ".sqlite", ".sqlite3"}:
+                continue
+            stat = path.stat()
+            files.append({
+                "name": path.name,
+                "path": str(path),
+                "size": stat.st_size,
+                "modified_at": datetime.fromtimestamp(stat.st_mtime).isoformat(timespec="seconds"),
+                "staff_count": backup_file_staff_count(path),
+            })
+    files.sort(key=lambda item: item["modified_at"], reverse=True)
+    return {
+        "backup_dir": str(BACKUP_DIR),
+        "data_dir": str(DATA_DIR),
+        "db_path": str(DB_PATH),
+        "files": files[:200],
+    }
 
 
 def clear_state_backups():
@@ -3705,6 +3857,10 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(raw)
             return
+        if path == "/api/backup-status":
+            if not self.authorized():
+                return
+            return self.json_response({"ok": True, **list_disk_backups()})
         if path.startswith("/api/table/"):
             if not self.authorized():
                 return
