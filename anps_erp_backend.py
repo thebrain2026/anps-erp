@@ -65,6 +65,17 @@ DB_SCHEMA_VERSION = 4
 DEFAULT_SCHOOL_ID = os.environ.get("ANPS_DEFAULT_SCHOOL_ID", "anps").strip() or "anps"
 DEFAULT_SCHOOL_NAME = os.environ.get("ANPS_DEFAULT_SCHOOL_NAME", "Alfred Nobel Public School").strip() or "Alfred Nobel Public School"
 SESSION_TTL_DAYS = 7
+EMERGENCY_STAFF_RESTORE_SEED = [
+    {"staffId": "ANPS-STF-005", "name": "anesha", "role": "teacher", "designation": "Teacher", "teachingSubject": "", "department": "Teaching", "phone": "14313131313", "emergencyPhone": "", "email": "adad@gmail.com", "address": "", "photo": "", "status": "Active", "school_id": "anps", "schoolId": "anps"},
+    {"staffId": "ANPS-STF-007", "name": "chand", "role": "teacher", "designation": "Teacher", "teachingSubject": "", "department": "Teaching", "phone": "2113131", "emergencyPhone": "", "email": "dffa@gmail.com", "address": "", "photo": "", "status": "Active", "school_id": "anps", "schoolId": "anps"},
+    {"staffId": "ANPS-STF-003", "name": "indra", "role": "teacher", "designation": "Teacher", "teachingSubject": "", "department": "Teaching", "phone": "2123131", "emergencyPhone": "", "email": "aaafafw@gmail.com", "address": "", "photo": "", "status": "Active", "school_id": "anps", "schoolId": "anps"},
+    {"staffId": "ANPS-STF-001", "name": "jhuma", "role": "front office", "designation": "Receptionist", "teachingSubject": "", "department": "accounts office", "phone": "1234567890", "emergencyPhone": "", "email": "jhuma@gmail.com", "address": "", "photo": "", "status": "Active", "school_id": "anps", "schoolId": "anps"},
+    {"staffId": "ANPS-STF-008", "name": "papiya", "role": "teacher", "designation": "Teacher", "teachingSubject": "", "department": "Teaching", "phone": "123131", "emergencyPhone": "", "email": "3qa@gmail.com", "address": "", "photo": "", "status": "Active", "school_id": "anps", "schoolId": "anps"},
+    {"staffId": "ANPS-STF-004", "name": "rajkumar", "role": "teacher", "designation": "Teacher", "teachingSubject": "", "department": "Teaching", "phone": "23424242", "emergencyPhone": "", "email": "24242424@gmail.com", "address": "", "photo": "", "status": "Active", "school_id": "anps", "schoolId": "anps"},
+    {"staffId": "ANPS-STF-002", "name": "rojmary", "role": "teacher", "designation": "Teacher", "teachingSubject": "", "department": "Teaching", "phone": "2324214121", "emergencyPhone": "", "email": "131313@gmail.com", "address": "", "photo": "", "status": "Active", "school_id": "anps", "schoolId": "anps"},
+    {"staffId": "ANPS-STF-009", "name": "sabana", "role": "teacher", "designation": "Teacher", "teachingSubject": "", "department": "Teaching", "phone": "242", "emergencyPhone": "", "email": "dff@gmail.com", "address": "", "photo": "", "status": "Active", "school_id": "anps", "schoolId": "anps"},
+    {"staffId": "ANPS-STF-006", "name": "tithi", "role": "teacher", "designation": "Teacher", "teachingSubject": "", "department": "Teaching", "phone": "1q313131", "emergencyPhone": "", "email": "dada@gmail.com", "address": "", "photo": "", "status": "Active", "school_id": "anps", "schoolId": "anps"},
+]
 TENANT_TABLES = {
     "students",
     "guardians",
@@ -2430,7 +2441,40 @@ def hydrate_state_from_normalized_tables(conn, state):
         )
     if not state.get("staffMembers"):
         state = hydrate_staff_from_recent_state_backups(conn, state)
+    if not state.get("staffMembers") and EMERGENCY_STAFF_RESTORE_SEED:
+        state["staffMembers"] = [dict(item) for item in EMERGENCY_STAFF_RESTORE_SEED]
+        state.setdefault("departments", [{"name": "Teaching", "status": "Active"}, {"name": "accounts office", "status": "Active"}])
+        state.setdefault("roles", [{"name": "teacher", "status": "Active"}, {"name": "front office", "status": "Active"}])
+        state.setdefault("designations", [{"name": "Teacher", "status": "Active"}, {"name": "Receptionist", "status": "Active"}])
+        persist_emergency_staff_seed(conn, state["staffMembers"])
     return ensure_state_school(state)
+
+
+def persist_emergency_staff_seed(conn, staff_list):
+    for item in staff_list:
+        staff_id = str(item.get("staffId") or "").strip()
+        if not staff_id:
+            continue
+        school_id = normalize_school_id(item.get("school_id") or item.get("schoolId") or DEFAULT_SCHOOL_ID)
+        upsert_json_row(
+            conn,
+            "staff_members",
+            ["staff_id"],
+            item,
+            {
+                "school_id": school_id,
+                "staff_id": staff_id,
+                "name": item.get("name") or "",
+                "role_name": item.get("role") or "",
+                "designation": item.get("designation") or "",
+                "department": item.get("department") or "",
+                "subject": item.get("teachingSubject") or "",
+                "mobile": item.get("phone") or item.get("mobile") or "",
+                "email": item.get("email") or "",
+                "status": item.get("status") or "Active",
+                "raw_json": json.dumps(item, ensure_ascii=False),
+            },
+        )
 
 
 def hydrate_staff_from_recent_state_backups(conn, state):
