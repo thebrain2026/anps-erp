@@ -2490,7 +2490,36 @@ def apply_staff_restore_candidate(conn, state, candidate):
         if isinstance(candidate.get(key), list):
             state[key] = candidate[key]
     persist_restored_staff_members(conn, staff)
+    persist_restored_staff_state(conn, state, candidate.get("source") or "backup")
     return state
+
+
+def persist_restored_staff_state(conn, state, source):
+    state = ensure_state_school(state)
+    raw = json.dumps(state, ensure_ascii=False, separators=(",", ":"))
+    conn.execute(
+        """
+        INSERT INTO app_state (key, value, updated_at)
+        VALUES (?, ?, CURRENT_TIMESTAMP)
+        ON CONFLICT(key) DO UPDATE SET
+            value = excluded.value,
+            updated_at = CURRENT_TIMESTAMP
+        """,
+        (STATE_KEY, raw),
+    )
+    conn.execute(
+        """
+        INSERT INTO audit_events (actor, action, entity_type, entity_id, details)
+        VALUES (?, ?, ?, ?, ?)
+        """,
+        (
+            "system",
+            "Restore",
+            "staff_members",
+            "disk_backup",
+            f"Restored {len(state.get('staffMembers') or [])} staff from {source}",
+        ),
+    )
 
 
 def staff_restore_candidate_from_state(backup_state, source=""):
