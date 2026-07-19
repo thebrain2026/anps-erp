@@ -69,17 +69,7 @@ DEFAULT_SCHOOL_NAME = os.environ.get("ANPS_DEFAULT_SCHOOL_NAME", "Alfred Nobel P
 SESSION_TTL_DAYS = 7
 EMERGENCY_STAFF_RESTORE_ENABLED = os.environ.get("ANPS_EMERGENCY_STAFF_RESTORE_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
 AUTO_STAFF_BACKUP_RESTORE_ENABLED = os.environ.get("ANPS_AUTO_STAFF_BACKUP_RESTORE_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
-EMERGENCY_STAFF_RESTORE_SEED = [
-    {"staffId": "ANPS-STF-005", "name": "anesha", "role": "teacher", "designation": "Teacher", "teachingSubject": "", "department": "Teaching", "phone": "14313131313", "emergencyPhone": "", "email": "adad@gmail.com", "address": "", "photo": "", "status": "Active", "school_id": "anps", "schoolId": "anps"},
-    {"staffId": "ANPS-STF-007", "name": "chand", "role": "teacher", "designation": "Teacher", "teachingSubject": "", "department": "Teaching", "phone": "2113131", "emergencyPhone": "", "email": "dffa@gmail.com", "address": "", "photo": "", "status": "Active", "school_id": "anps", "schoolId": "anps"},
-    {"staffId": "ANPS-STF-003", "name": "indra", "role": "teacher", "designation": "Teacher", "teachingSubject": "", "department": "Teaching", "phone": "2123131", "emergencyPhone": "", "email": "aaafafw@gmail.com", "address": "", "photo": "", "status": "Active", "school_id": "anps", "schoolId": "anps"},
-    {"staffId": "ANPS-STF-001", "name": "jhuma", "role": "front office", "designation": "Receptionist", "teachingSubject": "", "department": "accounts office", "phone": "1234567890", "emergencyPhone": "", "email": "jhuma@gmail.com", "address": "", "photo": "", "status": "Active", "school_id": "anps", "schoolId": "anps"},
-    {"staffId": "ANPS-STF-008", "name": "papiya", "role": "teacher", "designation": "Teacher", "teachingSubject": "", "department": "Teaching", "phone": "123131", "emergencyPhone": "", "email": "3qa@gmail.com", "address": "", "photo": "", "status": "Active", "school_id": "anps", "schoolId": "anps"},
-    {"staffId": "ANPS-STF-004", "name": "rajkumar", "role": "teacher", "designation": "Teacher", "teachingSubject": "", "department": "Teaching", "phone": "23424242", "emergencyPhone": "", "email": "24242424@gmail.com", "address": "", "photo": "", "status": "Active", "school_id": "anps", "schoolId": "anps"},
-    {"staffId": "ANPS-STF-002", "name": "rojmary", "role": "teacher", "designation": "Teacher", "teachingSubject": "", "department": "Teaching", "phone": "2324214121", "emergencyPhone": "", "email": "131313@gmail.com", "address": "", "photo": "", "status": "Active", "school_id": "anps", "schoolId": "anps"},
-    {"staffId": "ANPS-STF-009", "name": "sabana", "role": "teacher", "designation": "Teacher", "teachingSubject": "", "department": "Teaching", "phone": "242", "emergencyPhone": "", "email": "dff@gmail.com", "address": "", "photo": "", "status": "Active", "school_id": "anps", "schoolId": "anps"},
-    {"staffId": "ANPS-STF-006", "name": "tithi", "role": "teacher", "designation": "Teacher", "teachingSubject": "", "department": "Teaching", "phone": "1q313131", "emergencyPhone": "", "email": "dada@gmail.com", "address": "", "photo": "", "status": "Active", "school_id": "anps", "schoolId": "anps"},
-]
+EMERGENCY_STAFF_RESTORE_SEED = []
 TENANT_TABLES = {
     "students",
     "guardians",
