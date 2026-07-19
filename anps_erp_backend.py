@@ -65,6 +65,7 @@ DB_SCHEMA_VERSION = 4
 DEFAULT_SCHOOL_ID = os.environ.get("ANPS_DEFAULT_SCHOOL_ID", "anps").strip() or "anps"
 DEFAULT_SCHOOL_NAME = os.environ.get("ANPS_DEFAULT_SCHOOL_NAME", "Alfred Nobel Public School").strip() or "Alfred Nobel Public School"
 SESSION_TTL_DAYS = 7
+EMERGENCY_STAFF_RESTORE_ENABLED = os.environ.get("ANPS_EMERGENCY_STAFF_RESTORE_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
 EMERGENCY_STAFF_RESTORE_SEED = [
     {"staffId": "ANPS-STF-005", "name": "anesha", "role": "teacher", "designation": "Teacher", "teachingSubject": "", "department": "Teaching", "phone": "14313131313", "emergencyPhone": "", "email": "adad@gmail.com", "address": "", "photo": "", "status": "Active", "school_id": "anps", "schoolId": "anps"},
     {"staffId": "ANPS-STF-007", "name": "chand", "role": "teacher", "designation": "Teacher", "teachingSubject": "", "department": "Teaching", "phone": "2113131", "emergencyPhone": "", "email": "dffa@gmail.com", "address": "", "photo": "", "status": "Active", "school_id": "anps", "schoolId": "anps"},
@@ -2439,18 +2440,18 @@ def hydrate_state_from_normalized_tables(conn, state):
                 "status": item.get("status") or row["status"] or "Active",
             },
         )
-    if not state.get("staffMembers"):
-        state = hydrate_staff_from_recent_state_backups(conn, state)
-    if not state.get("staffMembers") and EMERGENCY_STAFF_RESTORE_SEED:
+    state = hydrate_staff_from_recent_state_backups(conn, state)
+    state = hydrate_staff_from_disk_backups(conn, state)
+    if not state.get("staffMembers") and EMERGENCY_STAFF_RESTORE_ENABLED and EMERGENCY_STAFF_RESTORE_SEED:
         state["staffMembers"] = [dict(item) for item in EMERGENCY_STAFF_RESTORE_SEED]
         state.setdefault("departments", [{"name": "Teaching", "status": "Active"}, {"name": "accounts office", "status": "Active"}])
         state.setdefault("roles", [{"name": "teacher", "status": "Active"}, {"name": "front office", "status": "Active"}])
         state.setdefault("designations", [{"name": "Teacher", "status": "Active"}, {"name": "Receptionist", "status": "Active"}])
-        persist_emergency_staff_seed(conn, state["staffMembers"])
+        persist_restored_staff_members(conn, state["staffMembers"])
     return ensure_state_school(state)
 
 
-def persist_emergency_staff_seed(conn, staff_list):
+def persist_restored_staff_members(conn, staff_list):
     for item in staff_list:
         staff_id = str(item.get("staffId") or "").strip()
         if not staff_id:
@@ -2477,26 +2478,153 @@ def persist_emergency_staff_seed(conn, staff_list):
         )
 
 
+def apply_staff_restore_candidate(conn, state, candidate):
+    if not candidate:
+        return state
+    staff = candidate.get("staffMembers")
+    current_staff = state.get("staffMembers") if isinstance(state.get("staffMembers"), list) else []
+    if not isinstance(staff, list) or len(staff) <= len(current_staff):
+        return state
+    state["staffMembers"] = staff
+    for key in ("departments", "roles", "designations", "userAccessAccounts"):
+        if isinstance(candidate.get(key), list):
+            state[key] = candidate[key]
+    persist_restored_staff_members(conn, staff)
+    return state
+
+
+def staff_restore_candidate_from_state(backup_state, source=""):
+    if not isinstance(backup_state, dict):
+        return None
+    if isinstance(backup_state.get("state"), dict):
+        backup_state = backup_state["state"]
+    staff = backup_state.get("staffMembers")
+    if not isinstance(staff, list) or not staff:
+        return None
+    candidate = {"staffMembers": staff, "source": source, "count": len(staff)}
+    for key in ("departments", "roles", "designations", "userAccessAccounts"):
+        if isinstance(backup_state.get(key), list):
+            candidate[key] = backup_state[key]
+    return candidate
+
+
 def hydrate_staff_from_recent_state_backups(conn, state):
     rows = conn.execute(
         "SELECT value FROM state_backups ORDER BY id DESC LIMIT 50"
     ).fetchall()
+    best_candidate = None
     for row in rows:
         try:
             backup_state = json.loads(row["value"] or "{}")
         except (TypeError, json.JSONDecodeError):
             continue
-        if not isinstance(backup_state, dict):
+        candidate = staff_restore_candidate_from_state(backup_state, "state_backups")
+        if candidate and (not best_candidate or candidate["count"] > best_candidate["count"]):
+            best_candidate = candidate
+    return apply_staff_restore_candidate(conn, state, best_candidate)
+
+
+def hydrate_staff_from_disk_backups(conn, state):
+    best_candidate = None
+    for path in iter_staff_backup_paths():
+        candidate = staff_restore_candidate_from_backup_file(path)
+        if candidate and (not best_candidate or candidate["count"] > best_candidate["count"]):
+            best_candidate = candidate
+    return apply_staff_restore_candidate(conn, state, best_candidate)
+
+
+def iter_staff_backup_paths():
+    paths = []
+    for root in (BACKUP_DIR, DATA_DIR):
+        if not root.exists():
             continue
-        backup_staff = backup_state.get("staffMembers")
-        if not isinstance(backup_staff, list) or not backup_staff:
+        for pattern in ("*.json", "*.db", "*.sqlite", "*.sqlite3"):
+            paths.extend(root.rglob(pattern))
+    unique_paths = []
+    seen = set()
+    current_db = DB_PATH.resolve()
+    for path in paths:
+        try:
+            resolved = path.resolve()
+        except OSError:
             continue
-        state["staffMembers"] = backup_staff
-        for key in ("departments", "roles", "designations", "userAccessAccounts"):
-            if not state.get(key) and isinstance(backup_state.get(key), list):
-                state[key] = backup_state[key]
-        break
-    return state
+        if resolved == current_db or resolved in seen:
+            continue
+        seen.add(resolved)
+        unique_paths.append(resolved)
+    unique_paths.sort(key=lambda item: item.stat().st_mtime if item.exists() else 0, reverse=True)
+    return unique_paths[:120]
+
+
+def staff_restore_candidate_from_backup_file(path):
+    suffix = path.suffix.lower()
+    if suffix == ".json":
+        try:
+            return staff_restore_candidate_from_state(json.loads(path.read_text()), str(path))
+        except (OSError, TypeError, json.JSONDecodeError, UnicodeDecodeError):
+            return None
+    if suffix not in {".db", ".sqlite", ".sqlite3"}:
+        return None
+    return staff_restore_candidate_from_backup_db(path)
+
+
+def staff_restore_candidate_from_backup_db(path):
+    candidates = []
+    try:
+        backup_conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
+        backup_conn.row_factory = sqlite3.Row
+    except sqlite3.Error:
+        return None
+    with backup_conn:
+        try:
+            rows = backup_conn.execute("SELECT value FROM app_state WHERE key = ?", (STATE_KEY,)).fetchall()
+        except sqlite3.Error:
+            rows = []
+        for row in rows:
+            try:
+                candidates.append(staff_restore_candidate_from_state(json.loads(row["value"] or "{}"), str(path)))
+            except (TypeError, json.JSONDecodeError):
+                continue
+        try:
+            rows = backup_conn.execute("SELECT value FROM state_backups ORDER BY id DESC LIMIT 100").fetchall()
+        except sqlite3.Error:
+            rows = []
+        for row in rows:
+            try:
+                candidates.append(staff_restore_candidate_from_state(json.loads(row["value"] or "{}"), str(path)))
+            except (TypeError, json.JSONDecodeError):
+                continue
+        try:
+            staff = table_json_rows(
+                backup_conn,
+                "staff_members",
+                "name COLLATE NOCASE",
+                lambda row, item: {
+                    **item,
+                    "staffId": item.get("staffId") or row["staff_id"],
+                    "name": item.get("name") or row["name"],
+                    "phone": item.get("phone") or row["mobile"] or "",
+                    "mobile": item.get("mobile") or row["mobile"] or "",
+                    "email": item.get("email") or row["email"] or "",
+                    "role": item.get("role") or row["role_name"] or "",
+                    "designation": item.get("designation") or row["designation"] or "",
+                    "department": item.get("department") or row["department"] or "",
+                    "teachingSubject": item.get("teachingSubject") or row["subject"] or "",
+                    "status": item.get("status") or row["status"] or "Active",
+                },
+            )
+        except sqlite3.Error:
+            staff = []
+        if staff:
+            candidates.append({"staffMembers": staff, "source": str(path), "count": len(staff)})
+    candidates = [candidate for candidate in candidates if candidate]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda candidate: candidate["count"])
+
+
+def persist_emergency_staff_seed(conn, staff_list):
+    persist_restored_staff_members(conn, staff_list)
 
 
 def table_json_rows(conn, table_name, order_by, map_item):
