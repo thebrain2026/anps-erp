@@ -68,6 +68,7 @@ DEFAULT_SCHOOL_ID = os.environ.get("ANPS_DEFAULT_SCHOOL_ID", "anps").strip() or 
 DEFAULT_SCHOOL_NAME = os.environ.get("ANPS_DEFAULT_SCHOOL_NAME", "Alfred Nobel Public School").strip() or "Alfred Nobel Public School"
 SESSION_TTL_DAYS = 7
 EMERGENCY_STAFF_RESTORE_ENABLED = os.environ.get("ANPS_EMERGENCY_STAFF_RESTORE_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
+AUTO_STAFF_BACKUP_RESTORE_ENABLED = os.environ.get("ANPS_AUTO_STAFF_BACKUP_RESTORE_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
 EMERGENCY_STAFF_RESTORE_SEED = [
     {"staffId": "ANPS-STF-005", "name": "anesha", "role": "teacher", "designation": "Teacher", "teachingSubject": "", "department": "Teaching", "phone": "14313131313", "emergencyPhone": "", "email": "adad@gmail.com", "address": "", "photo": "", "status": "Active", "school_id": "anps", "schoolId": "anps"},
     {"staffId": "ANPS-STF-007", "name": "chand", "role": "teacher", "designation": "Teacher", "teachingSubject": "", "department": "Teaching", "phone": "2113131", "emergencyPhone": "", "email": "dffa@gmail.com", "address": "", "photo": "", "status": "Active", "school_id": "anps", "schoolId": "anps"},
@@ -1583,11 +1584,19 @@ def merge_state_without_losing_receipts(server_state, incoming_state):
         **(server_state.get("mobileAppSettings") if isinstance(server_state.get("mobileAppSettings"), dict) else {}),
         **(incoming_state.get("mobileAppSettings") if isinstance(incoming_state.get("mobileAppSettings"), dict) else {}),
     }
-    merged["staffMembers"] = merge_object_lists(
-        server_state.get("staffMembers") or [],
-        incoming_state.get("staffMembers") or [],
-        ["staffId", "email", "phone", "mobile", "name"],
-    )
+    if "staffMembers" in incoming_state and isinstance(incoming_state.get("staffMembers"), list):
+        incoming_staff = incoming_state.get("staffMembers") or []
+        merged["staffMembers"] = (
+            []
+            if not incoming_staff
+            else merge_object_lists(
+                server_state.get("staffMembers") or [],
+                incoming_staff,
+                ["staffId", "email", "phone", "mobile", "name"],
+            )
+        )
+    else:
+        merged["staffMembers"] = server_state.get("staffMembers") or []
     for key, fields in {
         "departments": ["name"],
         "roles": ["name"],
@@ -2442,8 +2451,9 @@ def hydrate_state_from_normalized_tables(conn, state):
                 "status": item.get("status") or row["status"] or "Active",
             },
         )
-    state = hydrate_staff_from_recent_state_backups(conn, state)
-    state = hydrate_staff_from_disk_backups(conn, state)
+    if AUTO_STAFF_BACKUP_RESTORE_ENABLED:
+        state = hydrate_staff_from_recent_state_backups(conn, state)
+        state = hydrate_staff_from_disk_backups(conn, state)
     if not state.get("staffMembers") and EMERGENCY_STAFF_RESTORE_ENABLED and EMERGENCY_STAFF_RESTORE_SEED:
         state["staffMembers"] = [dict(item) for item in EMERGENCY_STAFF_RESTORE_SEED]
         state.setdefault("departments", [{"name": "Teaching", "status": "Active"}, {"name": "accounts office", "status": "Active"}])
