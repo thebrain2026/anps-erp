@@ -11186,11 +11186,50 @@ function getSecuritySnapshot() {
   };
 }
 
+function getSessionAliases(session = activeSession) {
+  const cleanSession = String(session || "").trim();
+  if (!cleanSession) return [];
+  const aliases = new Set([cleanSession]);
+  const [startYear, endYear] = cleanSession.split("-");
+  if (startYear && endYear) {
+    if (startYear.length === 2) aliases.add(`20${startYear}-${endYear}`);
+    if (startYear.length === 4 && endYear.length === 2) aliases.add(`${startYear.slice(-2)}-${endYear}`);
+  }
+  return [...aliases];
+}
+
+function getActiveFinanceSessionData() {
+  const aliases = getSessionAliases(activeSession);
+  const populatedSession = aliases
+    .map(session => financeSessions[session])
+    .find(session => session && (
+      (session.feeMaster || []).length ||
+      (session.feeGroups || []).length ||
+      (session.dues || []).length
+    ));
+  return populatedSession || financeSessions[activeSession] || {};
+}
+
+function hasStaffSetupData() {
+  return Boolean(
+    staffMembers.length ||
+    userAccessAccounts.some(account =>
+      String(account.status || "Active") === "Active" &&
+      String(account.role || "").trim().toLowerCase() !== "master admin"
+    )
+  );
+}
+
+function hasFeeMasterSetupData() {
+  const session = getActiveFinanceSessionData();
+  return Boolean((session.feeMaster || []).length || (session.feeGroups || []).length);
+}
+
 function getSecurityReadinessIssues() {
   const issues = [];
   if (!students.length) issues.push("No student records found.");
-  if (!staffMembers.length) issues.push("No staff records found.");
-  if (!(financeSessions[activeSession]?.feeMaster || []).length) issues.push("No fee master structure found for active session.");
+  if (!hasStaffSetupData()) issues.push("No staff records found.");
+  if (!hasFeeMasterSetupData()) issues.push("No fee master structure found for active session.");
   if (!roles.length) issues.push("No user roles found.");
   if (!navigator.onLine) issues.push("Browser is currently offline.");
   return issues;

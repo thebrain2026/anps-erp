@@ -1569,6 +1569,18 @@ def merge_state_without_losing_receipts(server_state, incoming_state):
         **(server_state.get("mobileAppSettings") if isinstance(server_state.get("mobileAppSettings"), dict) else {}),
         **(incoming_state.get("mobileAppSettings") if isinstance(incoming_state.get("mobileAppSettings"), dict) else {}),
     }
+    merged["staffMembers"] = merge_object_lists(
+        server_state.get("staffMembers") or [],
+        incoming_state.get("staffMembers") or [],
+        ["staffId", "email", "phone", "mobile", "name"],
+    )
+    for key, fields in {
+        "departments": ["name"],
+        "roles": ["name"],
+        "designations": ["name"],
+        "userAccessAccounts": ["loginId", "id", "username"],
+    }.items():
+        merged[key] = merge_object_lists(server_state.get(key) or [], incoming_state.get(key) or [], fields)
     push_tokens = {}
     for item in [*(server_state.get("mobilePushTokens") or []), *(incoming_state.get("mobilePushTokens") or [])]:
         if not isinstance(item, dict):
@@ -1577,6 +1589,31 @@ def merge_state_without_losing_receipts(server_state, incoming_state):
         if token:
             push_tokens[token] = {**push_tokens.get(token, {}), **item}
     merged["mobilePushTokens"] = list(push_tokens.values())[:5000]
+    return merged
+
+
+def merge_object_lists(server_items, incoming_items, key_fields):
+    merged = []
+    index_by_key = {}
+
+    def item_key(item):
+        if not isinstance(item, dict):
+            return ""
+        for field in key_fields:
+            value = str(item.get(field) or "").strip().lower()
+            if value:
+                return f"{field}:{value}"
+        return ""
+
+    for item in [*(server_items or []), *(incoming_items or [])]:
+        if not isinstance(item, dict):
+            continue
+        key = item_key(item)
+        if key and key in index_by_key:
+            merged[index_by_key[key]] = {**merged[index_by_key[key]], **item}
+            continue
+        index_by_key[key or f"row:{len(merged)}"] = len(merged)
+        merged.append(item)
     return merged
 
 
@@ -2360,10 +2397,52 @@ def read_state_record():
         row = conn.execute("SELECT value, updated_at FROM app_state WHERE key = ?", (STATE_KEY,)).fetchone()
     if not row:
         return None
+    state = ensure_state_school(json.loads(row["value"]))
+    with connect() as conn:
+        state = hydrate_state_from_normalized_tables(conn, state)
     return {
-        "state": ensure_state_school(json.loads(row["value"])),
+        "state": state,
         "updated_at": row["updated_at"],
     }
+
+
+def hydrate_state_from_normalized_tables(conn, state):
+    if not isinstance(state, dict):
+        state = {}
+    if not state.get("staffMembers"):
+        state["staffMembers"] = table_json_rows(
+            conn,
+            "staff_members",
+            "name COLLATE NOCASE",
+            lambda row, item: {
+                **item,
+                "staffId": item.get("staffId") or row["staff_id"],
+                "name": item.get("name") or row["name"],
+                "phone": item.get("phone") or row["mobile"] or "",
+                "mobile": item.get("mobile") or row["mobile"] or "",
+                "email": item.get("email") or row["email"] or "",
+                "role": item.get("role") or row["role_name"] or "",
+                "designation": item.get("designation") or row["designation"] or "",
+                "department": item.get("department") or row["department"] or "",
+                "teachingSubject": item.get("teachingSubject") or row["subject"] or "",
+                "status": item.get("status") or row["status"] or "Active",
+            },
+        )
+    return ensure_state_school(state)
+
+
+def table_json_rows(conn, table_name, order_by, map_item):
+    rows = conn.execute(f"SELECT * FROM {table_name} ORDER BY {order_by}").fetchall()
+    items = []
+    for row in rows:
+        try:
+            item = json.loads(row["raw_json"] or "{}")
+        except (TypeError, json.JSONDecodeError):
+            item = {}
+        if not isinstance(item, dict):
+            item = {}
+        items.append(map_item(row, item))
+    return items
 
 
 def verify_login(username, password):
