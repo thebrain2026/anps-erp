@@ -2428,7 +2428,31 @@ def hydrate_state_from_normalized_tables(conn, state):
                 "status": item.get("status") or row["status"] or "Active",
             },
         )
+    if not state.get("staffMembers"):
+        state = hydrate_staff_from_recent_state_backups(conn, state)
     return ensure_state_school(state)
+
+
+def hydrate_staff_from_recent_state_backups(conn, state):
+    rows = conn.execute(
+        "SELECT value FROM state_backups ORDER BY id DESC LIMIT 50"
+    ).fetchall()
+    for row in rows:
+        try:
+            backup_state = json.loads(row["value"] or "{}")
+        except (TypeError, json.JSONDecodeError):
+            continue
+        if not isinstance(backup_state, dict):
+            continue
+        backup_staff = backup_state.get("staffMembers")
+        if not isinstance(backup_staff, list) or not backup_staff:
+            continue
+        state["staffMembers"] = backup_staff
+        for key in ("departments", "roles", "designations", "userAccessAccounts"):
+            if not state.get(key) and isinstance(backup_state.get(key), list):
+                state[key] = backup_state[key]
+        break
+    return state
 
 
 def table_json_rows(conn, table_name, order_by, map_item):
