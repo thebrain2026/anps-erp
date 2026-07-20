@@ -827,6 +827,47 @@ function mergeCollectedPayments(remoteCollected = {}, localCollected = {}, delet
   return merged;
 }
 
+function mergeFinanceSessions(remoteSessions = {}, localSessions = {}) {
+  const merged = {};
+  const sessions = new Set([...Object.keys(remoteSessions || {}), ...Object.keys(localSessions || {})]);
+  const getFeeMasterKey = item => {
+    if (!item || typeof item !== "object") return "";
+    const id = String(item.id || "").trim();
+    if (id) return `id:${id.toLowerCase()}`;
+    return [
+      String(item.className || "").trim().toLowerCase(),
+      String(item.studentType || "New Student").trim().toLowerCase()
+    ].join("|");
+  };
+  const mergeFeeMasterList = (remoteList = [], localList = []) => {
+    const rows = [];
+    const indexByKey = new Map();
+    [...remoteList, ...localList].forEach(item => {
+      if (!item || typeof item !== "object") return;
+      const key = getFeeMasterKey(item) || JSON.stringify(item);
+      if (!indexByKey.has(key)) {
+        indexByKey.set(key, rows.length);
+        rows.push(item);
+        return;
+      }
+      rows[indexByKey.get(key)] = {...rows[indexByKey.get(key)], ...item};
+    });
+    return rows;
+  };
+  sessions.forEach(sessionName => {
+    const remoteSession = remoteSessions?.[sessionName] || {};
+    const localSession = localSessions?.[sessionName] || {};
+    merged[sessionName] = {
+      ...remoteSession,
+      ...localSession,
+      feeMaster: mergeFeeMasterList(remoteSession.feeMaster || [], localSession.feeMaster || []),
+      feeGroups: mergeObjectListByKey(remoteSession.feeGroups || [], localSession.feeGroups || [], ["id", "groupName"]),
+      dues: mergeObjectListByKey(remoteSession.dues || [], localSession.dues || [], ["id", "admissionNo", "feeHead"])
+    };
+  });
+  return merged;
+}
+
 function mergeStateSnapshots(remoteState = {}, localState = {}) {
   const merged = {...remoteState, ...localState};
   const primitiveKeys = [
@@ -879,7 +920,7 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
     : [];
   merged.deletedPaymentReceipts = getDeletedPaymentReceiptMap(remoteState.deletedPaymentReceipts, localState.deletedPaymentReceipts);
   merged.collectedPayments = mergeCollectedPayments(remoteState.collectedPayments || {}, localState.collectedPayments || {}, merged.deletedPaymentReceipts);
-  merged.financeSessions = {...(remoteState.financeSessions || {}), ...(localState.financeSessions || {})};
+  merged.financeSessions = mergeFinanceSessions(remoteState.financeSessions || {}, localState.financeSessions || {});
   return merged;
 }
 
@@ -12888,9 +12929,9 @@ feeMasterForm.addEventListener("submit", event => {
   } else {
     session.feeMaster.push(feeData);
   }
+  if (!saveAppState()) return;
   renderFeeMaster();
   if (admissionForm.elements.klass.value === feeData.className) applyFeeMasterToAdmissionForm(feeData.className);
-  saveAppState();
   feeMasterForm.reset();
   const actionText = editingFeeMasterIndex >= 0 ? "updated" : "added";
   resetFeeMasterEditing();
@@ -12991,11 +13032,11 @@ feeGroupForm.addEventListener("submit", event => {
   } else {
     session.feeGroups.push(feeGroup);
   }
+  if (!saveAppState()) return;
   const actionText = editingFeeGroupIndex >= 0 ? "updated" : "added";
   renderFeeGroups();
   renderFeeMasterDynamicFields();
   renderFeeMaster();
-  saveAppState();
   feeGroupForm.reset();
   resetFeeGroupEditing();
   showToast(`Fee group ${actionText} in ${activeSession}.`);
