@@ -3046,14 +3046,15 @@ function getDailyCollectionReportRows() {
       }
       const row = dailyMap.get(dateLabel);
       const allocations = Array.isArray(payment.allocations) ? payment.allocations : [];
-      const total = allocations.length
+      const grossTotal = allocations.length
         ? allocations.reduce((sum, allocation) => sum + Number(allocation.amount || 0), 0)
         : Number(payment.amount || 0);
-      const split = getPaymentSplitForAmount(payment, total);
       const fine = allocations
         .filter(allocation => ["Tuition Late Fine", "Transport Late Fine"].includes(allocation.head))
         .reduce((sum, allocation) => sum + Number(allocation.amount || 0), 0);
       const discount = Number(payment.discountAmount || 0);
+      const total = Math.max(grossTotal - discount, 0);
+      const split = getPaymentSplitForAmount(payment, total);
       row.receipts.add(payment.receipt || "-");
       row.students.add(student?.name || admissionNo || "-");
       row.roles.add(payment.by || payment.entryRole || payment.role || "-");
@@ -3430,7 +3431,7 @@ function renderDailyCollectionDropdown(reportRow = {}) {
   const remarks = [...new Set(details.map(item => String(item.remarks || "").trim()).filter(item => item && item !== "-"))];
   return `
     <tr class="daily-collection-dropdown-row">
-      <td colspan="8">
+      <td colspan="9">
         <div class="daily-collection-detail-card">
           <div class="daily-collection-detail-head">
             <div>
