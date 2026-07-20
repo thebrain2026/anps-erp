@@ -832,6 +832,10 @@ function mergeCollectedPayments(remoteCollected = {}, localCollected = {}, delet
 function mergeFinanceSessions(remoteSessions = {}, localSessions = {}) {
   const merged = {};
   const sessions = new Set([...Object.keys(remoteSessions || {}), ...Object.keys(localSessions || {})]);
+  const getFeeMasterUpdatedAt = item => {
+    const time = Date.parse(item?.updatedAt || item?.createdAt || "");
+    return Number.isFinite(time) ? time : 0;
+  };
   const getFeeMasterKey = item => {
     if (!item || typeof item !== "object") return "";
     const id = String(item.id || "").trim();
@@ -852,7 +856,11 @@ function mergeFinanceSessions(remoteSessions = {}, localSessions = {}) {
         rows.push(item);
         return;
       }
-      rows[indexByKey.get(key)] = {...rows[indexByKey.get(key)], ...item};
+      const existingIndex = indexByKey.get(key);
+      const existing = rows[existingIndex];
+      rows[existingIndex] = getFeeMasterUpdatedAt(item) >= getFeeMasterUpdatedAt(existing)
+        ? {...existing, ...item}
+        : {...item, ...existing};
     });
     return rows;
   };
@@ -1124,10 +1132,13 @@ async function processBackendSaveQueue() {
     if (!backendQueuedSnapshot) localStorage.removeItem(BACKEND_PENDING_STATE_KEY);
   } catch (error) {
     markBackendConnectionIssue();
-    if (!backendQueuedSnapshot && rollbackRawState) restoreStateFromRaw(rollbackRawState);
-    if (!backendQueuedSnapshot) localStorage.removeItem(BACKEND_PENDING_STATE_KEY);
+    if (!backendQueuedSnapshot) {
+      backendQueuedSnapshot = snapshot;
+      backendQueuedRollbackRawState = rollbackRawState;
+      storePendingBackendSnapshot(snapshot);
+    }
     scheduleBackendReconnect();
-    if (!backendQueuedSnapshot) showToast("No internet/server connection. Entry not saved. Please reconnect and save again.", "error", 6000);
+    showToast("Saved locally. Server sync will retry automatically.", "warning", 6000);
     console.warn(
       backendQueuedSnapshot
         ? "Backend save failed; latest queued change will retry."
@@ -3384,7 +3395,7 @@ function renderDailyCollectionReport() {
   const rows = document.getElementById("dailyCollectionReportRows");
   if (!summary || !rows) return;
   const dateFilter = document.getElementById("dailyCollectionDateFilter");
-  const selectedDateLabel = dateFilter?.value ? formatDateDDMMYYYY(dateFilter.value) : "";
+  const selectedDateLabel = dateFilter?.value ? normalizeCollectionHistoryDateValue(dateFilter.value) : "";
   const allRows = getDailyCollectionReportRows();
   const reportRows = selectedDateLabel ? allRows.filter(row => row.date === selectedDateLabel) : allRows;
   const totals = reportRows.reduce((sum, row) => {
@@ -12431,6 +12442,7 @@ function isBackendAutoSyncPaused() {
   if (backendQueuedSnapshot) return true;
   if (localStorage.getItem(BACKEND_PENDING_STATE_KEY)) return true;
   if (Date.now() - backendLastLocalSaveAt < BACKEND_LOCAL_SAVE_GUARD_MS) return true;
+  if (document.activeElement && document.activeElement.closest?.("#feeMasterForm")) return true;
   return false;
 }
 
@@ -13111,10 +13123,25 @@ newSessionInput.addEventListener("keydown", event => {
 feeMasterForm.addEventListener("submit", event => {
   event.preventDefault();
   const session = ensureActiveFinanceSessionData();
+  if (!Array.isArray(session.feeMaster)) session.feeMaster = [];
   const data = new FormData(feeMasterForm);
+  const className = String(data.get("className") || "").trim();
+  if (!className) {
+    showToast("Please select a class before saving Fee Master.", "error");
+    return;
+  }
+  const now = new Date().toISOString();
+  const studentType = String(data.get("studentType") || "New Student").trim() || "New Student";
   const feeData = {
-    className: String(data.get("className") || "").trim(),
-    studentType: String(data.get("studentType") || "New Student"),
+    id: editingFeeMasterIndex >= 0 && session.feeMaster[editingFeeMasterIndex]?.id
+      ? session.feeMaster[editingFeeMasterIndex].id
+      : `fee-master-${Date.now()}-${Math.random().toString(16).slice(2)}`,
+    createdAt: editingFeeMasterIndex >= 0
+      ? session.feeMaster[editingFeeMasterIndex]?.createdAt || now
+      : now,
+    updatedAt: now,
+    className,
+    studentType,
     admissionFee: Number(data.get("admissionFee") || 0),
     annualFee: Number(data.get("annualFee") || 0),
     formFee: Number(data.get("formFee") || 0),
@@ -13127,7 +13154,12 @@ feeMasterForm.addEventListener("submit", event => {
   if (editingFeeMasterIndex >= 0) {
     session.feeMaster[editingFeeMasterIndex] = feeData;
   } else {
-    session.feeMaster.push(feeData);
+    const existingIndex = session.feeMaster.findIndex(item =>
+      String(item.className || "").trim().toLowerCase() === className.toLowerCase() &&
+      String(item.studentType || "New Student").trim().toLowerCase() === studentType.toLowerCase()
+    );
+    if (existingIndex >= 0) session.feeMaster[existingIndex] = {...session.feeMaster[existingIndex], ...feeData};
+    else session.feeMaster.push(feeData);
   }
   if (!saveAppState()) return;
   renderFeeMaster();
@@ -14715,7 +14747,15 @@ document.getElementById("studentTeacherRatioReportBtn").addEventListener("click"
 document.getElementById("entireSchoolFeesMonthFilter")?.addEventListener("change", renderEntireSchoolFeesReport);
 document.getElementById("showEntireSchoolMonthlyFeesBtn")?.addEventListener("click", () => setEntireSchoolFeesPanel("monthly"));
 document.getElementById("showEntireSchoolYearlyFeesBtn")?.addEventListener("click", () => setEntireSchoolFeesPanel("yearly"));
-document.getElementById("dailyCollectionDateFilter")?.addEventListener("change", () => {
+document.getElementById("dailyCollectionDateFilter")?.addEventListener("change", event => {
+  normalizeCollectionHistoryDateInput(event.target);
+  activeDailyCollectionDate = "";
+  renderDailyCollectionReport();
+});
+document.getElementById("dailyCollectionDateFilter")?.addEventListener("keydown", event => {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  normalizeCollectionHistoryDateInput(event.target);
   activeDailyCollectionDate = "";
   renderDailyCollectionReport();
 });
