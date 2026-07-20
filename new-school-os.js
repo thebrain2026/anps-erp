@@ -100,6 +100,7 @@ const viewHistoryStack = [];
 const collectedPayments = {};
 const deletedPaymentReceipts = {};
 const selectedHistoryPayments = new Set();
+const openFeeBookDropdowns = new Set();
 let receiptSerial = 1;
 let currentAdmissionPhoto = "";
 let currentStaffPhoto = "";
@@ -279,6 +280,7 @@ const titleMap = {
   finance: "Collect Fees",
   feeBook: "Fee Book",
   bankBook: "Bank Book",
+  bankReconciliation: "Bank Reconciliation",
   dueFeesSearch: "Search Due Fees",
   upiPaymentVerification: "UPI Verification",
   feeMaster: "Fee Master",
@@ -347,7 +349,7 @@ const ACCESS_PERMISSION_GROUPS = [
   {name: "Dashboard", modules: ["dashboard", "dashboardFeesCollection"]},
   {name: "Front Office", modules: ["admissionEnquiry", "complaintRegister", "complaintsDesk"]},
   {name: "Student Information", modules: ["students", "studentAdmission", "disableStudent", "bulkDeleteStudent"]},
-  {name: "Fees Collection", modules: ["finance", "feeBook", "bankBook", "dueFeesSearch", "upiPaymentVerification", "feeMaster", "feeGroup", "addClassSection", "tuitionFineSetup", "feeReminder"]},
+  {name: "Fees Collection", modules: ["finance", "feeBook", "bankBook", "bankReconciliation", "dueFeesSearch", "upiPaymentVerification", "feeMaster", "feeGroup", "addClassSection", "tuitionFineSetup", "feeReminder"]},
   {name: "Human Resources", modules: ["staffDetails", "staffAttendance", "applyLeave", "leaveType", "approveLeave", "teachersRating", "teacherAdvisory", "department", "designation", "disabledStaff"]},
   {name: "Communication", modules: ["noticeBoard", "teacherNoticeRequests", "sendSms"]},
   {name: "Homework", modules: ["addHomework", "teacherHomework", "homeworkDoubts", "dailyAssignment"]},
@@ -1834,6 +1836,7 @@ function renderActiveView(viewName = document.querySelector(".view.active")?.id 
     renderFeeBook();
   }
   if (viewName === "bankBook") renderBankBook();
+  if (viewName === "bankReconciliation") renderBankReconciliation([]);
   if (viewName === "dueFeesSearch") renderDueFeesSearch();
   if (viewName === "upiPaymentVerification") renderUpiPaymentVerification();
   if (viewName === "feeMaster") renderFeeMaster();
@@ -3037,6 +3040,7 @@ function getDailyCollectionReportRows() {
           bank: 0,
           cash: 0,
           fine: 0,
+          discount: 0,
           total: 0
         });
       }
@@ -3049,6 +3053,7 @@ function getDailyCollectionReportRows() {
       const fine = allocations
         .filter(allocation => ["Tuition Late Fine", "Transport Late Fine"].includes(allocation.head))
         .reduce((sum, allocation) => sum + Number(allocation.amount || 0), 0);
+      const discount = Number(payment.discountAmount || 0);
       row.receipts.add(payment.receipt || "-");
       row.students.add(student?.name || admissionNo || "-");
       row.roles.add(payment.by || payment.entryRole || payment.role || "-");
@@ -3060,12 +3065,14 @@ function getDailyCollectionReportRows() {
         bank: split.bank,
         cash: split.cash,
         fine,
+        discount,
         total,
         remarks: payment.remarks || "-"
       });
       row.bank += split.bank;
       row.cash += split.cash;
       row.fine += fine;
+      row.discount += discount;
       row.total += total;
     });
   });
@@ -3165,6 +3172,160 @@ function renderBankBook() {
   `).join("") || `<tr><td colspan="11">No bank payment found for the selected filter.</td></tr>`;
 }
 
+function parseBankCsv(text = "") {
+  const rows = [];
+  let field = "";
+  let row = [];
+  let quoted = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    const next = text[i + 1];
+    if (ch === '"' && quoted && next === '"') {
+      field += '"';
+      i += 1;
+    } else if (ch === '"') {
+      quoted = !quoted;
+    } else if (ch === "," && !quoted) {
+      row.push(field);
+      field = "";
+    } else if ((ch === "\n" || ch === "\r") && !quoted) {
+      if (ch === "\r" && next === "\n") i += 1;
+      row.push(field);
+      if (row.some(cell => String(cell || "").trim())) rows.push(row);
+      row = [];
+      field = "";
+    } else {
+      field += ch;
+    }
+  }
+  row.push(field);
+  if (row.some(cell => String(cell || "").trim())) rows.push(row);
+  return rows;
+}
+
+function normalizeBankHeader(value = "") {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]+/g, "");
+}
+
+function getBankCsvValue(row, headers, aliases = []) {
+  const headerIndex = headers.findIndex(header => aliases.some(alias => header.includes(alias)));
+  return headerIndex >= 0 ? row[headerIndex] : "";
+}
+
+function parseBankAmount(value = "") {
+  const clean = String(value || "").replace(/[₹,\s]/g, "").replace(/[^\d.-]/g, "");
+  return Number(clean || 0);
+}
+
+function normalizeBankDate(value = "") {
+  const raw = String(value || "").trim();
+  if (!raw) return "";
+  const ddmmyyyy = raw.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
+  if (ddmmyyyy) {
+    const [, dd, mm, yy] = ddmmyyyy;
+    const yyyy = yy.length === 2 ? `20${yy}` : yy;
+    return `${dd.padStart(2, "0")}-${mm.padStart(2, "0")}-${yyyy}`;
+  }
+  const yyyymmdd = raw.match(/^(\d{4})[\/\-.](\d{1,2})[\/\-.](\d{1,2})/);
+  if (yyyymmdd) {
+    const [, yyyy, mm, dd] = yyyymmdd;
+    return `${dd.padStart(2, "0")}-${mm.padStart(2, "0")}-${yyyy}`;
+  }
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? raw : formatDateDDMMYYYY(parsed);
+}
+
+function normalizeReference(value = "") {
+  return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+}
+
+function buildBankStatementRows(csvText = "") {
+  const parsed = parseBankCsv(csvText);
+  if (parsed.length < 2) return [];
+  const headers = parsed[0].map(normalizeBankHeader);
+  return parsed.slice(1).map((row, index) => {
+    const date = normalizeBankDate(getBankCsvValue(row, headers, ["valuedate", "transactiondate", "trandate", "date", "posteddate"]));
+    const remarks = getBankCsvValue(row, headers, ["transactionremarks", "remarks", "narration", "description", "particulars", "refno", "referenceno"]);
+    const deposit = parseBankAmount(getBankCsvValue(row, headers, ["depositcr", "deposit", "credit", "cramount", "amountcr"]));
+    const withdrawal = parseBankAmount(getBankCsvValue(row, headers, ["withdrawaldr", "withdrawal", "debit", "dramount"]));
+    const fallbackAmount = parseBankAmount(getBankCsvValue(row, headers, ["amount"]));
+    const amount = deposit || (fallbackAmount > 0 && !withdrawal ? fallbackAmount : 0);
+    return {
+      id: `bank-${index}`,
+      date,
+      amount,
+      remarks: remarks || row.join(" "),
+      raw: row
+    };
+  }).filter(row => Number(row.amount || 0) > 0);
+}
+
+function findBankBookMatch(bankRow, erpRows, usedReceipts) {
+  const sameDateAmount = erpRows.filter(row => !usedReceipts.has(row.receipt) && row.date === bankRow.date && Number(row.bankAmount || 0) === Number(bankRow.amount || 0));
+  if (sameDateAmount.length === 1) return {row: sameDateAmount[0], status: "Matched", note: "Exact date and amount match"};
+  const bankRef = normalizeReference(bankRow.remarks);
+  const referenceMatch = sameDateAmount.find(row => {
+    const erpRef = normalizeReference([row.receipt, row.studentName, row.admissionNo, row.remarks].join(" "));
+    return erpRef && bankRef && (bankRef.includes(erpRef) || erpRef.includes(bankRef) || normalizeReference(row.admissionNo).slice(-3) && bankRef.includes(normalizeReference(row.admissionNo).slice(-3)));
+  });
+  if (referenceMatch) return {row: referenceMatch, status: "Matched", note: "Date, amount, and reference match"};
+  if (sameDateAmount.length > 1) return {row: sameDateAmount[0], status: "Review", note: `${sameDateAmount.length} ERP entries have the same date and amount`};
+  const amountOnly = erpRows.filter(row => !usedReceipts.has(row.receipt) && Number(row.bankAmount || 0) === Number(bankRow.amount || 0));
+  if (amountOnly.length === 1) return {row: amountOnly[0], status: "Review", note: "Amount matches, date is different"};
+  if (amountOnly.length > 1) return {row: amountOnly[0], status: "Review", note: `${amountOnly.length} ERP entries have this amount`};
+  return {row: null, status: "Unmatched", note: "No ERP Bank Book entry found"};
+}
+
+function renderBankReconciliation(bankRows = []) {
+  const summary = document.getElementById("bankReconSummary");
+  const body = document.getElementById("bankReconRows");
+  if (!summary || !body) return;
+  const erpRows = getBankBookRows();
+  const usedReceipts = new Set();
+  const results = bankRows.map(bankRow => {
+    const match = findBankBookMatch(bankRow, erpRows, usedReceipts);
+    if (match.row && match.status === "Matched") usedReceipts.add(match.row.receipt);
+    return {bankRow, ...match};
+  });
+  const totals = results.reduce((sum, item) => {
+    sum.bank += Number(item.bankRow.amount || 0);
+    if (item.status === "Matched") {
+      sum.matched += 1;
+      sum.matchedAmount += Number(item.bankRow.amount || 0);
+    } else if (item.status === "Review") {
+      sum.review += 1;
+    } else {
+      sum.unmatched += 1;
+    }
+    return sum;
+  }, {bank: 0, matchedAmount: 0, matched: 0, review: 0, unmatched: 0});
+  summary.innerHTML = `
+    <article><span>CSV Credits</span><strong>${results.length}</strong></article>
+    <article><span>Matched</span><strong>${totals.matched}</strong></article>
+    <article><span>Need Review</span><strong>${totals.review}</strong></article>
+    <article><span>Unmatched</span><strong>${totals.unmatched}</strong></article>
+    <article><span>CSV Total</span><strong>${formatRs(totals.bank)}</strong></article>
+    <article><span>Matched Amount</span><strong>${formatRs(totals.matchedAmount)}</strong></article>
+  `;
+  body.innerHTML = results.map(item => {
+    const row = item.row || {};
+    return `
+      <tr class="bank-recon-${String(item.status || "").toLowerCase()}">
+        <td><span class="bank-recon-status">${escapeHtml(item.status)}</span></td>
+        <td>${escapeHtml(item.bankRow.date || "-")}</td>
+        <td><strong>${formatRs(item.bankRow.amount || 0)}</strong></td>
+        <td>${escapeHtml(item.bankRow.remarks || "-")}</td>
+        <td>${escapeHtml(row.receipt || "-")}</td>
+        <td>${escapeHtml(row.studentName || "-")}</td>
+        <td>${escapeHtml(row.admissionNo || "-")}</td>
+        <td>${escapeHtml(row.date || "-")}</td>
+        <td>${row.bankAmount ? formatRs(row.bankAmount) : "-"}</td>
+        <td>${escapeHtml(item.note || "-")}</td>
+      </tr>
+    `;
+  }).join("") || `<tr><td colspan="10">No credit rows found in the uploaded CSV.</td></tr>`;
+}
+
 function shortCollectionDateLabel(value = "") {
   const date = parseDateDDMMYYYY(value);
   if (Number.isNaN(date.getTime())) return String(value || "-").slice(0, 5);
@@ -3229,16 +3390,18 @@ function renderDailyCollectionReport() {
     sum.bank += row.bank;
     sum.cash += row.cash;
     sum.fine += row.fine;
+    sum.discount += row.discount || 0;
     sum.total += row.total;
     sum.receipts += row.receipts.size;
     return sum;
-  }, {bank: 0, cash: 0, fine: 0, total: 0, receipts: 0});
+  }, {bank: 0, cash: 0, fine: 0, discount: 0, total: 0, receipts: 0});
   summary.innerHTML = `
     <article><span>${selectedDateLabel ? "Selected Date" : "Total Days"}</span><strong>${selectedDateLabel ? escapeHtml(selectedDateLabel) : reportRows.length}</strong></article>
     <article><span>Total Collection</span><strong>${formatRs(totals.total)}</strong></article>
     <article><span>Bank</span><strong>${formatRs(totals.bank)}</strong></article>
     <article><span>Cash</span><strong>${formatRs(totals.cash)}</strong></article>
     <article><span>Fine</span><strong>${formatRs(totals.fine)}</strong></article>
+    <article><span>Discount</span><strong>${formatRs(totals.discount)}</strong></article>
     <article><span>Receipts</span><strong>${totals.receipts}</strong></article>
   `;
   rows.innerHTML = reportRows.map(row => {
@@ -3252,11 +3415,12 @@ function renderDailyCollectionReport() {
         <td>${formatRs(row.bank)}</td>
         <td>${formatRs(row.cash)}</td>
         <td>${formatRs(row.fine)}</td>
+        <td>${formatRs(row.discount || 0)}</td>
         <td><strong>${formatRs(row.total)}</strong></td>
       </tr>
       ${isOpen ? renderDailyCollectionDropdown(row) : ""}
     `;
-  }).join("") || `<tr><td colspan="8">${selectedDateLabel ? "No collection found for selected date." : "No daily collection found yet."}</td></tr>`;
+  }).join("") || `<tr><td colspan="9">${selectedDateLabel ? "No collection found for selected date." : "No daily collection found yet."}</td></tr>`;
 }
 
 function renderDailyCollectionDropdown(reportRow = {}) {
@@ -3279,12 +3443,13 @@ function renderDailyCollectionDropdown(reportRow = {}) {
             <article><span>Bank</span><strong>${formatRs(reportRow.bank)}</strong></article>
             <article><span>Cash</span><strong>${formatRs(reportRow.cash)}</strong></article>
             <article><span>Fine</span><strong>${formatRs(reportRow.fine)}</strong></article>
+            <article><span>Discount</span><strong>${formatRs(reportRow.discount || 0)}</strong></article>
             <article><span>Total</span><strong>${formatRs(reportRow.total)}</strong></article>
           </div>
           <div class="table-wrap daily-collection-detail-table">
             <table>
               <thead>
-                <tr><th>Student</th><th>Admission No.</th><th>Receipt</th><th>Bank</th><th>Cash</th><th>Total</th><th>Remarks</th><th>Entry Role</th></tr>
+                <tr><th>Student</th><th>Admission No.</th><th>Receipt</th><th>Bank</th><th>Cash</th><th>Discount</th><th>Total</th><th>Remarks</th><th>Entry Role</th></tr>
               </thead>
               <tbody>
                 ${details.map(item => `
@@ -3294,11 +3459,12 @@ function renderDailyCollectionDropdown(reportRow = {}) {
                     <td>${escapeHtml(item.receipt || "-")}</td>
                     <td>${formatRs(item.bank || 0)}</td>
                     <td>${formatRs(item.cash || 0)}</td>
+                    <td>${formatRs(item.discount || 0)}</td>
                     <td><strong>${formatRs(item.total || 0)}</strong></td>
                     <td>${escapeHtml(item.remarks || "-")}</td>
                     <td>${escapeHtml(item.role || "-")}</td>
                   </tr>
-                `).join("") || `<tr><td colspan="8">No student payments found for this date.</td></tr>`}
+                `).join("") || `<tr><td colspan="9">No student payments found for this date.</td></tr>`}
               </tbody>
             </table>
           </div>
@@ -8163,7 +8329,7 @@ function renderStudentFeeCounter(admissionNo = activeFeeStudentAdmissionNo, requ
     document.getElementById("feeForm").dataset.fineAmount = 0;
     document.getElementById("feeForm").dataset.feeMonth = "";
     document.getElementById("receiptBox").textContent = "Select a student or enter an admission number.";
-    document.getElementById("ledgerPaymentRows").innerHTML = `<tr><td colspan="11">No payment history yet.</td></tr>`;
+    document.getElementById("ledgerPaymentRows").innerHTML = `<tr><td colspan="13">No payment history yet.</td></tr>`;
     return;
   }
   resetPaymentEditMode();
@@ -8382,6 +8548,7 @@ function buildLedgerPaymentRow(student, payment) {
   const total = allocations.reduce((sum, allocation) => sum + Number(allocation.amount || 0), 0);
   const savedBank = Number(payment.bankAmount || 0);
   const savedCash = Number(payment.cashAmount || 0);
+  const discount = Number(payment.discountAmount || 0);
   const split = savedBank || savedCash ? {bank: savedBank, cash: savedCash} : getPaymentSplitForAmount(payment, total);
   return {
     date: getPaymentPrimaryDate(payment),
@@ -8392,6 +8559,7 @@ function buildLedgerPaymentRow(student, payment) {
     bank: split.bank,
     cash: split.cash,
     fine,
+    discount,
     remarks: payment.remarks || "",
     by: payment.by
   };
@@ -8699,12 +8867,21 @@ function renderLedgerMonthPartialCell(monthAmount, paidAmount) {
   return `<strong>${formatRs(paid)}</strong>`;
 }
 
+function getFeeBookDropdownKey(student = {}, row = {}, type = "period") {
+  return [
+    type,
+    normalizeAdmissionNo(student.admissionNo || activeLedgerAdmissionNo || ""),
+    String(row.name || "").trim()
+  ].join("__");
+}
+
 function renderLedgerPeriodCell(student, row) {
   const payments = getLedgerPaymentDetails(student, row);
   const months = Array.isArray(row.months) ? row.months : [];
   if (!months.length && !payments.length) return `<span class="fee-period">${row.period}</span>`;
+  const dropdownKey = getFeeBookDropdownKey(student, row, "period");
   return `
-    <details class="period-details ledger-payment-details">
+    <details class="period-details ledger-payment-details" data-fee-book-dropdown="${escapeHtml(dropdownKey)}" ${openFeeBookDropdowns.has(dropdownKey) ? "open" : ""}>
       <summary><span class="fee-period">${row.period}</span></summary>
       <div class="period-breakdown ledger-payment-breakdown">
         ${months.length ? `
@@ -10458,8 +10635,9 @@ function renderLedgerDateCell(student, row) {
   if (!payments.length) return "-";
   if (row && row.name === "Tuition Fee") return `<span class="fee-date">${formatDateDDMMYYYY(payments[0].date)}</span>`;
   if (payments.length === 1) return `<span class="fee-date">${formatDateDDMMYYYY(payments[0].date)}</span>`;
+  const dropdownKey = getFeeBookDropdownKey(student, row, "date");
   return `
-    <details class="date-details">
+    <details class="date-details" data-fee-book-dropdown="${escapeHtml(dropdownKey)}" ${openFeeBookDropdowns.has(dropdownKey) ? "open" : ""}>
       <summary><span class="fee-date">${formatDateDDMMYYYY(payments[0].date)}</span></summary>
       <div class="date-breakdown">
         ${payments.map(payment => `
@@ -10577,7 +10755,7 @@ function renderFeeBook(admissionNo = activeLedgerAdmissionNo) {
     document.getElementById("ledgerDiscount").textContent = formatRs(0);
     document.getElementById("ledgerDue").textContent = formatRs(0);
     document.getElementById("ledgerFeeRows").innerHTML = `<tr><td colspan="10">No student selected. Add a student admission first.</td></tr>`;
-    document.getElementById("ledgerPaymentRows").innerHTML = `<tr><td colspan="12">No payment history yet.</td></tr>`;
+    document.getElementById("ledgerPaymentRows").innerHTML = `<tr><td colspan="13">No payment history yet.</td></tr>`;
     return;
   }
   activeLedgerAdmissionNo = student.admissionNo;
@@ -10647,6 +10825,7 @@ function renderFeeBook(admissionNo = activeLedgerAdmissionNo) {
       <td>${formatRs(payment.bank)}</td>
       <td>${formatRs(payment.cash)}</td>
       <td>${formatRs(payment.fine)}</td>
+      <td>${formatRs(payment.discount || 0)}</td>
       <td>
         <label class="payment-total-selector" title="Click to add/remove from quick total">
           <input data-payment-total-select type="checkbox" value="${escapeHtml(selectionKey)}" data-bank="${Number(payment.bank || 0)}" data-cash="${Number(payment.cash || 0)}" data-fine="${Number(payment.fine || 0)}" data-total="${totalAmount}" ${isSelected ? "checked" : ""} />
@@ -10670,7 +10849,7 @@ function renderFeeBook(admissionNo = activeLedgerAdmissionNo) {
       </td>
     </tr>
   `;
-  }).join("") || `<tr><td colspan="12">${hasHistoryFilter ? "No payment history found in selected filter." : "No payment history yet."}</td></tr>`;
+  }).join("") || `<tr><td colspan="13">${hasHistoryFilter ? "No payment history found in selected filter." : "No payment history yet."}</td></tr>`;
   updatePaymentQuickTotal();
 }
 
@@ -12962,6 +13141,13 @@ feeBookStudentSelect.addEventListener("change", () => {
   renderFeeBook(feeBookStudentSelect.value);
 });
 
+document.getElementById("ledgerFeeRows")?.addEventListener("toggle", event => {
+  const dropdown = event.target;
+  if (!(dropdown instanceof HTMLDetailsElement) || !dropdown.dataset.feeBookDropdown) return;
+  if (dropdown.open) openFeeBookDropdowns.add(dropdown.dataset.feeBookDropdown);
+  else openFeeBookDropdowns.delete(dropdown.dataset.feeBookDropdown);
+}, true);
+
 document.getElementById("dueFeesMonthFilter").addEventListener("change", renderDueFeesSearch);
 document.getElementById("dueFeesClassFilter")?.addEventListener("change", renderDueFeesSearch);
 document.getElementById("dueFeesSectionFilter")?.addEventListener("change", renderDueFeesSearch);
@@ -14416,6 +14602,27 @@ document.getElementById("bankBookClearFilters")?.addEventListener("click", () =>
   renderBankBook();
 });
 
+document.getElementById("bankReconRunBtn")?.addEventListener("click", () => {
+  const input = document.getElementById("bankReconCsvInput");
+  const file = input?.files?.[0];
+  if (!file) {
+    showToast("Please upload a bank CSV statement first.");
+    return;
+  }
+  const reader = new FileReader();
+  reader.onload = () => {
+    renderBankReconciliation(buildBankStatementRows(String(reader.result || "")));
+    showToast("Bank statement matched with Bank Book.");
+  };
+  reader.readAsText(file);
+});
+
+document.getElementById("bankReconClearBtn")?.addEventListener("click", () => {
+  const input = document.getElementById("bankReconCsvInput");
+  if (input) input.value = "";
+  renderBankReconciliation([]);
+});
+
 document.getElementById("importStaffAttendanceBtn").addEventListener("click", () => {
   staffAttendanceImport.click();
 });
@@ -15360,14 +15567,19 @@ document.body.addEventListener("click", event => {
   document.querySelectorAll("#ledgerFeeRows .payment-split-details[open]").forEach(dropdown => {
     if (dropdown !== activePaymentSplit) dropdown.open = false;
   });
-  document.querySelectorAll("#ledgerFeeRows .period-details[open], #ledgerFeeRows .date-details[open], #dueFeesSearchRows .period-details[open]").forEach(dropdown => {
-    if (dropdown !== activeTableDropdown) {
+  if (!activeTableDropdown) {
+    openFeeBookDropdowns.clear();
+    document.querySelectorAll("#ledgerFeeRows .period-details[open], #ledgerFeeRows .date-details[open], #dueFeesSearchRows .period-details[open]").forEach(dropdown => {
       dropdown.querySelectorAll(".payment-split-details[open]").forEach(childDropdown => {
         childDropdown.open = false;
       });
       dropdown.open = false;
-    }
-  });
+    });
+  } else {
+    document.querySelectorAll("#dueFeesSearchRows .period-details[open]").forEach(dropdown => {
+      if (dropdown !== activeTableDropdown) dropdown.open = false;
+    });
+  }
   const profile = event.target.closest("[data-profile]");
   const editStudent = event.target.closest("[data-edit-student]");
   const editStudentTransport = event.target.closest("[data-edit-student-transport]");

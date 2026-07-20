@@ -3144,6 +3144,50 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .78), 0 8px 18px rgba(31, 50, 72, .06);
 }
 
+.bank-reconciliation-upload {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px;
+  margin-bottom: 10px;
+  border: 1px solid #c5ddf1;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #f0f8ff 0%, #ffffff 58%, #fff5dc 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .82), 0 10px 20px rgba(31, 50, 72, .07);
+}
+
+.bank-reconciliation-upload label {
+  display: grid;
+  gap: 7px;
+  min-width: 280px;
+  color: #50657b;
+  font-size: .8rem;
+  font-weight: 950;
+}
+
+.bank-reconciliation-upload input[type="file"] {
+  min-height: 42px;
+  border: 1px dashed #8ab2d4;
+  border-radius: 7px;
+  background: #fff;
+  color: #123456;
+  padding: 9px 10px;
+  font: inherit;
+  font-weight: 850;
+}
+
+.bank-reconciliation-help {
+  margin: 0 0 12px;
+  padding: 9px 11px;
+  border-left: 4px solid #177e89;
+  border-radius: 7px;
+  background: rgba(255, 255, 255, .72);
+  color: #50657b;
+  font-size: .84rem;
+  font-weight: 800;
+}
+
 .daily-collection-filter label {
   display: grid;
   gap: 7px;
@@ -3333,6 +3377,10 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   min-width: 1180px;
 }
 
+.bank-reconciliation-table table {
+  min-width: 1320px;
+}
+
 .entire-school-fees-table table {
   min-width: 1380px;
 }
@@ -3403,6 +3451,42 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
 .bank-book-table td:nth-child(9) {
   color: #174f81;
   font-weight: 950;
+}
+
+.bank-recon-status {
+  display: inline-flex;
+  min-width: 86px;
+  justify-content: center;
+  padding: 5px 8px;
+  border-radius: 999px;
+  color: #fff;
+  background: #64748b;
+  font-size: .76rem;
+  font-weight: 950;
+}
+
+.bank-recon-matched .bank-recon-status {
+  background: #167b45;
+}
+
+.bank-recon-review .bank-recon-status {
+  background: #a16207;
+}
+
+.bank-recon-unmatched .bank-recon-status {
+  background: #b42318;
+}
+
+.bank-recon-matched td {
+  background: #f1fbf4 !important;
+}
+
+.bank-recon-review td {
+  background: #fff8e6 !important;
+}
+
+.bank-recon-unmatched td {
+  background: #fff1f1 !important;
 }
 
 .daily-collection-date-action {

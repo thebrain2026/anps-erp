@@ -54,6 +54,7 @@
             <button data-view="finance" type="button">Collect Fees</button>
             <button data-view="feeBook" type="button">Fee Book</button>
             <button data-view="bankBook" type="button">Bank Book</button>
+            <button data-view="bankReconciliation" type="button">Bank Reconciliation</button>
             <button data-view="dueFeesSearch" type="button">Search Due Fees</button>
             <button data-view="upiPaymentVerification" type="button">UPI Verification</button>
             <button data-view="feeMaster" type="button">Fee Master</button>
@@ -600,7 +601,7 @@
                   <button class="ghost-action" id="clearPaymentQuickTotal" type="button">Clear</button>
                 </div>
                 <table>
-                  <thead><tr><th>Date</th><th>Receipt No.</th><th>Student Name</th><th>Admission No.</th><th>Fee Head</th><th>Bank Payment</th><th>Cash Payment</th><th>Fine</th><th>Total Amount</th><th>Remarks</th><th>Collected By</th><th>Action</th></tr></thead>
+                  <thead><tr><th>Date</th><th>Receipt No.</th><th>Student Name</th><th>Admission No.</th><th>Fee Head</th><th>Bank Payment</th><th>Cash Payment</th><th>Fine</th><th>Discount</th><th>Total Amount</th><th>Remarks</th><th>Collected By</th><th>Action</th></tr></thead>
                   <tbody id="ledgerPaymentRows"></tbody>
                 </table>
               </div>
@@ -717,6 +718,37 @@
               <thead><tr><th>Date</th><th>Receipt No.</th><th>Student</th><th>Admission No.</th><th>Class</th><th>Fee Head</th><th>Month</th><th>Bank Amount</th><th>Total Paid</th><th>Remarks</th><th>Entry Role</th></tr></thead>
               <tbody id="bankBookRows">
                 <tr><td colspan="11">No bank payment found yet.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="bankReconciliation">
+        <div class="panel bank-book-panel bank-reconciliation-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Fees Collection</p>
+              <h2>Bank Reconciliation</h2>
+              <small>Upload a bank CSV statement to match bank credits with ERP Bank Book entries.</small>
+            </div>
+          </div>
+          <div class="bank-reconciliation-upload">
+            <label>Bank Statement CSV
+              <input id="bankReconCsvInput" type="file" accept=".csv,text/csv" />
+            </label>
+            <button class="primary-action" id="bankReconRunBtn" type="button">Match Statement</button>
+            <button class="ghost-action" id="bankReconClearBtn" type="button">Clear</button>
+          </div>
+          <div class="bank-reconciliation-help">
+            CSV should include transaction date, remarks/reference, and deposit/credit amount columns. Excel files are not required.
+          </div>
+          <div class="bank-book-summary" id="bankReconSummary"></div>
+          <div class="report-table-panel table-wrap bank-book-table bank-reconciliation-table">
+            <table>
+              <thead><tr><th>Status</th><th>Bank Date</th><th>Bank Amount</th><th>Bank Reference / Remarks</th><th>ERP Receipt</th><th>Student</th><th>Admission No.</th><th>ERP Date</th><th>ERP Amount</th><th>Match Note</th></tr></thead>
+              <tbody id="bankReconRows">
+                <tr><td colspan="10">Upload a bank CSV statement and click Match Statement.</td></tr>
               </tbody>
             </table>
           </div>
@@ -1770,9 +1802,9 @@
           <div class="daily-collection-summary" id="dailyCollectionSummary"></div>
           <div class="report-table-panel table-wrap daily-collection-report-table">
             <table>
-              <thead><tr><th>Date</th><th>Receipts</th><th>Students</th><th>Entry Role</th><th>Bank</th><th>Cash</th><th>Fine</th><th>Total Collection</th></tr></thead>
+              <thead><tr><th>Date</th><th>Receipts</th><th>Students</th><th>Entry Role</th><th>Bank</th><th>Cash</th><th>Fine</th><th>Discount</th><th>Total Collection</th></tr></thead>
               <tbody id="dailyCollectionReportRows">
-                <tr><td colspan="8">No daily collection found yet.</td></tr>
+                <tr><td colspan="9">No daily collection found yet.</td></tr>
               </tbody>
             </table>
           </div>
