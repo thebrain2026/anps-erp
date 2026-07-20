@@ -5685,6 +5685,41 @@ function renderDues() {
   `).join("") || `<tr><td colspan="4">No active due or late-payment follow-up found.</td></tr>`;
 }
 
+function getRunningAcademicMonth() {
+  return ACADEMIC_MONTHS[getAcademicMonthIndexForDate(new Date())] || ACADEMIC_MONTHS[0];
+}
+
+function getDashboardRunningMonthDueSummary(month = getRunningAcademicMonth()) {
+  const dueStudents = new Map();
+  let totalDue = 0;
+  getActiveStudents().forEach(student => {
+    let studentDue = 0;
+    getLedgerRows(student).forEach(row => {
+      const item = getSearchDueMonthItem(student, row, month);
+      if (!item) return;
+      studentDue += Number(item.total || 0);
+    });
+    if (studentDue > 0) {
+      const key = student.admissionNo || student.name || `student-${dueStudents.size}`;
+      dueStudents.set(key, studentDue);
+      totalDue += studentDue;
+    }
+  });
+  return {month, studentCount: dueStudents.size, totalDue};
+}
+
+function renderDashboardDueStudents() {
+  const monthEl = document.getElementById("dashboardDueStudentsMonth");
+  const countEl = document.getElementById("dashboardDueStudentsCount");
+  const amountEl = document.getElementById("dashboardDueStudentsAmount");
+  if (!monthEl || !countEl || !amountEl) return;
+  const summary = getDashboardRunningMonthDueSummary();
+  const monthDate = getAcademicMonthDate(summary.month, 1);
+  monthEl.textContent = `${summary.month} ${monthDate.getFullYear()} due summary`;
+  countEl.textContent = summary.studentCount.toLocaleString("en-IN");
+  amountEl.textContent = `Due amount ${formatRs(summary.totalDue)}`;
+}
+
 function getLateFinePaymentProfile(student = {}) {
   const payments = getSessionPayments(student.admissionNo);
   const monthProfile = ACADEMIC_MONTHS.reduce((profile, month) => {
@@ -7778,6 +7813,7 @@ function renderFinanceSession(includeTables = true) {
   document.getElementById("kpiFollowUpsNote").textContent = `${dashboardHighPriority} high priority`;
   document.getElementById("studentCount").textContent = getActiveStudents().length.toLocaleString("en-IN");
   renderDues();
+  renderDashboardDueStudents();
   if (!includeTables) return;
   resetFeeMasterEditing();
   resetFeeGroupEditing();

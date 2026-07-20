@@ -271,23 +271,41 @@
             <div class="module-status" id="moduleStatus"></div>
           </section>
 
-          <section class="panel">
-            <div class="panel-head">
-              <div>
-                <p class="eyebrow">Finance desk</p>
-                <h2>Due follow-up</h2>
+          <div class="dashboard-finance-stack">
+            <section class="panel due-followup-panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Finance desk</p>
+                  <h2>Due follow-up</h2>
+                </div>
+                <button class="mini" data-view-jump="dueFeesSearch" type="button">Open</button>
               </div>
-              <button class="mini" data-view-jump="dueFeesSearch" type="button">Open</button>
-            </div>
-            <div class="table-wrap compact-table">
-              <table>
-                <thead>
-                  <tr><th>Student</th><th>Class</th><th>Due</th><th>Status</th></tr>
-                </thead>
-                <tbody id="dueTable"></tbody>
-              </table>
-            </div>
-          </section>
+              <div class="table-wrap compact-table">
+                <table>
+                  <thead>
+                    <tr><th>Student</th><th>Class</th><th>Due</th><th>Status</th></tr>
+                  </thead>
+                  <tbody id="dueTable"></tbody>
+                </table>
+              </div>
+            </section>
+
+            <section class="panel dashboard-due-students-card">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Running month</p>
+                  <h2>Due Students</h2>
+                  <small id="dashboardDueStudentsMonth">Current month dues</small>
+                </div>
+                <button class="mini" data-view-jump="dueFeesSearch" type="button">Open</button>
+              </div>
+              <div class="due-students-card-body">
+                <strong id="dashboardDueStudentsCount">0</strong>
+                <span>students due</span>
+                <small id="dashboardDueStudentsAmount">Due amount Rs. 0</small>
+              </div>
+            </section>
+          </div>
         </div>
       </section>
 
