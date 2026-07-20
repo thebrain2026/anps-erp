@@ -868,6 +868,24 @@ function mergeFinanceSessions(remoteSessions = {}, localSessions = {}) {
   return merged;
 }
 
+function mergeTransportVillageFees(remoteFees = {}, localFees = {}) {
+  const merged = {};
+  const villages = new Set([...Object.keys(remoteFees || {}), ...Object.keys(localFees || {})]);
+  const feeTypes = ["newStudentFee", "promotedStudentFee", "specialStudentFee"];
+  villages.forEach(village => {
+    const remoteRow = remoteFees[village] || {};
+    const localRow = localFees[village] || {};
+    const row = {...remoteRow, ...localRow};
+    feeTypes.forEach(type => {
+      const localValue = Number(localRow[type] || 0);
+      const remoteValue = Number(remoteRow[type] || 0);
+      if (!localValue && remoteValue) row[type] = remoteValue;
+    });
+    merged[village] = row;
+  });
+  return merged;
+}
+
 function mergeStateSnapshots(remoteState = {}, localState = {}) {
   const merged = {...remoteState, ...localState};
   const primitiveKeys = [
@@ -911,7 +929,7 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
     merged[key] = mergeObjectListByKey(remoteState[key] || [], localState[key] || [], fields);
   });
   merged.transportVillageDistances = {...(remoteState.transportVillageDistances || {}), ...(localState.transportVillageDistances || {})};
-  merged.transportVillageFees = {...(remoteState.transportVillageFees || {}), ...(localState.transportVillageFees || {})};
+  merged.transportVillageFees = mergeTransportVillageFees(remoteState.transportVillageFees || {}, localState.transportVillageFees || {});
   merged.rolePermissions = {...(remoteState.rolePermissions || {}), ...(localState.rolePermissions || {})};
   merged.rolePermissionAudit = {...(remoteState.rolePermissionAudit || {}), ...(localState.rolePermissionAudit || {})};
   merged.classSubjectAssignments = {...(remoteState.classSubjectAssignments || {}), ...(localState.classSubjectAssignments || {})};

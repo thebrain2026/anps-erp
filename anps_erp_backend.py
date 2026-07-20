@@ -1440,6 +1440,14 @@ def money(value):
     return int("".join(ch for ch in str(value or "") if ch.isdigit()) or "0")
 
 
+def first_non_zero_money(*values):
+    for value in values:
+        amount = money(value)
+        if amount:
+            return amount
+    return 0
+
+
 def payment_merge_key(payment):
     if not isinstance(payment, dict):
         return ""
@@ -2164,6 +2172,10 @@ def sync_state_tables(conn, state):
     village_fees = state.get("transportVillageFees", {}) or {}
     for village_name in state.get("transportVillages", []) or []:
         fees = village_fees.get(village_name, {}) if isinstance(village_fees, dict) else {}
+        existing_village = conn.execute(
+            "SELECT new_student_fee, promoted_student_fee, special_student_fee FROM transport_villages WHERE village_name = ?",
+            (str(village_name),),
+        ).fetchone()
         row = {"villageName": village_name, **(fees if isinstance(fees, dict) else {})}
         upsert_json_row(
             conn,
@@ -2173,9 +2185,21 @@ def sync_state_tables(conn, state):
             {
                 "village_name": str(village_name),
                 "distance_km": str(village_distances.get(village_name) or "") if isinstance(village_distances, dict) else "",
-                "new_student_fee": money(fees.get("newStudentFee") or fees.get("new_student_fee")),
-                "promoted_student_fee": money(fees.get("promotedStudentFee") or fees.get("promoted_student_fee")),
-                "special_student_fee": money(fees.get("specialStudentFee") or fees.get("special_student_fee")),
+                "new_student_fee": first_non_zero_money(
+                    fees.get("newStudentFee"),
+                    fees.get("new_student_fee"),
+                    existing_village["new_student_fee"] if existing_village else 0,
+                ),
+                "promoted_student_fee": first_non_zero_money(
+                    fees.get("promotedStudentFee"),
+                    fees.get("promoted_student_fee"),
+                    existing_village["promoted_student_fee"] if existing_village else 0,
+                ),
+                "special_student_fee": first_non_zero_money(
+                    fees.get("specialStudentFee"),
+                    fees.get("special_student_fee"),
+                    existing_village["special_student_fee"] if existing_village else 0,
+                ),
                 "raw_json": json.dumps(row, ensure_ascii=False),
             },
         )
