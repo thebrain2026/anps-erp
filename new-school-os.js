@@ -2429,7 +2429,7 @@ function updateClassReferences(oldClassName, newClassName) {
     classSubjectAssignments[newClassName] = classSubjectAssignments[oldClassName];
     delete classSubjectAssignments[oldClassName];
   }
-  (financeSessions[activeSession]?.feeMaster || []).forEach(item => {
+  (ensureActiveFinanceSessionData().feeMaster || []).forEach(item => {
     if (item.className === oldClassName) item.className = newClassName;
   });
   students.forEach(student => {
@@ -2493,7 +2493,7 @@ function setClassSectionSetupPanel(panelId) {
 }
 
 function getAdmissionStudentTypeOptions() {
-  const sessionTypes = [...new Set((financeSessions[activeSession]?.feeMaster || [])
+  const sessionTypes = [...new Set((getActiveFinanceSessionData().feeMaster || [])
     .map(item => item.studentType)
     .filter(Boolean))];
   const feeMasterTypes = [...feeMasterForm.elements.studentType.options]
@@ -2593,7 +2593,7 @@ function getFeeMasterForClass(className = "", studentType = admissionForm.elemen
   const cleanClass = String(className || "").trim();
   if (!cleanClass) return null;
   const cleanType = String(studentType || "New Student").trim();
-  const matches = (financeSessions[activeSession]?.feeMaster || []).filter(item => item.className === cleanClass);
+  const matches = (getActiveFinanceSessionData().feeMaster || []).filter(item => item.className === cleanClass);
   return matches.find(item => item.studentType === cleanType)
     || matches.find(item => item.studentType === "New Student")
     || matches[0]
@@ -7516,7 +7516,7 @@ function renderSessions() {
 }
 
 function renderFinanceSession(includeTables = true) {
-  const session = financeSessions[activeSession];
+  const session = ensureActiveFinanceSessionData();
   const dashboardMonthly = getDashboardMonthlyFeeCollectionSummary();
   const dashboardFollowUps = getDashboardDueFollowUps();
   const dashboardHighPriority = dashboardFollowUps.filter(item => item.status === "High Priority").length;
@@ -10866,7 +10866,7 @@ function isBuiltInClassFeeGroup(groupName = "") {
 }
 
 function getDynamicFeeGroups() {
-  const session = financeSessions[activeSession];
+  const session = ensureActiveFinanceSessionData();
   const seen = new Set();
   return (session.feeGroups || []).filter(group => {
     const name = String(group.groupName || "").trim();
@@ -10906,7 +10906,7 @@ function renderFeeMasterCustomFees(item = {}) {
 }
 
 function renderFeeMaster() {
-  const session = financeSessions[activeSession];
+  const session = ensureActiveFinanceSessionData();
   const showFeeGroupColumn = getDynamicFeeGroups().length > 0;
   renderAdmissionClassOptions();
   renderFeeMasterClassOptions();
@@ -10978,7 +10978,7 @@ function resetFeeGroupEditing() {
 }
 
 function renderFeeGroups() {
-  const session = financeSessions[activeSession];
+  const session = ensureActiveFinanceSessionData();
   document.getElementById("feeGroupCards").innerHTML = session.feeGroups.map((group, index) => `
     <article>
       <span>${group.category}</span>
@@ -11299,7 +11299,7 @@ function setSecurityBackups(backups) {
 function getSecurityRecordCounts() {
   const sessionPayments = collectedPayments[activeSession] || {};
   const paymentCount = Object.values(sessionPayments).reduce((sum, payments) => sum + (Array.isArray(payments) ? payments.length : 0), 0);
-  const session = financeSessions[activeSession] || {};
+  const session = getActiveFinanceSessionData();
   return {
     students: students.length,
     activeStudents: getActiveStudents().length,
@@ -11345,21 +11345,84 @@ function getSessionAliases(session = activeSession) {
   const [startYear, endYear] = cleanSession.split("-");
   if (startYear && endYear) {
     if (startYear.length === 2) aliases.add(`20${startYear}-${endYear}`);
-    if (startYear.length === 4 && endYear.length === 2) aliases.add(`${startYear.slice(-2)}-${endYear}`);
+    if (startYear.length === 4 && endYear.length === 2) {
+      aliases.add(`${startYear.slice(-2)}-${endYear}`);
+      aliases.add(`${startYear}-${startYear.slice(0, 2)}${endYear}`);
+    }
+    if (startYear.length === 2 && endYear.length === 2) aliases.add(`20${startYear}-20${endYear}`);
+    if (startYear.length === 4 && endYear.length === 4) aliases.add(`${startYear}-${endYear.slice(-2)}`);
   }
   return [...aliases];
+}
+
+function hasFinanceSetupRecords(session = {}) {
+  return Boolean(
+    (session.feeMaster || []).length ||
+    (session.feeGroups || []).length
+  );
+}
+
+function createBlankFinanceSession(summary = "No finance data entered for this session yet.") {
+  return {
+    feesCollected: "Rs. 0",
+    collectionPercent: 0,
+    followUps: 0,
+    highPriority: 0,
+    paid: 0,
+    promise: 0,
+    overdue: 0,
+    summary,
+    feeMaster: [],
+    feeGroups: [],
+    dues: []
+  };
+}
+
+function cloneFinanceSessionData(session = {}) {
+  return {
+    ...createBlankFinanceSession(session.summary || "Fee setup copied for the active session."),
+    ...session,
+    feeMaster: JSON.parse(JSON.stringify(session.feeMaster || [])),
+    feeGroups: JSON.parse(JSON.stringify(session.feeGroups || [])),
+    dues: JSON.parse(JSON.stringify(session.dues || []))
+  };
 }
 
 function getActiveFinanceSessionData() {
   const aliases = getSessionAliases(activeSession);
   const populatedSession = aliases
     .map(session => financeSessions[session])
-    .find(session => session && (
-      (session.feeMaster || []).length ||
-      (session.feeGroups || []).length ||
-      (session.dues || []).length
-    ));
+    .find(session => session && hasFinanceSetupRecords(session));
   return populatedSession || financeSessions[activeSession] || {};
+}
+
+function ensureActiveFinanceSessionData() {
+  if (!financeSessions[activeSession]) {
+    financeSessions[activeSession] = createBlankFinanceSession();
+  }
+  if (hasFinanceSetupRecords(financeSessions[activeSession])) return financeSessions[activeSession];
+  const aliasWithData = getSessionAliases(activeSession)
+    .filter(session => session !== activeSession)
+    .find(session => financeSessions[session] && hasFinanceSetupRecords(financeSessions[session]));
+  if (aliasWithData) {
+    const aliasData = cloneFinanceSessionData(financeSessions[aliasWithData]);
+    financeSessions[activeSession] = {
+      ...financeSessions[activeSession],
+      summary: financeSessions[activeSession].summary || aliasData.summary,
+      feeMaster: aliasData.feeMaster,
+      feeGroups: aliasData.feeGroups
+    };
+    saveAppState();
+  }
+  return financeSessions[activeSession];
+}
+
+function getBestAvailableFinanceSessionData() {
+  const activeData = getActiveFinanceSessionData();
+  if (hasFinanceSetupRecords(activeData)) {
+    return activeData;
+  }
+  return Object.values(financeSessions).find(session => session && hasFinanceSetupRecords(session)) || activeData;
 }
 
 function hasStaffSetupData() {
@@ -11373,7 +11436,7 @@ function hasStaffSetupData() {
 }
 
 function hasFeeMasterSetupData() {
-  const session = getActiveFinanceSessionData();
+  const session = getBestAvailableFinanceSessionData();
   return Boolean((session.feeMaster || []).length || (session.feeGroups || []).length);
 }
 
@@ -12806,6 +12869,7 @@ newSessionInput.addEventListener("keydown", event => {
 
 feeMasterForm.addEventListener("submit", event => {
   event.preventDefault();
+  const session = ensureActiveFinanceSessionData();
   const data = new FormData(feeMasterForm);
   const feeData = {
     className: String(data.get("className") || "").trim(),
@@ -12820,9 +12884,9 @@ feeMasterForm.addEventListener("submit", event => {
     customFees: getFeeMasterCustomFees()
   };
   if (editingFeeMasterIndex >= 0) {
-    financeSessions[activeSession].feeMaster[editingFeeMasterIndex] = feeData;
+    session.feeMaster[editingFeeMasterIndex] = feeData;
   } else {
-    financeSessions[activeSession].feeMaster.push(feeData);
+    session.feeMaster.push(feeData);
   }
   renderFeeMaster();
   if (admissionForm.elements.klass.value === feeData.className) applyFeeMasterToAdmissionForm(feeData.className);
@@ -12915,6 +12979,7 @@ admissionForm.addEventListener("reset", () => {
 
 feeGroupForm.addEventListener("submit", event => {
   event.preventDefault();
+  const session = ensureActiveFinanceSessionData();
   const data = new FormData(feeGroupForm);
   const feeGroup = {
     groupName: String(data.get("groupName") || "").trim(),
@@ -12922,9 +12987,9 @@ feeGroupForm.addEventListener("submit", event => {
     description: String(data.get("description") || "").trim()
   };
   if (editingFeeGroupIndex >= 0) {
-    financeSessions[activeSession].feeGroups[editingFeeGroupIndex] = feeGroup;
+    session.feeGroups[editingFeeGroupIndex] = feeGroup;
   } else {
-    financeSessions[activeSession].feeGroups.push(feeGroup);
+    session.feeGroups.push(feeGroup);
   }
   const actionText = editingFeeGroupIndex >= 0 ? "updated" : "added";
   renderFeeGroups();
@@ -15762,7 +15827,8 @@ document.body.addEventListener("click", event => {
   }
   if (editFeeMaster) {
     const index = Number(editFeeMaster.dataset.editFeeMaster);
-    const item = financeSessions[activeSession].feeMaster[index];
+    const session = ensureActiveFinanceSessionData();
+    const item = session.feeMaster[index];
     if (item) {
       editingFeeMasterIndex = index;
       feeMasterForm.elements.className.value = item.className;
@@ -15782,9 +15848,10 @@ document.body.addEventListener("click", event => {
   }
   if (deleteFeeMaster) {
     const index = Number(deleteFeeMaster.dataset.deleteFeeMaster);
-    const item = financeSessions[activeSession].feeMaster[index];
+    const session = ensureActiveFinanceSessionData();
+    const item = session.feeMaster[index];
     if (item && confirm(`Delete ${item.className} ${item.studentType}?`)) {
-      financeSessions[activeSession].feeMaster.splice(index, 1);
+      session.feeMaster.splice(index, 1);
       resetFeeMasterEditing();
       feeMasterForm.reset();
       renderFeeMaster();
@@ -15794,7 +15861,8 @@ document.body.addEventListener("click", event => {
   }
   if (editFeeGroup) {
     const index = Number(editFeeGroup.dataset.editFeeGroup);
-    const item = financeSessions[activeSession].feeGroups[index];
+    const session = ensureActiveFinanceSessionData();
+    const item = session.feeGroups[index];
     if (item) {
       editingFeeGroupIndex = index;
       feeGroupForm.elements.groupName.value = item.groupName;
@@ -15806,9 +15874,10 @@ document.body.addEventListener("click", event => {
   }
   if (deleteFeeGroup) {
     const index = Number(deleteFeeGroup.dataset.deleteFeeGroup);
-    const item = financeSessions[activeSession].feeGroups[index];
+    const session = ensureActiveFinanceSessionData();
+    const item = session.feeGroups[index];
     if (item && confirm(`Delete ${item.groupName}?`)) {
-      financeSessions[activeSession].feeGroups.splice(index, 1);
+      session.feeGroups.splice(index, 1);
       resetFeeGroupEditing();
       feeGroupForm.reset();
       renderFeeGroups();
