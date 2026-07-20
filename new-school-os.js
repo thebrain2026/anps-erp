@@ -1808,6 +1808,8 @@ function renderActiveView(viewName = document.querySelector(".view.active")?.id 
   if (viewName === "finance") {
     renderFinanceSession(true);
     renderStudentFeeCounter();
+    renderFeeBookStudentOptions();
+    renderFeeBook(activeLedgerAdmissionNo || activeFeeStudentAdmissionNo);
   }
   if (viewName === "feeBook") {
     renderFeeBookStudentOptions();
