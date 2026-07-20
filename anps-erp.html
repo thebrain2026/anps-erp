@@ -218,10 +218,10 @@
             <small id="kpiFeesNote">0% of selected session</small>
             <div class="monthly-fee-breakdown" id="kpiFeesMonthlyBreakdown" aria-label="Monthly fee collection summary"></div>
           </article>
-          <article class="kpi-card warning">
-            <span>Open Follow-ups</span>
-            <strong id="kpiFollowUps">0</strong>
-            <small id="kpiFollowUpsNote">0 high priority</small>
+          <article class="kpi-card due-students-kpi-card">
+            <span>Due Students</span>
+            <strong id="dashboardDueStudentsCount">0</strong>
+            <small><span id="dashboardDueStudentsMonth">Current month</span> | <span id="dashboardDueStudentsAmount">Due amount Rs. 0</span></small>
           </article>
         </div>
 
@@ -271,41 +271,23 @@
             <div class="module-status" id="moduleStatus"></div>
           </section>
 
-          <div class="dashboard-finance-stack">
-            <section class="panel due-followup-panel">
-              <div class="panel-head">
-                <div>
-                  <p class="eyebrow">Finance desk</p>
-                  <h2>Due follow-up</h2>
-                </div>
-                <button class="mini" data-view-jump="dueFeesSearch" type="button">Open</button>
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Finance desk</p>
+                <h2>Due follow-up</h2>
               </div>
-              <div class="table-wrap compact-table">
-                <table>
-                  <thead>
-                    <tr><th>Student</th><th>Class</th><th>Due</th><th>Status</th></tr>
-                  </thead>
-                  <tbody id="dueTable"></tbody>
-                </table>
-              </div>
-            </section>
-
-            <section class="panel dashboard-due-students-card">
-              <div class="panel-head">
-                <div>
-                  <p class="eyebrow">Running month</p>
-                  <h2>Due Students</h2>
-                  <small id="dashboardDueStudentsMonth">Current month dues</small>
-                </div>
-                <button class="mini" data-view-jump="dueFeesSearch" type="button">Open</button>
-              </div>
-              <div class="due-students-card-body">
-                <strong id="dashboardDueStudentsCount">0</strong>
-                <span>students due</span>
-                <small id="dashboardDueStudentsAmount">Due amount Rs. 0</small>
-              </div>
-            </section>
-          </div>
+              <button class="mini" data-view-jump="dueFeesSearch" type="button">Open</button>
+            </div>
+            <div class="table-wrap compact-table">
+              <table>
+                <thead>
+                  <tr><th>Student</th><th>Class</th><th>Due</th><th>Status</th></tr>
+                </thead>
+                <tbody id="dueTable"></tbody>
+              </table>
+            </div>
+          </section>
         </div>
       </section>
 

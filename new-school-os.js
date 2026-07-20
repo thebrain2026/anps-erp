@@ -7809,8 +7809,10 @@ function renderFinanceSession(includeTables = true) {
       </div>
     `).join("");
   }
-  document.getElementById("kpiFollowUps").textContent = String(dashboardFollowUps.length).padStart(2, "0");
-  document.getElementById("kpiFollowUpsNote").textContent = `${dashboardHighPriority} high priority`;
+  const followUpsKpi = document.getElementById("kpiFollowUps");
+  const followUpsNote = document.getElementById("kpiFollowUpsNote");
+  if (followUpsKpi) followUpsKpi.textContent = String(dashboardFollowUps.length).padStart(2, "0");
+  if (followUpsNote) followUpsNote.textContent = `${dashboardHighPriority} high priority`;
   document.getElementById("studentCount").textContent = getActiveStudents().length.toLocaleString("en-IN");
   renderDues();
   renderDashboardDueStudents();
