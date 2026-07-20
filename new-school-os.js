@@ -278,6 +278,7 @@ const titleMap = {
   bulkDeleteStudent: "Bulk Delete",
   finance: "Collect Fees",
   feeBook: "Fee Book",
+  bankBook: "Bank Book",
   dueFeesSearch: "Search Due Fees",
   upiPaymentVerification: "UPI Verification",
   feeMaster: "Fee Master",
@@ -346,7 +347,7 @@ const ACCESS_PERMISSION_GROUPS = [
   {name: "Dashboard", modules: ["dashboard", "dashboardFeesCollection"]},
   {name: "Front Office", modules: ["admissionEnquiry", "complaintRegister", "complaintsDesk"]},
   {name: "Student Information", modules: ["students", "studentAdmission", "disableStudent", "bulkDeleteStudent"]},
-  {name: "Fees Collection", modules: ["finance", "feeBook", "dueFeesSearch", "upiPaymentVerification", "feeMaster", "feeGroup", "addClassSection", "tuitionFineSetup", "feeReminder"]},
+  {name: "Fees Collection", modules: ["finance", "feeBook", "bankBook", "dueFeesSearch", "upiPaymentVerification", "feeMaster", "feeGroup", "addClassSection", "tuitionFineSetup", "feeReminder"]},
   {name: "Human Resources", modules: ["staffDetails", "staffAttendance", "applyLeave", "leaveType", "approveLeave", "teachersRating", "teacherAdvisory", "department", "designation", "disabledStaff"]},
   {name: "Communication", modules: ["noticeBoard", "teacherNoticeRequests", "sendSms"]},
   {name: "Homework", modules: ["addHomework", "teacherHomework", "homeworkDoubts", "dailyAssignment"]},
@@ -1771,6 +1772,7 @@ function renderActiveView(viewName = document.querySelector(".view.active")?.id 
     renderFeeBookStudentOptions();
     renderFeeBook();
   }
+  if (viewName === "bankBook") renderBankBook();
   if (viewName === "dueFeesSearch") renderDueFeesSearch();
   if (viewName === "upiPaymentVerification") renderUpiPaymentVerification();
   if (viewName === "feeMaster") renderFeeMaster();
@@ -3007,6 +3009,99 @@ function getDailyCollectionReportRows() {
     });
   });
   return [...dailyMap.values()].sort((a, b) => parseDateDDMMYYYY(b.date) - parseDateDDMMYYYY(a.date));
+}
+
+function getBankBookRows() {
+  const sessionPayments = collectedPayments[activeSession] || {};
+  const rows = [];
+  Object.entries(sessionPayments).forEach(([admissionNo, payments]) => {
+    const student = findStudentByAdmissionNo(admissionNo);
+    (payments || []).forEach(payment => {
+      const total = Number(payment.amount || 0);
+      const split = getPaymentSplitForAmount(payment, total);
+      const bankAmount = Number(payment.bankAmount || split.bank || 0);
+      if (bankAmount <= 0) return;
+      const allocations = Array.isArray(payment.allocations) ? payment.allocations : [];
+      const feeHeads = [...new Set(allocations.map(item => item.head).filter(Boolean))];
+      const feeMonths = [...new Set(allocations.map(item => item.month).filter(Boolean))];
+      rows.push({
+        date: formatDateDDMMYYYY(payment.date),
+        receipt: payment.receipt || "-",
+        studentName: student?.name || payment.studentName || "-",
+        admissionNo,
+        className: student ? [student.className || student.class || student.klass, student.section].filter(Boolean).join(" ") || "-" : "-",
+        feeHead: feeHeads.join(", ") || payment.feeHead || "-",
+        feeMonth: feeMonths.join(", ") || payment.feeMonth || "-",
+        bankAmount,
+        cashAmount: Number(payment.cashAmount || split.cash || 0),
+        total: total || bankAmount + Number(payment.cashAmount || split.cash || 0),
+        remarks: payment.remarks || "-",
+        role: payment.by || payment.entryRole || payment.role || "-"
+      });
+    });
+  });
+  return rows.sort((a, b) => {
+    const dateDiff = parseDateDDMMYYYY(b.date) - parseDateDDMMYYYY(a.date);
+    if (dateDiff) return dateDiff;
+    return String(b.receipt || "").localeCompare(String(a.receipt || ""), undefined, {numeric: true});
+  });
+}
+
+function populateBankBookFeeHeadFilter(rows = getBankBookRows()) {
+  const select = document.getElementById("bankBookFeeHeadFilter");
+  if (!select) return;
+  const current = select.value;
+  const heads = [...new Set(rows.flatMap(row => String(row.feeHead || "").split(",").map(item => item.trim()).filter(Boolean)).filter(head => head !== "-"))]
+    .sort((a, b) => a.localeCompare(b, undefined, {numeric: true}));
+  select.innerHTML = `<option value="">All Fee Heads</option>${heads.map(head => `<option value="${escapeHtml(head)}">${escapeHtml(head)}</option>`).join("")}`;
+  if (heads.includes(current)) select.value = current;
+}
+
+function renderBankBook() {
+  const summary = document.getElementById("bankBookSummary");
+  const body = document.getElementById("bankBookRows");
+  if (!summary || !body) return;
+  const allRows = getBankBookRows();
+  populateBankBookFeeHeadFilter(allRows);
+  const selectedDate = document.getElementById("bankBookDateFilter")?.value || "";
+  const selectedDateLabel = selectedDate ? formatDateDDMMYYYY(selectedDate) : "";
+  const selectedHead = String(document.getElementById("bankBookFeeHeadFilter")?.value || "").trim();
+  const search = String(document.getElementById("bankBookSearchInput")?.value || "").trim().toLowerCase();
+  const rows = allRows.filter(row => {
+    const matchesDate = !selectedDateLabel || row.date === selectedDateLabel;
+    const matchesHead = !selectedHead || String(row.feeHead || "").split(",").map(item => item.trim()).includes(selectedHead);
+    const haystack = [row.receipt, row.studentName, row.admissionNo, row.className, row.feeHead, row.feeMonth, row.remarks, row.role].join(" ").toLowerCase();
+    return matchesDate && matchesHead && (!search || haystack.includes(search));
+  });
+  const totals = rows.reduce((sum, row) => {
+    sum.bank += Number(row.bankAmount || 0);
+    sum.cash += Number(row.cashAmount || 0);
+    sum.total += Number(row.total || 0);
+    sum.receipts += 1;
+    sum.students.add(row.admissionNo);
+    return sum;
+  }, {bank: 0, cash: 0, total: 0, receipts: 0, students: new Set()});
+  summary.innerHTML = `
+    <article><span>Bank Receipts</span><strong>${totals.receipts}</strong></article>
+    <article><span>Students</span><strong>${totals.students.size}</strong></article>
+    <article><span>Bank Amount</span><strong>${formatRs(totals.bank)}</strong></article>
+    <article><span>Total Paid</span><strong>${formatRs(totals.total)}</strong></article>
+  `;
+  body.innerHTML = rows.map(row => `
+    <tr>
+      <td>${escapeHtml(row.date || "-")}</td>
+      <td><strong>${escapeHtml(row.receipt || "-")}</strong></td>
+      <td>${escapeHtml(row.studentName || "-")}</td>
+      <td>${escapeHtml(row.admissionNo || "-")}</td>
+      <td>${escapeHtml(row.className || "-")}</td>
+      <td>${escapeHtml(row.feeHead || "-")}</td>
+      <td>${escapeHtml(row.feeMonth || "-")}</td>
+      <td><strong>${formatRs(row.bankAmount || 0)}</strong></td>
+      <td>${formatRs(row.total || 0)}</td>
+      <td>${escapeHtml(row.remarks || "-")}</td>
+      <td>${escapeHtml(row.role || "-")}</td>
+    </tr>
+  `).join("") || `<tr><td colspan="11">No bank payment found for the selected filter.</td></tr>`;
 }
 
 function shortCollectionDateLabel(value = "") {
@@ -14180,6 +14275,19 @@ document.getElementById("upiPaymentRows")?.addEventListener("click", event => {
   const reject = event.target.closest("[data-reject-upi-payment]");
   if (approve) approveUpiPaymentRequest(approve.dataset.approveUpiPayment);
   if (reject) rejectUpiPaymentRequest(reject.dataset.rejectUpiPayment);
+});
+
+document.getElementById("bankBookDateFilter")?.addEventListener("change", renderBankBook);
+document.getElementById("bankBookFeeHeadFilter")?.addEventListener("change", renderBankBook);
+document.getElementById("bankBookSearchInput")?.addEventListener("input", renderBankBook);
+document.getElementById("bankBookClearFilters")?.addEventListener("click", () => {
+  const date = document.getElementById("bankBookDateFilter");
+  const feeHead = document.getElementById("bankBookFeeHeadFilter");
+  const search = document.getElementById("bankBookSearchInput");
+  if (date) date.value = "";
+  if (feeHead) feeHead.value = "";
+  if (search) search.value = "";
+  renderBankBook();
 });
 
 document.getElementById("importStaffAttendanceBtn").addEventListener("click", () => {

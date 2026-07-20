@@ -3048,6 +3048,13 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   box-shadow: 0 18px 42px rgba(30, 64, 104, .08);
 }
 
+.bank-book-panel {
+  overflow: hidden;
+  border-color: #bed8ee;
+  background: linear-gradient(135deg, #ffffff 0%, #f2f9ff 48%, #fff8e8 100%);
+  box-shadow: 0 18px 42px rgba(30, 64, 104, .08);
+}
+
 .entire-school-fees-panel {
   overflow: hidden;
   border-color: #bfd8f1;
@@ -3060,6 +3067,14 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   padding: 18px;
   border-bottom: 1px solid rgba(185, 210, 234, .75);
   background: linear-gradient(110deg, #174f81 0%, #177e89 58%, #8a6b10 100%);
+  color: #fff;
+}
+
+.bank-book-panel .panel-head {
+  margin: -18px -18px 16px;
+  padding: 18px;
+  border-bottom: 1px solid rgba(185, 210, 234, .75);
+  background: linear-gradient(110deg, #123f66 0%, #157d85 58%, #8a6b10 100%);
   color: #fff;
 }
 
@@ -3077,6 +3092,12 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   color: #fff;
 }
 
+.bank-book-panel .panel-head .eyebrow,
+.bank-book-panel .panel-head h2,
+.bank-book-panel .panel-head small {
+  color: #fff;
+}
+
 .entire-school-fees-panel .panel-head .eyebrow,
 .entire-school-fees-panel .panel-head h2,
 .entire-school-fees-panel .panel-head small {
@@ -3090,7 +3111,27 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   margin-bottom: 14px;
 }
 
+.bank-book-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
 .daily-collection-filter {
+  display: flex;
+  align-items: end;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px;
+  margin-bottom: 12px;
+  border: 1px solid #c7ddf2;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #eaf5ff 0%, #ffffff 58%, #fff4d8 100%);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .78), 0 8px 18px rgba(31, 50, 72, .06);
+}
+
+.bank-book-filter {
   display: flex;
   align-items: end;
   flex-wrap: wrap;
@@ -3112,7 +3153,28 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   font-weight: 950;
 }
 
+.bank-book-filter label {
+  display: grid;
+  gap: 7px;
+  min-width: 190px;
+  color: #50657b;
+  font-size: .8rem;
+  font-weight: 950;
+}
+
 .daily-collection-filter input {
+  min-height: 40px;
+  border: 1px solid #c8d9ee;
+  border-radius: 7px;
+  background: #fff;
+  color: #123456;
+  padding: 0 10px;
+  font: inherit;
+  font-weight: 850;
+}
+
+.bank-book-filter input,
+.bank-book-filter select {
   min-height: 40px;
   border: 1px solid #c8d9ee;
   border-radius: 7px;
@@ -3168,6 +3230,14 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   box-shadow: 0 10px 22px rgba(31, 50, 72, .08), inset 0 1px 0 rgba(255, 255, 255, .8);
 }
 
+.bank-book-summary article {
+  padding: 13px;
+  border: 1px solid #d6e4f1;
+  border-radius: 8px;
+  background: linear-gradient(135deg, #eaf5ff 0%, #ffffff 58%, #fff5dd 100%);
+  box-shadow: 0 10px 22px rgba(31, 50, 72, .08), inset 0 1px 0 rgba(255, 255, 255, .8);
+}
+
 .entire-school-fees-summary article {
   padding: 13px;
   border: 1px solid #d6e4f1;
@@ -3184,6 +3254,14 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   text-transform: uppercase;
 }
 
+.bank-book-summary span {
+  display: block;
+  color: #50657b;
+  font-size: .74rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
 .entire-school-fees-summary span {
   display: block;
   color: #50657b;
@@ -3193,6 +3271,14 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
 }
 
 .daily-collection-summary strong {
+  display: block;
+  margin-top: 5px;
+  color: #173761;
+  font-size: 1.14rem;
+  font-weight: 950;
+}
+
+.bank-book-summary strong {
   display: block;
   margin-top: 5px;
   color: #173761;
@@ -3243,6 +3329,10 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   min-width: 820px;
 }
 
+.bank-book-table table {
+  min-width: 1180px;
+}
+
 .entire-school-fees-table table {
   min-width: 1380px;
 }
@@ -3256,12 +3346,21 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   background: linear-gradient(90deg, #174f81 0%, #177e89 55%, #6d8f20 100%);
 }
 
+.bank-book-table th {
+  color: #ffffff;
+  background: linear-gradient(90deg, #123f66 0%, #177e89 55%, #6d8f20 100%);
+}
+
 .entire-school-fees-table th {
   color: #ffffff;
   background: linear-gradient(90deg, #174f81 0%, #177e89 55%, #6d8f20 100%);
 }
 
 .daily-collection-report-table tbody tr:nth-child(odd) td {
+  background: #f4f9ff;
+}
+
+.bank-book-table tbody tr:nth-child(odd) td {
   background: #f4f9ff;
 }
 
@@ -3273,11 +3372,19 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   background: #fbfff6;
 }
 
+.bank-book-table tbody tr:nth-child(even) td {
+  background: #fbfff6;
+}
+
 .entire-school-fees-table tbody tr:nth-child(even) td {
   background: #fbfff6;
 }
 
 .daily-collection-report-table tbody tr:hover td {
+  background: #fff8df;
+}
+
+.bank-book-table tbody tr:hover td {
   background: #fff8df;
 }
 
@@ -3287,6 +3394,13 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
 
 .daily-collection-report-table td:first-child,
 .daily-collection-report-table td:last-child {
+  color: #174f81;
+  font-weight: 950;
+}
+
+.bank-book-table td:first-child,
+.bank-book-table td:nth-child(8),
+.bank-book-table td:nth-child(9) {
   color: #174f81;
   font-weight: 950;
 }
