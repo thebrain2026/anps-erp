@@ -8286,10 +8286,16 @@ function getSessionPayments(admissionNo) {
   if (!collectedPayments[activeSession]) collectedPayments[activeSession] = {};
   const sessionPayments = collectedPayments[activeSession];
   const requestedKey = String(admissionNo || "").trim();
-  const canonicalKey = Object.keys(sessionPayments).find(key => normalizeAdmissionNo(key) === normalizeAdmissionNo(requestedKey)) || requestedKey;
+  const normalizedKey = normalizeAdmissionNo(requestedKey);
+  const serialKey = getAdmissionNoSerialPart(requestedKey);
+  const canonicalKey = [requestedKey, normalizedKey, serialKey]
+    .filter(Boolean)
+    .find(key => Array.isArray(sessionPayments[key]))
+    || Object.keys(sessionPayments).find(key => normalizeAdmissionNo(key) === normalizedKey)
+    || requestedKey;
   if (!sessionPayments[canonicalKey]) sessionPayments[canonicalKey] = [];
-  Object.keys(sessionPayments).forEach(key => {
-    if (key === canonicalKey || !arePaymentAdmissionKeysRelated(key, canonicalKey)) return;
+  [requestedKey, normalizedKey, serialKey].filter(Boolean).forEach(key => {
+    if (key === canonicalKey || !Array.isArray(sessionPayments[key]) || !arePaymentAdmissionKeysRelated(key, canonicalKey)) return;
     sessionPayments[canonicalKey] = mergePaymentList(sessionPayments[canonicalKey], sessionPayments[key]);
     delete sessionPayments[key];
   });
