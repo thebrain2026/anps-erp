@@ -2353,6 +2353,24 @@ function findActiveStudentByAdmissionOrName(value) {
     || null;
 }
 
+function getAdmissionNoSerialPart(value = "") {
+  const normalized = normalizeAdmissionNo(value);
+  const parts = normalized.split("/");
+  const serial = parts[parts.length - 1] || normalized;
+  return /^\d+$/.test(serial) ? String(Number(serial)) : "";
+}
+
+function arePaymentAdmissionKeysRelated(first = "", second = "") {
+  const normalizedFirst = normalizeAdmissionNo(first);
+  const normalizedSecond = normalizeAdmissionNo(second);
+  if (!normalizedFirst || !normalizedSecond) return false;
+  if (normalizedFirst === normalizedSecond) return true;
+  const firstSerial = getAdmissionNoSerialPart(first);
+  const secondSerial = getAdmissionNoSerialPart(second);
+  if (!firstSerial || firstSerial !== secondSerial) return false;
+  return normalizedFirst === firstSerial || normalizedSecond === secondSerial;
+}
+
 function renderStudentDueAccessSettings() {
   const form = document.getElementById("studentDueAccessForm");
   const preview = document.getElementById("studentDueAccessPreview");
@@ -7546,6 +7564,33 @@ function getLateFineHeadForFee(feeHead = "") {
   return "Tuition Late Fine";
 }
 
+function normalizePaymentFeeHead(head = "") {
+  const clean = String(head || "").trim().replace(/\s+/g, " ");
+  const normalized = clean.toLowerCase();
+  if (["tuition fee", "tuition fees"].includes(normalized)) return "Tuition Fee";
+  if (["transport fee", "transport fees"].includes(normalized)) return "Transport Fees";
+  if (["tuition late fine", "tuition fine", "late fine tuition"].includes(normalized)) return "Tuition Late Fine";
+  if (["transport late fine", "transport fine", "late fine transport"].includes(normalized)) return "Transport Late Fine";
+  return clean;
+}
+
+function normalizePaymentMonth(month = "") {
+  const clean = String(month || "").trim();
+  if (!clean) return "";
+  if (ACADEMIC_MONTHS.includes(clean)) return clean;
+  const normalized = clean.toLowerCase().slice(0, 3);
+  return ACADEMIC_MONTHS.find(item => item.toLowerCase() === normalized) || "";
+}
+
+function allocationMatchesHead(allocation = {}, feeHead = "") {
+  const normalizedHead = normalizePaymentFeeHead(allocation.head);
+  return getFeeHeadMatchingHeads(feeHead).map(normalizePaymentFeeHead).includes(normalizedHead);
+}
+
+function allocationMatchesMonth(allocation = {}, month = "") {
+  return normalizePaymentMonth(allocation.month) === normalizePaymentMonth(month);
+}
+
 function getFeeHeadMatchingHeads(feeHead = "") {
   if (feeHead === "Tuition Fee") return ["Tuition Fee", "Tuition Late Fine"];
   if (feeHead === "Transport Fees") return ["Transport Fees", "Transport Late Fine"];
@@ -8239,14 +8284,23 @@ function setAdmissionMonthGroups(student = {}) {
 
 function getSessionPayments(admissionNo) {
   if (!collectedPayments[activeSession]) collectedPayments[activeSession] = {};
-  if (!collectedPayments[activeSession][admissionNo]) collectedPayments[activeSession][admissionNo] = [];
-  return collectedPayments[activeSession][admissionNo];
+  const sessionPayments = collectedPayments[activeSession];
+  const requestedKey = String(admissionNo || "").trim();
+  const canonicalKey = Object.keys(sessionPayments).find(key => normalizeAdmissionNo(key) === normalizeAdmissionNo(requestedKey)) || requestedKey;
+  if (!sessionPayments[canonicalKey]) sessionPayments[canonicalKey] = [];
+  Object.keys(sessionPayments).forEach(key => {
+    if (key === canonicalKey || !arePaymentAdmissionKeysRelated(key, canonicalKey)) return;
+    sessionPayments[canonicalKey] = mergePaymentList(sessionPayments[canonicalKey], sessionPayments[key]);
+    delete sessionPayments[key];
+  });
+  return sessionPayments[canonicalKey];
 }
 
 function getPaymentAllocationTotals(admissionNo) {
   return getSessionPayments(admissionNo).reduce((totals, payment) => {
     payment.allocations.forEach(allocation => {
-      totals[allocation.head] = (totals[allocation.head] || 0) + allocation.amount;
+      const head = normalizePaymentFeeHead(allocation.head);
+      totals[head] = (totals[head] || 0) + allocation.amount;
     });
     return totals;
   }, {});
@@ -8255,10 +8309,12 @@ function getPaymentAllocationTotals(admissionNo) {
 function getTuitionMonthPayments(admissionNo) {
   return getSessionPayments(admissionNo).reduce((months, payment) => {
     payment.allocations.forEach(allocation => {
-      if (!allocation.month) return;
-      if (!months[allocation.month]) months[allocation.month] = {tuition: 0, fine: 0};
-      if (allocation.head === "Tuition Fee") months[allocation.month].tuition += allocation.amount;
-      if (allocation.head === "Tuition Late Fine") months[allocation.month].fine += allocation.amount;
+      const month = normalizePaymentMonth(allocation.month);
+      if (!month) return;
+      const head = normalizePaymentFeeHead(allocation.head);
+      if (!months[month]) months[month] = {tuition: 0, fine: 0};
+      if (head === "Tuition Fee") months[month].tuition += allocation.amount;
+      if (head === "Tuition Late Fine") months[month].fine += allocation.amount;
     });
     return months;
   }, {});
@@ -8271,7 +8327,7 @@ function getMonthlyFeePaidAmount(student, row, month) {
   const exactMonthAmounts = row.months.reduce((totals, itemMonth) => {
     totals[itemMonth] = payments.reduce((sum, payment) => {
       return sum + (payment.allocations || [])
-        .filter(allocation => allocation.head === row.name && allocation.month === itemMonth)
+        .filter(allocation => allocationMatchesHead(allocation, row.name) && allocationMatchesMonth(allocation, itemMonth) && !/fine/i.test(normalizePaymentFeeHead(allocation.head)))
         .reduce((allocationSum, allocation) => allocationSum + Number(allocation.amount || 0), 0);
     }, 0);
     return totals;
@@ -8281,7 +8337,7 @@ function getMonthlyFeePaidAmount(student, row, month) {
   const chunks = [];
   payments.slice().reverse().forEach(payment => {
     (payment.allocations || [])
-      .filter(allocation => allocation.head === row.name && !allocation.month)
+      .filter(allocation => allocationMatchesHead(allocation, row.name) && !normalizePaymentMonth(allocation.month) && !/fine/i.test(normalizePaymentFeeHead(allocation.head)))
       .forEach(allocation => chunks.push(Number(allocation.amount || 0)));
   });
   for (const itemMonth of row.months) {
@@ -8314,7 +8370,7 @@ function getTuitionMonthPaidInfo(student, row, month) {
 function hasAnyFinePaidForMonth(admissionNo = "", month = "") {
   if (!admissionNo || !month) return false;
   return getSessionPayments(admissionNo).some(payment => (payment.allocations || []).some(allocation => (
-    allocation.month === month &&
+    allocationMatchesMonth(allocation, month) &&
     /fine/i.test(String(allocation.head || "")) &&
     Number(allocation.amount || 0) > 0
   )));
@@ -8330,10 +8386,12 @@ function shouldWaiveRepeatFineAfterFinePaid(paid = {}, paidKey = "", monthlyAmou
 function getTransportMonthPayments(admissionNo) {
   return getSessionPayments(admissionNo).reduce((months, payment) => {
     payment.allocations.forEach(allocation => {
-      if (!allocation.month) return;
-      if (!months[allocation.month]) months[allocation.month] = {transport: 0, fine: 0};
-      if (allocation.head === "Transport Fees") months[allocation.month].transport += allocation.amount;
-      if (allocation.head === "Transport Late Fine") months[allocation.month].fine += allocation.amount;
+      const month = normalizePaymentMonth(allocation.month);
+      if (!month) return;
+      const head = normalizePaymentFeeHead(allocation.head);
+      if (!months[month]) months[month] = {transport: 0, fine: 0};
+      if (head === "Transport Fees") months[month].transport += allocation.amount;
+      if (head === "Transport Late Fine") months[month].fine += allocation.amount;
     });
     return months;
   }, {});
@@ -8941,9 +8999,10 @@ function getPaidLedgerMonths(student, row) {
   const paidMonths = new Set();
   const paymentInfo = getSessionPayments(student.admissionNo).reduce((info, payment) => {
     payment.allocations.forEach(allocation => {
-      if (allocation.head !== row.name) return;
-      if (allocation.month) {
-        info.exactMonthTotals[allocation.month] = (info.exactMonthTotals[allocation.month] || 0) + allocation.amount;
+      if (!allocationMatchesHead(allocation, row.name) || /fine/i.test(normalizePaymentFeeHead(allocation.head))) return;
+      const month = normalizePaymentMonth(allocation.month);
+      if (month) {
+        info.exactMonthTotals[month] = (info.exactMonthTotals[month] || 0) + allocation.amount;
       } else {
         info.unassignedPaid += allocation.amount;
       }
@@ -8966,7 +9025,7 @@ function getLedgerMonthPaidAmount(student, row, month) {
   if (!student || !row || !month) return 0;
   const directPaid = getSessionPayments(student.admissionNo).reduce((sum, payment) => {
     return sum + (payment.allocations || [])
-      .filter(allocation => allocation.head === row.name && allocation.month === month)
+      .filter(allocation => allocationMatchesHead(allocation, row.name) && allocationMatchesMonth(allocation, month) && !/fine/i.test(normalizePaymentFeeHead(allocation.head)))
       .reduce((allocationSum, allocation) => allocationSum + Number(allocation.amount || 0), 0);
   }, 0);
   return directPaid;
