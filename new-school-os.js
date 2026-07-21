@@ -855,12 +855,11 @@ function mergeFinanceSessions(remoteSessions = {}, localSessions = {}) {
   };
   const getFeeMasterKey = item => {
     if (!item || typeof item !== "object") return "";
+    const className = String(item.className || "").trim().toLowerCase();
+    const studentType = String(item.studentType || "New Student").trim().toLowerCase();
+    if (className) return `${className}|${studentType}`;
     const id = String(item.id || "").trim();
-    if (id) return `id:${id.toLowerCase()}`;
-    return [
-      String(item.className || "").trim().toLowerCase(),
-      String(item.studentType || "New Student").trim().toLowerCase()
-    ].join("|");
+    return id ? `id:${id.toLowerCase()}` : "";
   };
   const mergeFeeMasterList = (remoteList = [], localList = []) => {
     const rows = [];
@@ -913,6 +912,19 @@ function mergeTransportVillageFees(remoteFees = {}, localFees = {}) {
   return merged;
 }
 
+function mergeClassSubjectAssignments(remoteAssignments = {}, localAssignments = {}) {
+  const merged = {};
+  const classes = new Set([...Object.keys(remoteAssignments || {}), ...Object.keys(localAssignments || {})]);
+  classes.forEach(className => {
+    const subjects = [
+      ...(Array.isArray(remoteAssignments?.[className]) ? remoteAssignments[className] : []),
+      ...(Array.isArray(localAssignments?.[className]) ? localAssignments[className] : [])
+    ].map(subject => String(subject || "").trim()).filter(Boolean);
+    if (subjects.length) merged[className] = [...new Set(subjects)];
+  });
+  return merged;
+}
+
 function mergeStateSnapshots(remoteState = {}, localState = {}) {
   const merged = {...remoteState, ...localState};
   const primitiveKeys = [
@@ -959,7 +971,7 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
   merged.transportVillageFees = mergeTransportVillageFees(remoteState.transportVillageFees || {}, localState.transportVillageFees || {});
   merged.rolePermissions = {...(remoteState.rolePermissions || {}), ...(localState.rolePermissions || {})};
   merged.rolePermissionAudit = {...(remoteState.rolePermissionAudit || {}), ...(localState.rolePermissionAudit || {})};
-  merged.classSubjectAssignments = {...(remoteState.classSubjectAssignments || {}), ...(localState.classSubjectAssignments || {})};
+  merged.classSubjectAssignments = mergeClassSubjectAssignments(remoteState.classSubjectAssignments || {}, localState.classSubjectAssignments || {});
   merged.classTimetableEntries = Array.isArray(remoteState.classTimetableEntries)
     ? remoteState.classTimetableEntries
     : [];
@@ -967,6 +979,47 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
   merged.collectedPayments = mergeCollectedPayments(remoteState.collectedPayments || {}, localState.collectedPayments || {}, merged.deletedPaymentReceipts);
   merged.financeSessions = mergeFinanceSessions(remoteState.financeSessions || {}, localState.financeSessions || {});
   return merged;
+}
+
+function mergeSetupSafeState(backendState = {}, localSnapshot = {}) {
+  return {
+    ...backendState,
+    customAdmissionClasses: mergePrimitiveList(backendState.customAdmissionClasses || [], localSnapshot.customAdmissionClasses || []),
+    customAdmissionSections: mergePrimitiveList(backendState.customAdmissionSections || [], localSnapshot.customAdmissionSections || []),
+    customSubjects: mergePrimitiveList(backendState.customSubjects || [], localSnapshot.customSubjects || []),
+    classSectionMasterInitialized: backendState.classSectionMasterInitialized === true || localSnapshot.classSectionMasterInitialized === true,
+    classSubjectAssignments: mergeClassSubjectAssignments(backendState.classSubjectAssignments || {}, localSnapshot.classSubjectAssignments || {}),
+    transportVillages: mergePrimitiveList(backendState.transportVillages || [], localSnapshot.transportVillages || []),
+    customTransportVillages: mergePrimitiveList(backendState.customTransportVillages || [], localSnapshot.customTransportVillages || []),
+    transportVillageDistances: {...(backendState.transportVillageDistances || {}), ...(localSnapshot.transportVillageDistances || {})},
+    transportVillageFees: mergeTransportVillageFees(backendState.transportVillageFees || {}, localSnapshot.transportVillageFees || {}),
+    transportFineSetup: {...(backendState.transportFineSetup || {}), ...(localSnapshot.transportFineSetup || {})},
+    transportRoutes: mergeObjectListByKey(backendState.transportRoutes || [], localSnapshot.transportRoutes || [], ["routeName"]),
+    transportVehicles: mergeObjectListByKey(backendState.transportVehicles || [], localSnapshot.transportVehicles || [], ["id", "vehicleNo"]),
+    transportVehicleAssignments: mergeObjectListByKey(backendState.transportVehicleAssignments || [], localSnapshot.transportVehicleAssignments || [], ["routeName", "vehicleNo", "shift"]),
+    transportRoutePickupPoints: mergeObjectListByKey(backendState.transportRoutePickupPoints || [], localSnapshot.transportRoutePickupPoints || [], ["routeName", "villageName", "shift"]),
+    financeSessions: mergeFinanceSessions(backendState.financeSessions || {}, localSnapshot.financeSessions || {})
+  };
+}
+
+function hasSetupSafeMergeChanges(mergedState = {}, backendState = {}) {
+  return [
+    "customAdmissionClasses",
+    "customAdmissionSections",
+    "customSubjects",
+    "classSectionMasterInitialized",
+    "classSubjectAssignments",
+    "transportVillages",
+    "customTransportVillages",
+    "transportVillageDistances",
+    "transportVillageFees",
+    "transportFineSetup",
+    "transportRoutes",
+    "transportVehicles",
+    "transportVehicleAssignments",
+    "transportRoutePickupPoints",
+    "financeSessions"
+  ].some(key => JSON.stringify(mergedState[key] || null) !== JSON.stringify(backendState[key] || null));
 }
 
 function canApplyBackendSaveResult() {
@@ -11965,8 +12018,8 @@ function renderSecurityMaintenance(message = "") {
   }
 }
 
-function createSecurityBackup() {
-  saveAppState();
+async function createSecurityBackup() {
+  const saved = saveAppState();
   const state = getSecurityStateObject();
   const backup = {
     id: `BACKUP-${Date.now()}`,
@@ -11977,8 +12030,35 @@ function createSecurityBackup() {
   };
   const backups = [backup, ...getSecurityBackups()];
   setSecurityBackups(backups);
-  renderSecurityMaintenance(`<strong>Backup created.</strong><br>${formatDateDDMMYYYY(backup.createdAt)} | Records: ${Object.values(backup.records).reduce((sum, value) => sum + Number(value || 0), 0)}`);
+  renderSecurityMaintenance(`<strong>Browser backup created.</strong><br>${formatDateDDMMYYYY(backup.createdAt)} | Records: ${Object.values(backup.records).reduce((sum, value) => sum + Number(value || 0), 0)}<br>Creating Render disk backup...`);
   showToast("Security backup created.");
+  if (!saved) return;
+  try {
+    await new Promise(resolve => setTimeout(resolve, BACKEND_SAVE_DEBOUNCE_MS + 250));
+    if (backendSaveTimer) await processBackendSaveQueue();
+    while (backendSaveInFlight) await new Promise(resolve => setTimeout(resolve, 150));
+    const hasToken = await ensureBackendToken();
+    if (!hasToken) throw new Error("Backend session is not ready.");
+    const response = await backendFetch("/api/backup", {
+      method: "POST",
+      headers: backendHeaders()
+    }, 20000);
+    const payload = await response.json().catch(() => ({}));
+    if (!response.ok || payload?.ok === false) throw new Error(payload?.error || `Backup failed ${response.status}`);
+    renderSecurityMaintenance(`
+      <strong>Backup created.</strong><br>
+      Browser backup: ${escapeHtml(formatDateDDMMYYYY(backup.createdAt))}<br>
+      Render disk backup: ${escapeHtml(payload.file || "Created")}<br>
+      Backup ID: ${escapeHtml(String(payload.backup_id || "-"))}
+    `);
+    showToast("Render backup created.");
+  } catch (error) {
+    renderSecurityMaintenance(`
+      <strong>Browser backup created, but Render backup failed.</strong><br>
+      ${escapeHtml(error?.message || "Please check backend connection and try again.")}
+    `);
+    showToast("Render backup failed.", "error");
+  }
 }
 
 function exportSecurityJson() {
@@ -12628,14 +12708,17 @@ async function pullBackendStateIfChanged(showMessage = false) {
     const payload = await stateResponse.json();
     const backendState = payload?.state || {};
     if (!backendState || !Object.keys(backendState).length) return;
+    const localSnapshot = getAppStateSnapshot();
+    const mergedState = mergeSetupSafeState(backendState, localSnapshot);
+    const shouldResaveSetup = hasSetupSafeMergeChanges(mergedState, backendState);
     backendHydrating = true;
     backendLastUpdatedAt = payload?.updated_at || serverUpdatedAt || backendLastUpdatedAt;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(backendState));
-    applySavedState(backendState);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(mergedState));
+    applySavedState(mergedState);
     const restoredStaff = await hydrateStaffFromBackendModule();
     refreshAllAfterSecurityClean();
     backendHydrating = false;
-    if (restoredStaff) queueBackendSave(getAppStateSnapshot());
+    if (restoredStaff || shouldResaveSetup) queueBackendSave(getAppStateSnapshot());
     if (showMessage) showToast("Latest database data synced.");
   } catch (error) {
     markBackendConnectionIssue();
@@ -12670,13 +12753,16 @@ async function initializeBackendSync() {
     const backendState = payload?.state || {};
     backendLastUpdatedAt = payload?.updated_at || "";
     if (!flushedPending && backendState && Object.keys(backendState).length) {
+      const localSnapshot = getAppStateSnapshot();
+      const mergedState = mergeSetupSafeState(backendState, localSnapshot);
+      const shouldResaveSetup = hasSetupSafeMergeChanges(mergedState, backendState);
       backendHydrating = true;
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(backendState));
-      applySavedState(backendState);
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(mergedState));
+      applySavedState(mergedState);
       const restoredStaff = await hydrateStaffFromBackendModule();
       refreshAllAfterSecurityClean();
       backendHydrating = false;
-      if (restoredStaff) queueBackendSave(getAppStateSnapshot());
+      if (restoredStaff || shouldResaveSetup) queueBackendSave(getAppStateSnapshot());
       showToast("Backend database connected.");
     } else if (!backendState || !Object.keys(backendState).length) {
       queueBackendSave(getAppStateSnapshot());
@@ -12941,7 +13027,11 @@ document.getElementById("transportPickupPoint").addEventListener("change", event
     const value = String(distanceInput.value || "").trim();
     if (value) transportVillageDistances[village] = value;
     else delete transportVillageDistances[village];
-    saveAppState();
+    if (!saveAppState()) {
+      renderTransportVillages();
+      showToast("Pickup point fees were not saved. Please check the internet or server connection.", "error", 6000);
+      return;
+    }
     return;
   }
   const feeInput = event.target.closest("[data-village-fee]");
@@ -12950,7 +13040,11 @@ document.getElementById("transportPickupPoint").addEventListener("change", event
     const feeType = feeInput.dataset.feeType;
     if (!transportVillageFees[village]) transportVillageFees[village] = {};
     transportVillageFees[village][feeType] = Number(feeInput.value || 0);
-    saveAppState();
+    if (!saveAppState()) {
+      renderTransportVillages();
+      showToast("Pickup point fees were not saved. Please check the internet or server connection.", "error", 6000);
+      return;
+    }
     updateAdmissionTransportFee();
     return;
   }
@@ -12969,7 +13063,11 @@ document.getElementById("transportPickupPoint").addEventListener("change", event
   }
   renameTransportVillageReferences(oldName, newName);
   dedupeTransportVillages();
-  saveAppState();
+  if (!saveAppState()) {
+    renderTransportVillages();
+    showToast("Pickup point update was not saved. Please check the internet or server connection.", "error", 6000);
+    return;
+  }
   renderTransportVillages();
   renderAdmissionVillageTownOptions(admissionForm.elements.villageTown?.value || "");
   showToast(`${oldName} updated.`);
@@ -12992,7 +13090,11 @@ document.getElementById("transportPickupPoint").addEventListener("click", event 
   if (index >= 0) transportVillages.splice(index, 1);
   delete transportVillageDistances[village];
   delete transportVillageFees[village];
-  saveAppState();
+  if (!saveAppState()) {
+    renderTransportVillages();
+    showToast("Pickup point deletion was not saved. Please check the internet or server connection.", "error", 6000);
+    return;
+  }
   renderTransportVillages();
   renderAdmissionVillageTownOptions(admissionForm.elements.villageTown?.value || "");
   updateAdmissionTransportFee();
@@ -13293,13 +13395,20 @@ feeMasterForm.addEventListener("submit", event => {
   }
   const now = new Date().toISOString();
   const studentType = String(data.get("studentType") || "New Student").trim() || "New Student";
+  const existingIndex = session.feeMaster.findIndex(item =>
+    String(item.className || "").trim().toLowerCase() === className.toLowerCase() &&
+    String(item.studentType || "New Student").trim().toLowerCase() === studentType.toLowerCase()
+  );
+  const sourceFeeRow = editingFeeMasterIndex >= 0
+    ? session.feeMaster[editingFeeMasterIndex]
+    : existingIndex >= 0
+      ? session.feeMaster[existingIndex]
+      : null;
   const feeData = {
-    id: editingFeeMasterIndex >= 0 && session.feeMaster[editingFeeMasterIndex]?.id
-      ? session.feeMaster[editingFeeMasterIndex].id
+    id: sourceFeeRow?.id
+      ? sourceFeeRow.id
       : `fee-master-${Date.now()}-${Math.random().toString(16).slice(2)}`,
-    createdAt: editingFeeMasterIndex >= 0
-      ? session.feeMaster[editingFeeMasterIndex]?.createdAt || now
-      : now,
+    createdAt: sourceFeeRow?.createdAt || now,
     updatedAt: now,
     className,
     studentType,
@@ -13315,10 +13424,6 @@ feeMasterForm.addEventListener("submit", event => {
   if (editingFeeMasterIndex >= 0) {
     session.feeMaster[editingFeeMasterIndex] = feeData;
   } else {
-    const existingIndex = session.feeMaster.findIndex(item =>
-      String(item.className || "").trim().toLowerCase() === className.toLowerCase() &&
-      String(item.studentType || "New Student").trim().toLowerCase() === studentType.toLowerCase()
-    );
     if (existingIndex >= 0) session.feeMaster[existingIndex] = {...session.feeMaster[existingIndex], ...feeData};
     else session.feeMaster.push(feeData);
   }
@@ -13459,7 +13564,7 @@ classSetupForm.addEventListener("submit", event => {
     customAdmissionClasses.push(className);
   }
   customAdmissionClasses.sort((a, b) => a.localeCompare(b, undefined, {numeric: true}));
-  saveAppState();
+  if (!saveAppState()) return;
   renderClassSectionSetup();
   renderAdmissionClassOptions();
   renderFeeMasterClassOptions();
@@ -13490,7 +13595,7 @@ sectionSetupForm.addEventListener("submit", event => {
     customAdmissionSections.push(sectionName);
   }
   customAdmissionSections.sort((a, b) => a.localeCompare(b, undefined, {numeric: true}));
-  saveAppState();
+  if (!saveAppState()) return;
   renderClassSectionSetup();
   renderAdmissionSectionOptions();
   sectionSetupForm.reset();
@@ -13517,7 +13622,7 @@ subjectSetupForm.addEventListener("submit", event => {
     customSubjects.push(subjectName);
   }
   customSubjects.sort((a, b) => a.localeCompare(b, undefined, {numeric: true}));
-  saveAppState();
+  if (!saveAppState()) return;
   renderClassSectionSetup();
   renderClassTimetableOptions();
   renderHomeworkModule();
@@ -13536,7 +13641,7 @@ subjectAssignForm.addEventListener("submit", event => {
     return;
   }
   classSubjectAssignments[className] = [...new Set(data.getAll("subjects").map(subject => String(subject || "").trim()).filter(Boolean))];
-  saveAppState();
+  if (!saveAppState()) return;
   renderSubjectAssignmentSetup(className);
   renderClassTimetableOptions();
   renderHomeworkModule();
@@ -14308,7 +14413,11 @@ if (transportVillageForm) {
     transportVillages.push(villageName);
     if (distanceKm) transportVillageDistances[villageName] = distanceKm;
     transportVillageFees[villageName] = {newStudentFee, promotedStudentFee, specialStudentFee};
-    saveAppState();
+    if (!saveAppState()) {
+      renderTransportVillages();
+      showToast("Pickup point was not saved. Please check the internet or server connection.", "error", 6000);
+      return;
+    }
     renderTransportVillages();
     renderAdmissionVillageTownOptions(admissionForm.elements.villageTown?.value || "");
     transportVillageForm.reset();
@@ -14419,7 +14528,13 @@ if (transportRouteForm) {
       transportRoutes.push(routeEntry);
     }
     transportRoutes.sort((a, b) => String(a.routeName || "").localeCompare(String(b.routeName || ""), undefined, {numeric: true}));
-    saveAppState();
+    if (!saveAppState()) {
+      renderTransportRoutes();
+      renderTransportVehicleAssignments();
+      renderTransportRoutePickupPoints();
+      showToast("Route was not saved. Please check the internet or server connection.", "error", 6000);
+      return;
+    }
     renderTransportRoutes();
     renderTransportVehicleAssignments();
     renderTransportRoutePickupPoints();
@@ -14469,7 +14584,12 @@ if (transportAssignVehicleForm) {
       String(a.routeName || "").localeCompare(String(b.routeName || ""), undefined, {numeric: true}) ||
       String(a.shift || "").localeCompare(String(b.shift || ""), undefined, {numeric: true})
     );
-    saveAppState();
+    if (!saveAppState()) {
+      renderTransportVehicleAssignments();
+      renderTransportRoutePickupPoints();
+      showToast("Vehicle assignment was not saved. Please check the internet or server connection.", "error", 6000);
+      return;
+    }
     renderTransportVehicleAssignments();
     renderTransportRoutePickupPoints();
     transportAssignVehicleForm.reset();
@@ -14513,7 +14633,11 @@ if (transportRoutePickupForm) {
       Number(a.sequence || 999) - Number(b.sequence || 999) ||
       String(a.villageName || "").localeCompare(String(b.villageName || ""), undefined, {numeric: true})
     );
-    saveAppState();
+    if (!saveAppState()) {
+      renderTransportRoutePickupPoints();
+      showToast("Pickup mapping was not saved. Please check the internet or server connection.", "error", 6000);
+      return;
+    }
     renderTransportRoutePickupPoints();
     transportRoutePickupForm.reset();
     transportRoutePickupForm.querySelector("button[type='submit']").textContent = "Map Pickup Point";

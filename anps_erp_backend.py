@@ -3439,6 +3439,24 @@ def atomic_write_text(path, text):
 
 def state_backup_payload(state, reason):
     state = ensure_state_school(state if isinstance(state, dict) else {})
+    finance_sessions = state.get("financeSessions") if isinstance(state.get("financeSessions"), dict) else {}
+    fee_master_count = sum(
+        len(session.get("feeMaster") or [])
+        for session in finance_sessions.values()
+        if isinstance(session, dict)
+    )
+    fee_group_count = sum(
+        len(session.get("feeGroups") or [])
+        for session in finance_sessions.values()
+        if isinstance(session, dict)
+    )
+    transport_village_fees = state.get("transportVillageFees") if isinstance(state.get("transportVillageFees"), dict) else {}
+    transport_fee_row_count = 0
+    for row in transport_village_fees.values():
+        if not isinstance(row, dict):
+            continue
+        if any(money(row.get(key)) > 0 for key in ("newStudentFee", "promotedStudentFee", "specialStudentFee")):
+            transport_fee_row_count += 1
     return {
         "created_at": datetime.now().isoformat(timespec="seconds"),
         "reason": reason,
@@ -3448,6 +3466,16 @@ def state_backup_payload(state, reason):
             "staffMembers": len(state.get("staffMembers") or []),
             "fees": len(state.get("fees") or []),
             "feeReceipts": len(state.get("feeReceipts") or state.get("fees") or []),
+            "feeMaster": fee_master_count,
+            "feeGroups": fee_group_count,
+            "customAdmissionClasses": len(state.get("customAdmissionClasses") or []),
+            "customAdmissionSections": len(state.get("customAdmissionSections") or []),
+            "customSubjects": len(state.get("customSubjects") or []),
+            "classSubjectAssignments": len(state.get("classSubjectAssignments") or {}),
+            "transportVillages": len(state.get("transportVillages") or []),
+            "transportVillageFees": transport_fee_row_count,
+            "transportRoutes": len(state.get("transportRoutes") or []),
+            "transportRoutePickupPoints": len(state.get("transportRoutePickupPoints") or []),
             "userAccessAccounts": len(state.get("userAccessAccounts") or []),
         },
         "state": state,
