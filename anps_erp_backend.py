@@ -1532,6 +1532,19 @@ def is_deleted_payment_receipt(deleted_map, session, admission_no, receipt_no):
     return bool(normalized_receipt and isinstance(deleted_map, dict) and deleted_map.get(str(session), {}).get(normalized_admission_no, {}).get(normalized_receipt))
 
 
+def is_deleted_payment_receipt_anywhere(deleted_map, receipt_no):
+    normalized_receipt = str(receipt_no or "").strip().lower()
+    if not normalized_receipt or not isinstance(deleted_map, dict):
+        return False
+    for session_rows in deleted_map.values():
+        if not isinstance(session_rows, dict):
+            continue
+        for receipts in session_rows.values():
+            if isinstance(receipts, dict) and receipts.get(normalized_receipt):
+                return True
+    return False
+
+
 def live_payment_list(payments, deleted_map, session, admission_no):
     return [
         payment
@@ -1818,6 +1831,7 @@ def ensure_default_school_row(conn, state=None):
 def sync_state_tables(conn, state):
     state = ensure_state_school(state or {})
     school_id = school_id_from_state(state)
+    deleted_receipts = deleted_payment_receipt_map(state.get("deletedPaymentReceipts") or {})
     ensure_default_school_row(conn, state)
     for table in (
         "students",
@@ -1930,6 +1944,8 @@ def sync_state_tables(conn, state):
         receipt_no = receipt.get("receipt")
         if not receipt_no:
             continue
+        if is_deleted_payment_receipt_anywhere(deleted_receipts, receipt_no):
+            continue
         cash = money(receipt.get("cashAmount"))
         bank = money(receipt.get("upiAmount"))
         net = money(receipt.get("amount")) or cash + bank
@@ -1976,6 +1992,8 @@ def sync_state_tables(conn, state):
                 for payment in payments or []:
                     receipt_no = payment.get("receipt")
                     if not receipt_no:
+                        continue
+                    if is_deleted_payment_receipt(deleted_receipts, session, admission_no, receipt_no):
                         continue
                     allocations = payment.get("allocations") or []
                     fine_total = sum(

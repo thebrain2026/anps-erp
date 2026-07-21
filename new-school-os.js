@@ -8706,6 +8706,13 @@ function deletePaymentByReceipt(admissionNo, receiptNo, paymentId = "") {
   return payments.length !== before;
 }
 
+async function flushPaymentDeleteSave() {
+  if (!backendQueuedSnapshot) return;
+  clearTimeout(backendSaveTimer);
+  backendSaveTimer = null;
+  await processBackendSaveQueue();
+}
+
 function getPaymentSplitForAmount(payment, amount) {
   const paidAmount = Number(amount || 0);
   const totalAmount = Number(payment.amount || 0);
@@ -16248,12 +16255,18 @@ document.body.addEventListener("click", event => {
     if (receiptNo && confirm(`Delete receipt ${receiptNo}?`)) {
       if (deletePaymentByReceipt(admissionNo, receiptNo)) {
         markPaymentReceiptDeleted(admissionNo, receiptNo);
-        saveAppState();
         renderStudentFeeCounter(admissionNo);
         renderFeeBook(admissionNo);
         renderDueFeesSearch();
         renderFinanceSession();
-        showToast(`Receipt ${receiptNo} deleted.`);
+        if (saveAppState()) {
+          flushPaymentDeleteSave()
+            .then(() => showToast(`Receipt ${receiptNo} deleted and synced.`))
+            .catch(error => {
+              console.warn("Payment delete sync failed.", error);
+              showToast(`Receipt ${receiptNo} deleted locally. Server sync will retry automatically.`, "warning", 6000);
+            });
+        }
       }
     }
   }
