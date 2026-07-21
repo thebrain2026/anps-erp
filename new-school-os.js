@@ -758,7 +758,24 @@ function getDeletedPaymentReceiptMap(...maps) {
 function isPaymentReceiptDeleted(deletedMap = {}, session = activeSession, admissionNo = "", receiptNo = "") {
   const normalizedAdmissionNo = normalizeAdmissionNo(admissionNo) || String(admissionNo || "").trim();
   const normalizedReceipt = String(receiptNo || "").trim().toLowerCase();
-  return Boolean(normalizedReceipt && deletedMap?.[session]?.[normalizedAdmissionNo]?.[normalizedReceipt]);
+  return Boolean(
+    normalizedReceipt &&
+    (
+      deletedMap?.[session]?.[normalizedAdmissionNo]?.[normalizedReceipt] ||
+      isPaymentReceiptDeletedAnywhere(deletedMap, normalizedReceipt)
+    )
+  );
+}
+
+function isPaymentReceiptDeletedAnywhere(deletedMap = {}, receiptNo = "") {
+  const normalizedReceipt = String(receiptNo || "").trim().toLowerCase();
+  if (!normalizedReceipt || !deletedMap || typeof deletedMap !== "object") return false;
+  return Object.values(deletedMap).some(sessionRows => {
+    if (!sessionRows || typeof sessionRows !== "object") return false;
+    return Object.values(sessionRows).some(receipts => {
+      return Boolean(receipts && typeof receipts === "object" && receipts[normalizedReceipt]);
+    });
+  });
 }
 
 function markPaymentReceiptDeleted(admissionNo, receiptNo, session = activeSession) {
@@ -8706,6 +8723,32 @@ function deletePaymentByReceipt(admissionNo, receiptNo, paymentId = "") {
   return payments.length !== before;
 }
 
+function deletePaymentReceiptEverywhere(admissionNo, receiptNo, paymentId = "") {
+  const targetReceipt = String(receiptNo || "").trim();
+  const targetPaymentId = String(paymentId || "").trim();
+  if (!targetReceipt && !targetPaymentId) return false;
+  let removed = deletePaymentByReceipt(admissionNo, targetReceipt, targetPaymentId);
+  Object.entries(collectedPayments || {}).forEach(([session, sessionRows]) => {
+    if (!sessionRows || typeof sessionRows !== "object") return;
+    Object.entries(sessionRows).forEach(([candidateAdmissionNo, payments]) => {
+      if (!Array.isArray(payments)) return;
+      const before = payments.length;
+      for (let index = payments.length - 1; index >= 0; index -= 1) {
+        const payment = payments[index] || {};
+        const samePayment = targetPaymentId && String(payment.id || "").trim() === targetPaymentId;
+        const sameReceipt = !targetPaymentId && String(payment.receipt || "").trim() === targetReceipt;
+        if (samePayment || sameReceipt) payments.splice(index, 1);
+      }
+      if (payments.length !== before) {
+        removed = true;
+        if (targetReceipt) markPaymentReceiptDeleted(candidateAdmissionNo, targetReceipt, session);
+      }
+    });
+  });
+  if (targetReceipt) markPaymentReceiptDeleted(admissionNo, targetReceipt);
+  return removed;
+}
+
 async function flushPaymentDeleteSave() {
   if (!backendQueuedSnapshot) return;
   clearTimeout(backendSaveTimer);
@@ -16253,8 +16296,8 @@ document.body.addEventListener("click", event => {
     const admissionNo = deletePayment.dataset.deletePayment;
     const receiptNo = deletePayment.dataset.paymentReceipt;
     if (receiptNo && confirm(`Delete receipt ${receiptNo}?`)) {
-      if (deletePaymentByReceipt(admissionNo, receiptNo)) {
-        markPaymentReceiptDeleted(admissionNo, receiptNo);
+      const removed = deletePaymentReceiptEverywhere(admissionNo, receiptNo, deletePayment.dataset.paymentId || "");
+      if (removed || receiptNo) {
         renderStudentFeeCounter(admissionNo);
         renderFeeBook(admissionNo);
         renderDueFeesSearch();

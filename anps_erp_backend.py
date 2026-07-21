@@ -1549,7 +1549,9 @@ def live_payment_list(payments, deleted_map, session, admission_no):
     return [
         payment
         for payment in (payments or [])
-        if isinstance(payment, dict) and not is_deleted_payment_receipt(deleted_map, session, admission_no, payment.get("receipt"))
+        if isinstance(payment, dict)
+        and not is_deleted_payment_receipt(deleted_map, session, admission_no, payment.get("receipt"))
+        and not is_deleted_payment_receipt_anywhere(deleted_map, payment.get("receipt"))
     ]
 
 
@@ -1994,6 +1996,8 @@ def sync_state_tables(conn, state):
                     if not receipt_no:
                         continue
                     if is_deleted_payment_receipt(deleted_receipts, session, admission_no, receipt_no):
+                        continue
+                    if is_deleted_payment_receipt_anywhere(deleted_receipts, receipt_no):
                         continue
                     allocations = payment.get("allocations") or []
                     fine_total = sum(
