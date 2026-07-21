@@ -12041,6 +12041,29 @@ function showSecurityBackups() {
   ` : "<strong>No backups saved yet.</strong>");
 }
 
+function exportSecuritySavedBackups() {
+  const backups = getSecurityBackups();
+  if (!backups.length) {
+    renderSecurityMaintenance("<strong>No saved backups found.</strong><br>Create a backup first, then export.");
+    showToast("No saved backups found.");
+    return;
+  }
+  const payload = {
+    exportedAt: new Date().toISOString(),
+    version: "ANPS-ERP Saved Browser Backups v1.0",
+    source: "Security Maintenance",
+    backups
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type: "application/json"});
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = `anps-security-browser-backups-${new Date().toISOString().slice(0, 10)}.json`;
+  link.click();
+  URL.revokeObjectURL(link.href);
+  renderSecurityMaintenance(`<strong>Saved backups exported.</strong><br>${backups.length} backup file downloaded.`);
+  showToast("Saved backups exported.");
+}
+
 function showSecurityAudit() {
   const counts = getSecurityRecordCounts();
   renderSecurityMaintenance(`
@@ -13816,6 +13839,7 @@ document.getElementById("securityRestoreFile")?.addEventListener("change", event
 });
 document.getElementById("securityMaintenanceBtn")?.addEventListener("click", runSecurityMaintenance);
 document.getElementById("securityShowBackupsBtn")?.addEventListener("click", showSecurityBackups);
+document.getElementById("securityExportSavedBackupsBtn")?.addEventListener("click", exportSecuritySavedBackups);
 document.getElementById("securityAuditBtn")?.addEventListener("click", showSecurityAudit);
 document.getElementById("securityHealthBtn")?.addEventListener("click", showSecuritySystemHealth);
 document.getElementById("securityReadinessBtn")?.addEventListener("click", showSecurityReadiness);
