@@ -12064,6 +12064,56 @@ function exportSecuritySavedBackups() {
   showToast("Saved backups exported.");
 }
 
+function findFeeMasterInSecurityBackups() {
+  const backups = getSecurityBackups();
+  const activeAliases = getSessionAliases(activeSession);
+  for (const backup of backups) {
+    const sessions = backup?.state?.financeSessions || {};
+    for (const sessionName of activeAliases) {
+      const feeMaster = sessions[sessionName]?.feeMaster;
+      if (Array.isArray(feeMaster) && feeMaster.length) {
+        return {backup, sessionName, feeMaster};
+      }
+    }
+    for (const [sessionName, sessionData] of Object.entries(sessions)) {
+      const feeMaster = sessionData?.feeMaster;
+      if (Array.isArray(feeMaster) && feeMaster.length) {
+        return {backup, sessionName, feeMaster};
+      }
+    }
+  }
+  return null;
+}
+
+function restoreFeeMasterOnlyFromSecurityBackup() {
+  const match = findFeeMasterInSecurityBackups();
+  if (!match) {
+    renderSecurityMaintenance("<strong>No Fee Master found in saved browser backups.</strong><br>Export/save a backup that contains Fee Master data first.");
+    showToast("No Fee Master backup found.");
+    return;
+  }
+  const currentSession = ensureActiveFinanceSessionData();
+  const existingCount = (currentSession.feeMaster || []).length;
+  const backupDate = formatDateDDMMYYYY(match.backup?.createdAt || new Date().toISOString());
+  const message = existingCount
+    ? `Replace ${existingCount} current Fee Master row(s) in ${activeSession} with ${match.feeMaster.length} row(s) from backup ${backupDate}? Only Fee Master will change.`
+    : `Restore ${match.feeMaster.length} Fee Master row(s) into ${activeSession} from backup ${backupDate}? Only Fee Master will change.`;
+  if (!confirm(message)) return;
+
+  currentSession.feeMaster = JSON.parse(JSON.stringify(match.feeMaster));
+  currentSession.summary = currentSession.summary || `Fee Master restored from backup ${backupDate}.`;
+  if (!saveAppState()) return;
+  renderFeeMaster();
+  renderFinanceSession();
+  renderSecurityStatusCards();
+  renderSecurityMaintenance(`
+    <strong>Fee Master restored safely.</strong><br>
+    ${match.feeMaster.length} row(s) copied from backup session ${escapeHtml(match.sessionName)} to active session ${escapeHtml(activeSession)}.
+    <br>Student, payment, staff and transport data were not changed.
+  `);
+  showToast("Fee Master restored from backup.");
+}
+
 function showSecurityAudit() {
   const counts = getSecurityRecordCounts();
   renderSecurityMaintenance(`
@@ -13840,6 +13890,7 @@ document.getElementById("securityRestoreFile")?.addEventListener("change", event
 document.getElementById("securityMaintenanceBtn")?.addEventListener("click", runSecurityMaintenance);
 document.getElementById("securityShowBackupsBtn")?.addEventListener("click", showSecurityBackups);
 document.getElementById("securityExportSavedBackupsBtn")?.addEventListener("click", exportSecuritySavedBackups);
+document.getElementById("securityRestoreFeeMasterBtn")?.addEventListener("click", restoreFeeMasterOnlyFromSecurityBackup);
 document.getElementById("securityAuditBtn")?.addEventListener("click", showSecurityAudit);
 document.getElementById("securityHealthBtn")?.addEventListener("click", showSecuritySystemHealth);
 document.getElementById("securityReadinessBtn")?.addEventListener("click", showSecurityReadiness);
