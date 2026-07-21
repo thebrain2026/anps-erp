@@ -2,6 +2,7 @@
 import json
 import hmac
 import os
+import re
 import secrets
 import sqlite3
 import urllib.error
@@ -1515,7 +1516,7 @@ def deleted_payment_receipt_map(*maps):
             for admission_no, receipts in session_rows.items():
                 if not isinstance(receipts, dict):
                     continue
-                normalized_admission_no = "".join(ch.lower() for ch in str(admission_no or "") if ch.isalnum()) or str(admission_no or "").strip()
+                normalized_admission_no = normalize_admission_no(admission_no)
                 if not normalized_admission_no:
                     continue
                 merged[str(session)].setdefault(normalized_admission_no, {})
@@ -1526,23 +1527,21 @@ def deleted_payment_receipt_map(*maps):
     return merged
 
 
+def normalize_admission_no(value):
+    clean = re.sub(r"\s*/\s*", "/", str(value or "").strip())
+    clean = re.sub(r"\s+", "", clean)
+    match = re.match(r"^(anps-adm/[^/]+/)(.+)$", clean, re.IGNORECASE)
+    if match:
+        serial = match.group(2).strip()
+        canonical_serial = str(int(serial)) if serial.isdigit() else serial.lower()
+        return f"{match.group(1).lower()}{canonical_serial}"
+    return clean.lower()
+
+
 def is_deleted_payment_receipt(deleted_map, session, admission_no, receipt_no):
-    normalized_admission_no = "".join(ch.lower() for ch in str(admission_no or "") if ch.isalnum()) or str(admission_no or "").strip()
+    normalized_admission_no = normalize_admission_no(admission_no)
     normalized_receipt = str(receipt_no or "").strip().lower()
     return bool(normalized_receipt and isinstance(deleted_map, dict) and deleted_map.get(str(session), {}).get(normalized_admission_no, {}).get(normalized_receipt))
-
-
-def is_deleted_payment_receipt_anywhere(deleted_map, receipt_no):
-    normalized_receipt = str(receipt_no or "").strip().lower()
-    if not normalized_receipt or not isinstance(deleted_map, dict):
-        return False
-    for session_rows in deleted_map.values():
-        if not isinstance(session_rows, dict):
-            continue
-        for receipts in session_rows.values():
-            if isinstance(receipts, dict) and receipts.get(normalized_receipt):
-                return True
-    return False
 
 
 def live_payment_list(payments, deleted_map, session, admission_no):
@@ -1551,7 +1550,6 @@ def live_payment_list(payments, deleted_map, session, admission_no):
         for payment in (payments or [])
         if isinstance(payment, dict)
         and not is_deleted_payment_receipt(deleted_map, session, admission_no, payment.get("receipt"))
-        and not is_deleted_payment_receipt_anywhere(deleted_map, payment.get("receipt"))
     ]
 
 
@@ -1942,11 +1940,13 @@ def sync_state_tables(conn, state):
             },
         )
 
+    selected_session = state.get("activeSession") or state.get("selectedSession") or state.get("settings", {}).get("academicYear") or "2026-27"
+
     for receipt in state.get("fees", []) or []:
         receipt_no = receipt.get("receipt")
         if not receipt_no:
             continue
-        if is_deleted_payment_receipt_anywhere(deleted_receipts, receipt_no):
+        if is_deleted_payment_receipt(deleted_receipts, selected_session, receipt.get("admissionNo") or "", receipt_no):
             continue
         cash = money(receipt.get("cashAmount"))
         bank = money(receipt.get("upiAmount"))
@@ -1976,7 +1976,6 @@ def sync_state_tables(conn, state):
             },
         )
 
-    selected_session = state.get("activeSession") or state.get("selectedSession") or state.get("settings", {}).get("academicYear") or "2026-27"
     collected = state.get("collectedPayments", {}) or {}
     if isinstance(collected, dict):
         for session, student_payments in collected.items():
@@ -1996,8 +1995,6 @@ def sync_state_tables(conn, state):
                     if not receipt_no:
                         continue
                     if is_deleted_payment_receipt(deleted_receipts, session, admission_no, receipt_no):
-                        continue
-                    if is_deleted_payment_receipt_anywhere(deleted_receipts, receipt_no):
                         continue
                     allocations = payment.get("allocations") or []
                     fine_total = sum(

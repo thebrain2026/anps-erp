@@ -758,24 +758,7 @@ function getDeletedPaymentReceiptMap(...maps) {
 function isPaymentReceiptDeleted(deletedMap = {}, session = activeSession, admissionNo = "", receiptNo = "") {
   const normalizedAdmissionNo = normalizeAdmissionNo(admissionNo) || String(admissionNo || "").trim();
   const normalizedReceipt = String(receiptNo || "").trim().toLowerCase();
-  return Boolean(
-    normalizedReceipt &&
-    (
-      deletedMap?.[session]?.[normalizedAdmissionNo]?.[normalizedReceipt] ||
-      isPaymentReceiptDeletedAnywhere(deletedMap, normalizedReceipt)
-    )
-  );
-}
-
-function isPaymentReceiptDeletedAnywhere(deletedMap = {}, receiptNo = "") {
-  const normalizedReceipt = String(receiptNo || "").trim().toLowerCase();
-  if (!normalizedReceipt || !deletedMap || typeof deletedMap !== "object") return false;
-  return Object.values(deletedMap).some(sessionRows => {
-    if (!sessionRows || typeof sessionRows !== "object") return false;
-    return Object.values(sessionRows).some(receipts => {
-      return Boolean(receipts && typeof receipts === "object" && receipts[normalizedReceipt]);
-    });
-  });
+  return Boolean(normalizedReceipt && deletedMap?.[session]?.[normalizedAdmissionNo]?.[normalizedReceipt]);
 }
 
 function markPaymentReceiptDeleted(admissionNo, receiptNo, session = activeSession) {
@@ -5761,8 +5744,10 @@ function getRunningAcademicMonth() {
 
 function getDashboardRunningMonthDueSummary(month = getRunningAcademicMonth()) {
   const dueStudents = new Map();
-  let totalDue = 0;
   getActiveStudents().forEach(student => {
+    const admissionKey = normalizeAdmissionNo(student.admissionNo || "");
+    const key = admissionKey || `name:${String(student.name || "").trim().toLowerCase()}` || `student-${dueStudents.size}`;
+    if (dueStudents.has(key)) return;
     let studentDue = 0;
     getLedgerRows(student).forEach(row => {
       const item = getSearchDueMonthItem(student, row, month);
@@ -5770,11 +5755,10 @@ function getDashboardRunningMonthDueSummary(month = getRunningAcademicMonth()) {
       studentDue += Number(item.total || 0);
     });
     if (studentDue > 0) {
-      const key = student.admissionNo || student.name || `student-${dueStudents.size}`;
       dueStudents.set(key, studentDue);
-      totalDue += studentDue;
     }
   });
+  const totalDue = [...dueStudents.values()].reduce((sum, amount) => sum + Number(amount || 0), 0);
   return {month, studentCount: dueStudents.size, totalDue};
 }
 
