@@ -7601,12 +7601,12 @@ function getTuitionSearchDueRow(student) {
   const monthlyFee = Number(student.tuitionFee || 0);
   if (!monthlyFee) return null;
   const today = new Date();
-  const monthPayments = getTuitionMonthPayments(student.admissionNo);
+  const row = {name: "Tuition Fee", monthlyAmount: monthlyFee, months: getSelectedMonths(student, "feeMonths")};
   const dueMonths = getSelectedMonths(student, "feeMonths").filter(month => getAcademicMonthDate(month, 1) <= today);
   if (!dueMonths.length) return null;
   const monthDetails = dueMonths.map(month => {
     const fine = calculateTuitionFineForMonth(month, new Date());
-    const paid = monthPayments[month] || {tuition: 0, fine: 0};
+    const paid = getTuitionMonthPaidInfo(student, row, month);
     const tuitionDue = Math.max(monthlyFee - paid.tuition, 0);
     const fineDue = shouldWaiveRepeatFineAfterFinePaid({...paid, monthlyAmount: monthlyFee}, "tuition", monthlyFee, student.admissionNo, month)
       ? 0
@@ -7694,7 +7694,6 @@ function getSearchDueMonthDetails(student, row, selectedMonth = "") {
   const monthCutoff = selectedMonth ? ACADEMIC_MONTHS.indexOf(selectedMonth) : -1;
   const today = new Date();
   const paidMonths = getPaidLedgerMonths(student, row);
-  const tuitionPayments = row.name === "Tuition Fee" ? getTuitionMonthPayments(student.admissionNo) : {};
   return (row.months || [])
     .filter(month => {
       const monthIndex = ACADEMIC_MONTHS.indexOf(month);
@@ -7703,7 +7702,7 @@ function getSearchDueMonthDetails(student, row, selectedMonth = "") {
     })
     .map(month => {
       if (row.name === "Tuition Fee") {
-        const paid = tuitionPayments[month] || {tuition: 0, fine: 0};
+        const paid = getTuitionMonthPaidInfo(student, row, month);
         const amount = Math.max(Number(row.monthlyAmount || 0) - paid.tuition, 0);
         const fineDue = getTuitionMonthFineDue(student, row, month);
         return {month, amount, fine: fineDue, total: amount + fineDue};
@@ -7724,8 +7723,7 @@ function getSearchDueMonthItem(student, row, month) {
   if (getAcademicMonthDate(month, 1) > new Date()) return null;
   const paidMonths = getPaidLedgerMonths(student, row);
   if (row.name === "Tuition Fee") {
-    const tuitionPayments = getTuitionMonthPayments(student.admissionNo);
-    const paid = tuitionPayments[month] || {tuition: 0, fine: 0};
+    const paid = getTuitionMonthPaidInfo(student, row, month);
     const amount = Math.max(Number(row.monthlyAmount || 0) - paid.tuition, 0);
     const fineDue = getTuitionMonthFineDue(student, row, month);
     return amount + fineDue > 0 ? {month, amount, fine: fineDue, total: amount + fineDue} : null;
