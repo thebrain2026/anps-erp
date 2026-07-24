@@ -327,6 +327,7 @@ const titleMap = {
   studentUserLogin: "Student User Login",
   mobileAppActivity: "Mobile App Activity",
   securityMaintenance: "Security Maintenance",
+  securitySmartEngine: "Smart Data Engine",
   securityDuplicateReceipts: "Duplicate Receipts",
   securityAlertSolver: "Alert Solver",
   securityRoleHealth: "Role & Permission Health",
@@ -357,7 +358,7 @@ const ACCESS_PERMISSION_GROUPS = [
   {name: "Academic", modules: ["classTimetable", "teacherTimetable", "classTeacherAssignment", "syllabus", "marksheet", "externalExamFees", "academicProfile", "teacherComplaint", "holidayReport", "annualCalendar"]},
   {name: "Certificate", modules: ["studentIdCard", "teacherIdCard"]},
   {name: "Settings", modules: ["masterAdmin", "schoolManagement", "userAccessSettings", "studentUserLogin", "mobileAppActivity"]},
-  {name: "Security", modules: ["securityMaintenance", "securityDuplicateReceipts", "securityAlertSolver", "securityRoleHealth"]},
+  {name: "Security", modules: ["securityMaintenance", "securitySmartEngine", "securityDuplicateReceipts", "securityAlertSolver", "securityRoleHealth"]},
   {name: "Transport", modules: ["transportFeesMaster", "transportFineSetup", "transportPickupPoint", "transportRoute", "transportVehicle", "transportAssignVehicle", "transportRoutePickupPoint", "studentTransportFees", "nonTransportStudents", "smartBusTracking"]}
 ];
 
@@ -1943,6 +1944,7 @@ function renderActiveView(viewName = document.querySelector(".view.active")?.id 
   if (viewName === "studentUserLogin") renderStudentUserLogin();
   if (viewName === "mobileAppActivity") renderMobileAppActivity();
   if (viewName === "securityMaintenance") renderSecurityMaintenance();
+  if (viewName === "securitySmartEngine") showSmartDataEngine();
   if (viewName === "securityDuplicateReceipts") renderDuplicateReceiptUtility();
   if (viewName === "securityAlertSolver") renderAlertSolverPage();
   if (viewName === "securityRoleHealth") renderRolePermissionHealth();
@@ -2031,6 +2033,9 @@ function setView(viewName, options = {}) {
   }
   if (viewName === "securityMaintenance") {
     renderSecurityMaintenance();
+  }
+  if (viewName === "securitySmartEngine") {
+    showSmartDataEngine();
   }
   if (viewName === "securityDuplicateReceipts") {
     renderDuplicateReceiptUtility();
@@ -12458,7 +12463,7 @@ function showSmartDataEngine() {
     return groups;
   }, {});
   const status = report.danger ? "Critical Review" : report.warning ? "Review Needed" : "Healthy";
-  const output = document.getElementById("securityOutput");
+  const output = document.getElementById("smartEngineOutput") || document.getElementById("securityOutput");
   if (!output) return;
   output.innerHTML = `
     <div class="system-health-summary">
@@ -14263,7 +14268,7 @@ document.getElementById("securityShowBackupsBtn")?.addEventListener("click", sho
 document.getElementById("securityExportSavedBackupsBtn")?.addEventListener("click", exportSecuritySavedBackups);
 document.getElementById("securityRestoreFeeMasterBtn")?.addEventListener("click", restoreFeeMasterOnlyFromSecurityBackup);
 document.getElementById("securityAuditBtn")?.addEventListener("click", showSecurityAudit);
-document.getElementById("securitySmartEngineBtn")?.addEventListener("click", showSmartDataEngine);
+document.getElementById("runSmartDataEngineBtn")?.addEventListener("click", showSmartDataEngine);
 document.getElementById("securityHealthBtn")?.addEventListener("click", showSecuritySystemHealth);
 document.getElementById("securityReadinessBtn")?.addEventListener("click", showSecurityReadiness);
 document.getElementById("securityBackupReminderBtn")?.addEventListener("click", showSecurityBackupReminder);

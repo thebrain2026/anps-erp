@@ -155,6 +155,7 @@
           <button class="nav-group-title" id="securityToggle" type="button" aria-expanded="false">Security</button>
           <div class="nav-sub">
             <button data-view="securityMaintenance" type="button">Security Maintenance</button>
+            <button data-view="securitySmartEngine" type="button">Smart Data Engine</button>
             <button data-view="securityDuplicateReceipts" type="button">Duplicate Receipts</button>
             <button data-view="securityAlertSolver" type="button">Alert Solver</button>
             <button data-view="securityRoleHealth" type="button">Role & Permission Health</button>
@@ -2856,7 +2857,6 @@
               <button class="ghost-action" id="securityExportSavedBackupsBtn" type="button">Export Saved Backups</button>
               <button class="ghost-action" id="securityRestoreFeeMasterBtn" type="button">Restore Fee Master Only</button>
               <button class="ghost-action" id="securityAuditBtn" type="button">Data Audit</button>
-              <button class="ghost-action" id="securitySmartEngineBtn" type="button">Smart Data Engine</button>
               <button class="ghost-action" id="securityHealthBtn" type="button">System Health</button>
               <button class="ghost-action" id="securityReadinessBtn" type="button">Readiness Check</button>
               <button class="ghost-action" id="securityBackupReminderBtn" type="button">Backup Reminder</button>
@@ -2889,6 +2889,31 @@
               </div>
               <textarea id="securityJsonOutput" class="security-json-output" readonly placeholder="Click Server JSON to view saved database JSON."></textarea>
             </div>
+          </section>
+        </div>
+      </section>
+
+      <section class="view" id="securitySmartEngine">
+        <div class="security-dashboard">
+          <section class="panel security-hero-panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Security</p>
+                <h2>Smart Data Engine</h2>
+                <small>Read-only checks for payment, master data, transport fee and backup safety.</small>
+              </div>
+              <button class="primary-action" id="runSmartDataEngineBtn" type="button">Run Scan</button>
+            </div>
+          </section>
+
+          <section class="panel">
+            <div class="panel-head">
+              <div>
+                <p class="eyebrow">Smart Scan</p>
+                <h2>Data Safety Report</h2>
+              </div>
+            </div>
+            <div class="security-output" id="smartEngineOutput">Click Run Scan to check data safety.</div>
           </section>
         </div>
       </section>
