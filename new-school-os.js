@@ -12275,6 +12275,225 @@ function showSecuritySystemHealth() {
   `);
 }
 
+function getSmartEngineNumber(...values) {
+  for (const value of values) {
+    const number = Number(value);
+    if (Number.isFinite(number)) return number;
+  }
+  return 0;
+}
+
+function getSmartEngineText(...values) {
+  for (const value of values) {
+    const text = String(value || "").trim();
+    if (text) return text;
+  }
+  return "";
+}
+
+function isMonthlySmartFeeHead(feeHead = "") {
+  const text = String(feeHead || "").toLowerCase();
+  return ["tuition", "transport", "robotic", "monthly", "other"].some(term => text.includes(term));
+}
+
+function getSmartEnginePaymentFeeHead(payment = {}) {
+  const directHead = getSmartEngineText(payment.feeHead, payment.fee_head, payment.head, payment.feeName);
+  if (directHead) return directHead;
+  const allocationHeads = (payment.allocations || [])
+    .map(allocation => getSmartEngineText(allocation.feeHead, allocation.fee_head, allocation.head, allocation.feeName))
+    .filter(Boolean);
+  return [...new Set(allocationHeads)].join(", ");
+}
+
+function getSmartEnginePaymentReceipt(payment = {}) {
+  return getSmartEngineText(payment.receipt, payment.receiptNo, payment.receipt_no, payment.receiptNumber);
+}
+
+function getSmartEnginePaymentMonth(payment = {}) {
+  return getSmartEngineText(payment.month, payment.feeMonth, payment.fee_month, payment.period, payment.periodLabel);
+}
+
+function getSmartEnginePaymentPaid(payment = {}) {
+  const savedAmount = getSmartEngineNumber(payment.amount, payment.netPaid, payment.net_paid);
+  if (savedAmount > 0) return savedAmount;
+  return getSmartEngineNumber(payment.bankAmount, payment.bank_amount) + getSmartEngineNumber(payment.cashAmount, payment.cash_amount);
+}
+
+function getSmartEnginePaymentDiscount(payment = {}) {
+  return getSmartEngineNumber(payment.discountAmount, payment.discount, payment.discount_amount);
+}
+
+function getSmartEngineAllocationTotal(payment = {}) {
+  return (payment.allocations || []).reduce((sum, allocation) => {
+    return sum + getSmartEngineNumber(allocation.amount, allocation.paidAmount, allocation.netPaid, allocation.net_paid);
+  }, 0);
+}
+
+function getSmartEnginePickupFeeTotal(point = {}) {
+  return getSmartEngineNumber(point.newStudentFee, point.new_student_fee, point.newFee) +
+    getSmartEngineNumber(point.promotedStudentFee, point.promoted_student_fee, point.promotedFee) +
+    getSmartEngineNumber(point.specialStudentFee, point.special_student_fee, point.specialFee);
+}
+
+function addSmartEngineIssue(list, type, title, details, severity = "warning", recommendation = "") {
+  list.push({type, title, details, severity, recommendation});
+}
+
+function getSmartDataEngineReport() {
+  const issues = [];
+  const paymentRecords = getPaymentHealthRecords();
+  const receiptOwners = new Map();
+  const receiptSet = new Set();
+  const monthlyFeeMissingMonth = [];
+
+  paymentRecords.forEach(({admissionNo, payment}) => {
+    const receipt = getSmartEnginePaymentReceipt(payment);
+    const feeHead = getSmartEnginePaymentFeeHead(payment);
+    const month = getSmartEnginePaymentMonth(payment);
+    const paidAmount = getSmartEnginePaymentPaid(payment);
+    const bankCashTotal = getSmartEngineNumber(payment.bankAmount, payment.bank_amount) + getSmartEngineNumber(payment.cashAmount, payment.cash_amount);
+    const allocationTotal = getSmartEngineAllocationTotal(payment);
+    const discountAmount = getSmartEnginePaymentDiscount(payment);
+
+    if (!receipt) {
+      addSmartEngineIssue(issues, "Payment Safety", "Payment without receipt number", `${admissionNo || "Unknown student"} | ${feeHead || "Unknown fee head"}`, "danger", "Receipt number should be present before any reconciliation or delete action.");
+    } else {
+      receiptSet.add(receipt);
+      if (!receiptOwners.has(receipt)) receiptOwners.set(receipt, new Set());
+      receiptOwners.get(receipt).add(admissionNo || "unknown");
+    }
+
+    if (isMonthlySmartFeeHead(feeHead) && !month) {
+      monthlyFeeMissingMonth.push(receipt || admissionNo || "Unknown receipt");
+    }
+
+    if (paidAmount > 0 && bankCashTotal > 0 && Math.abs(paidAmount - bankCashTotal) > 1) {
+      addSmartEngineIssue(issues, "Payment Safety", "Paid amount does not match bank plus cash", `${receipt || "-"} | Paid ${formatRs(paidAmount)} | Bank + Cash ${formatRs(bankCashTotal)}`, "danger", "Check this receipt before reporting due or collection totals.");
+    }
+
+    if (allocationTotal > 0 && Math.abs((paidAmount + discountAmount) - allocationTotal) > 1) {
+      addSmartEngineIssue(issues, "Payment Safety", "Payment allocation mismatch", `${receipt || "-"} | Paid + Discount ${formatRs(paidAmount + discountAmount)} | Allocated ${formatRs(allocationTotal)}`, "warning", "Payment history and fee allocation should match for correct due calculation.");
+    }
+  });
+
+  receiptOwners.forEach((owners, receipt) => {
+    if (owners.size > 1) {
+      addSmartEngineIssue(issues, "Payment Safety", "Same receipt used for multiple students", `${receipt} is linked with ${owners.size} admission numbers.`, "danger", "Open Duplicate Receipts and fix the duplicated receipt number.");
+    }
+  });
+
+  if (monthlyFeeMissingMonth.length) {
+    addSmartEngineIssue(
+      issues,
+      "Fee Month Safety",
+      "Monthly fee receipt without fee month",
+      `${monthlyFeeMissingMonth.slice(0, 10).join(", ")}${monthlyFeeMissingMonth.length > 10 ? ` and ${monthlyFeeMissingMonth.length - 10} more` : ""}`,
+      "danger",
+      "Tuition, transport and other monthly fee receipts must keep the month, otherwise paid months can again show as due."
+    );
+  }
+
+  const activeFinance = getActiveFinanceSessionData();
+  const bestFinance = getBestAvailableFinanceSessionData();
+  const feeMasterRows = Array.isArray(activeFinance?.feeMaster) ? activeFinance.feeMaster : [];
+  const fallbackFeeMasterRows = Array.isArray(bestFinance?.feeMaster) ? bestFinance.feeMaster : [];
+  const effectiveFeeMasterRows = feeMasterRows.length ? feeMasterRows : fallbackFeeMasterRows;
+
+  if (!effectiveFeeMasterRows.length) {
+    addSmartEngineIssue(issues, "Core Setup", "No fee master rows found", `Active session: ${activeSession || "-"}`, "danger", "Fee Master must be saved in the backend database and daily backup.");
+  } else {
+    effectiveFeeMasterRows.forEach((row, index) => {
+      const className = getSmartEngineText(row.className, row.class_name, row.class);
+      const feeHead = getSmartEngineText(row.feeHead, row.fee_head, row.head, row.name);
+      const amount = getSmartEngineNumber(row.amount, row.feeAmount, row.fee_amount);
+      if (!className || !feeHead || amount <= 0) {
+        addSmartEngineIssue(issues, "Core Setup", "Incomplete fee master row", `Row ${index + 1}: ${className || "No class"} | ${feeHead || "No fee head"} | ${formatRs(amount)}`, "warning", "Review Fee Master so every row has class, fee head and amount.");
+      }
+    });
+  }
+
+  const pickupFeeRows = (transportVillages || []).filter(point => getSmartEnginePickupFeeTotal(point) > 0).length;
+  if ((transportVillages || []).length && pickupFeeRows === 0) {
+    addSmartEngineIssue(issues, "Transport Master", "Pickup points have no saved fee values", `${transportVillages.length} pickup point(s) found, but fee rows are zero.`, "danger", "Transport pickup fees should be saved in the backend database and daily backup.");
+  }
+
+  const backups = getSecurityBackups();
+  const currentCounts = getSecurityRecordCounts();
+  const latestBackup = backups[0];
+  if (!latestBackup) {
+    addSmartEngineIssue(issues, "Backup Safety", "No browser backup found", "Create one backup after any master-data work.", "warning", "Use Security Maintenance > Create Backup before major edits.");
+  } else {
+    const backupRecords = latestBackup.records || {};
+    ["students", "staff", "payments", "feeMaster", "transportVillages"].forEach(key => {
+      const current = Number(currentCounts[key] || 0);
+      const backedUp = Number(backupRecords[key] || 0);
+      if (current > 0 && backedUp < current) {
+        addSmartEngineIssue(issues, "Backup Safety", "Latest browser backup is behind current data", `${key}: current ${current}, latest backup ${backedUp}`, "warning", "Create a fresh backup so the latest browser backup matches current data.");
+      }
+    });
+  }
+
+  const setupCards = [
+    {label: "Students", value: students.length},
+    {label: "Staff", value: staffMembers.length},
+    {label: "Fee Master", value: effectiveFeeMasterRows.length},
+    {label: "Payments", value: paymentRecords.length},
+    {label: "Receipt Numbers", value: receiptSet.size},
+    {label: "Pickup Fee Rows", value: pickupFeeRows},
+    {label: "Browser Backups", value: backups.length},
+    {label: "Active Session", value: activeSession || "-"}
+  ];
+  const danger = issues.filter(issue => issue.severity === "danger").length;
+  const warning = issues.filter(issue => issue.severity === "warning").length;
+  const info = issues.filter(issue => issue.severity === "info").length;
+  const score = Math.max(0, 100 - danger * 16 - warning * 7 - info * 3);
+  return {issues, setupCards, score, danger, warning, info};
+}
+
+function showSmartDataEngine() {
+  const report = getSmartDataEngineReport();
+  const grouped = report.issues.reduce((groups, issue) => {
+    if (!groups[issue.type]) groups[issue.type] = [];
+    groups[issue.type].push(issue);
+    return groups;
+  }, {});
+  const status = report.danger ? "Critical Review" : report.warning ? "Review Needed" : "Healthy";
+  const output = document.getElementById("securityOutput");
+  if (!output) return;
+  output.innerHTML = `
+    <div class="system-health-summary">
+      <article><span>Smart Score</span><strong>${report.score}%</strong></article>
+      <article><span>Status</span><strong>${escapeHtml(status)}</strong></article>
+      <article><span>Critical</span><strong>${report.danger}</strong></article>
+      <article><span>Warning</span><strong>${report.warning}</strong></article>
+    </div>
+    <div class="system-health-summary">
+      ${report.setupCards.map(card => `<article><span>${escapeHtml(card.label)}</span><strong>${escapeHtml(String(card.value))}</strong></article>`).join("")}
+    </div>
+    <div class="system-health-group">
+      <strong>Read-only scan</strong>
+      <ul>
+        <li class="info"><b>No data changed</b><span>This engine only checks saved ERP data, payment records, master setup and backup coverage.</span></li>
+      </ul>
+    </div>
+    ${report.issues.length ? Object.entries(grouped).map(([type, items]) => `
+      <div class="system-health-group">
+        <strong>${escapeHtml(type)}</strong>
+        <ul>
+          ${items.slice(0, 60).map(issue => `
+            <li class="${escapeHtml(issue.severity)}">
+              <b>${escapeHtml(issue.title)}</b>
+              <span>${escapeHtml(issue.details || "")}${issue.recommendation ? `<br>${escapeHtml(issue.recommendation)}` : ""}</span>
+            </li>
+          `).join("")}
+        </ul>
+        ${items.length > 60 ? `<small>${items.length - 60} more item(s) hidden to keep the page fast.</small>` : ""}
+      </div>
+    `).join("") : "<strong>Smart Data Engine: Healthy</strong><br>No high-risk data, payment, master setup or backup issue found."}
+  `;
+  showToast("Smart Data Engine scan completed.");
+}
+
 function getAlertSolverRules() {
   return [
     {
@@ -14044,6 +14263,7 @@ document.getElementById("securityShowBackupsBtn")?.addEventListener("click", sho
 document.getElementById("securityExportSavedBackupsBtn")?.addEventListener("click", exportSecuritySavedBackups);
 document.getElementById("securityRestoreFeeMasterBtn")?.addEventListener("click", restoreFeeMasterOnlyFromSecurityBackup);
 document.getElementById("securityAuditBtn")?.addEventListener("click", showSecurityAudit);
+document.getElementById("securitySmartEngineBtn")?.addEventListener("click", showSmartDataEngine);
 document.getElementById("securityHealthBtn")?.addEventListener("click", showSecuritySystemHealth);
 document.getElementById("securityReadinessBtn")?.addEventListener("click", showSecurityReadiness);
 document.getElementById("securityBackupReminderBtn")?.addEventListener("click", showSecurityBackupReminder);
