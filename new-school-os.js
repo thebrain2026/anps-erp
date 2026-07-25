@@ -140,6 +140,7 @@ const BACKEND_LOCAL_SAVE_GUARD_MS = 5000;
 const BACKEND_OFFLINE_FAIL_THRESHOLD = 5;
 const BACKEND_HEALTH_GRACE_MS = 60000;
 const BACKEND_FETCH_TIMEOUT_MS = 25000;
+const COLLECTION_HISTORY_INITIAL_ROW_LIMIT = 150;
 const MONTHLY_FINE_PAID_SMALL_DUE_LIMIT = 500;
 const ACADEMIC_MONTHS = ["Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec", "Jan", "Feb", "Mar"];
 const DEFAULT_ADMISSION_CLASSES = ["Nursery", "Class I", "Class II", "Class III", "Class IV", "Class V", "Class VI", "Class VII", "Class VIII", "Class IX", "Class X", "Class XI", "Class XII"];
@@ -8170,6 +8171,16 @@ function getCollectionHistoryReceiptFilter() {
   return String(document.getElementById("collectionHistoryReceiptNo")?.value || "").trim().toLowerCase();
 }
 
+function hasCollectionHistoryFilter() {
+  return Boolean(
+    document.getElementById("collectionHistoryFromDate")?.value ||
+    document.getElementById("collectionHistoryToDate")?.value ||
+    document.getElementById("collectionHistoryCollectedBy")?.value ||
+    document.getElementById("collectionHistoryAdmissionNo")?.value ||
+    document.getElementById("collectionHistoryReceiptNo")?.value
+  );
+}
+
 function renderCollectionHistoryCollectedByOptions(payments = []) {
   const select = document.getElementById("collectionHistoryCollectedBy");
   if (!select) return;
@@ -11022,14 +11033,14 @@ function renderFeeBook(admissionNo = activeLedgerAdmissionNo) {
   const allLedgerPayments = getAllLedgerPayments();
   renderCollectionHistoryCollectedByOptions(allLedgerPayments);
   const ledgerPayments = filterPaymentsByDateRange(allLedgerPayments);
-  const hasHistoryFilter = Boolean(
-    document.getElementById("collectionHistoryFromDate")?.value ||
-    document.getElementById("collectionHistoryToDate")?.value ||
-    document.getElementById("collectionHistoryCollectedBy")?.value ||
-    document.getElementById("collectionHistoryAdmissionNo")?.value ||
-    document.getElementById("collectionHistoryReceiptNo")?.value
-  );
-  document.getElementById("ledgerPaymentRows").innerHTML = ledgerPayments.map(payment => {
+  const hasHistoryFilter = hasCollectionHistoryFilter();
+  const visibleLedgerPayments = hasHistoryFilter
+    ? ledgerPayments
+    : ledgerPayments.slice(0, COLLECTION_HISTORY_INITIAL_ROW_LIMIT);
+  const limitMessage = !hasHistoryFilter && ledgerPayments.length > visibleLedgerPayments.length
+    ? `<tr class="muted-row"><td colspan="13">Showing latest ${visibleLedgerPayments.length} of ${ledgerPayments.length} payments. Use Admission No., Receipt No., or date filter to search older records.</td></tr>`
+    : "";
+  document.getElementById("ledgerPaymentRows").innerHTML = visibleLedgerPayments.map(payment => {
     const paymentAdmissionNo = payment.admissionNo || student.admissionNo || "";
     const paymentStudent = findStudentByAdmissionNo(paymentAdmissionNo) || student || {};
     const totalAmount = Number(payment.bank || 0) + Number(payment.cash || 0);
@@ -11069,7 +11080,7 @@ function renderFeeBook(admissionNo = activeLedgerAdmissionNo) {
       </td>
     </tr>
   `;
-  }).join("") || `<tr><td colspan="13">${hasHistoryFilter ? "No payment history found in selected filter." : "No payment history yet."}</td></tr>`;
+  }).join("") + limitMessage || `<tr><td colspan="13">${hasHistoryFilter ? "No payment history found in selected filter." : "No payment history yet."}</td></tr>`;
   updatePaymentQuickTotal();
 }
 
