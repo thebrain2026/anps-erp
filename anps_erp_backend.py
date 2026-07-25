@@ -1633,9 +1633,10 @@ def receipt_serial(receipt_no="", receipt_year=""):
     return int(match.group(2) or 0)
 
 
-def next_receipt_no_for_state(state, session):
+def next_receipt_no_for_state(state, session, deleted_map=None):
     receipt_year = str(session or datetime.now().year).split("-")[0] or str(datetime.now().year)
     payments_by_student = ((state.get("collectedPayments") or {}).get(session) or {})
+    deleted_map = deleted_map if isinstance(deleted_map, dict) else {}
     highest = 0
     used = set()
     if isinstance(payments_by_student, dict):
@@ -1647,6 +1648,14 @@ def next_receipt_no_for_state(state, session):
                 if receipt:
                     used.add(receipt)
                     highest = max(highest, receipt_serial(receipt, receipt_year))
+    for receipts in (deleted_map.get(str(session), {}) or {}).values():
+        if not isinstance(receipts, dict):
+            continue
+        for receipt in receipts:
+            clean_receipt = str(receipt or "").strip()
+            if clean_receipt:
+                used.add(clean_receipt)
+                highest = max(highest, receipt_serial(clean_receipt, receipt_year))
     serial = highest + 1
     while True:
         candidate = f"ANPS/{receipt_year}-{serial:03d}"
@@ -4112,6 +4121,7 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             if not student:
                 raise ValueError("Student not found in ERP data")
             canonical_admission = str(student.get("admissionNo") or student.get("id") or admission_no).strip()
+            deleted_receipts = deleted_payment_receipt_map(state.get("deletedPaymentReceipts") or {})
             state["collectedPayments"] = state.get("collectedPayments") if isinstance(state.get("collectedPayments"), dict) else {}
             state["collectedPayments"].setdefault(session, {})
             existing_key = next(
@@ -4126,9 +4136,25 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             payment = dict(payment)
             payment["id"] = payment.get("id") or f"PAY-{int(datetime.now().timestamp() * 1000)}"
             receipt = str(payment.get("receipt") or "").strip()
+            state["collectedPayments"][session][existing_key] = live_payment_list(
+                state["collectedPayments"][session].get(existing_key, []),
+                deleted_receipts,
+                session,
+                existing_key,
+            )
+            if receipt and is_deleted_payment_receipt(deleted_receipts, session, existing_key, receipt):
+                updated_at = write_state(state)
+                return self.json_response({
+                    "ok": True,
+                    "ignored": True,
+                    "reason": "receipt_deleted",
+                    "updated_at": updated_at,
+                    "payment": payment,
+                    "state": state,
+                })
             owner = payment_receipt_owner(state, session, receipt)
             if not receipt or (owner and normalize_admission_no(owner) != normalize_admission_no(existing_key)):
-                receipt = next_receipt_no_for_state(state, session)
+                receipt = next_receipt_no_for_state(state, session, deleted_receipts)
                 payment["receipt"] = receipt
             payments = [
                 row

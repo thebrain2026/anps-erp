@@ -1592,14 +1592,24 @@ function getReceiptSerial(receiptNo = "", receiptYear = String(activeSession || 
 
 function getHighestReceiptSerialForActiveSession(receiptYear = String(activeSession || "").split("-")[0]) {
   const sessionPayments = collectedPayments[activeSession] || {};
-  return Object.values(sessionPayments).reduce((max, payments) => {
+  const highestActiveSerial = Object.values(sessionPayments).reduce((max, payments) => {
     return Math.max(max, ...(payments || []).map(payment => getReceiptSerial(payment.receipt, receiptYear)));
   }, 0);
+  const deletedReceipts = deletedPaymentReceipts?.[activeSession] || {};
+  const highestDeletedSerial = Object.values(deletedReceipts).reduce((max, receipts) => {
+    if (!receipts || typeof receipts !== "object") return max;
+    return Math.max(max, ...Object.keys(receipts).map(receipt => getReceiptSerial(receipt, receiptYear)));
+  }, 0);
+  return Math.max(highestActiveSerial, highestDeletedSerial);
 }
 
 function isReceiptNoUsed(receiptNo = "", ignoredPaymentId = "") {
   const cleanReceipt = String(receiptNo || "").trim();
   if (!cleanReceipt) return false;
+  const deletedReceipts = deletedPaymentReceipts?.[activeSession] || {};
+  if (Object.values(deletedReceipts).some(receipts => receipts && typeof receipts === "object" && receipts[cleanReceipt.toLowerCase()])) {
+    return true;
+  }
   const sessionPayments = collectedPayments[activeSession] || {};
   return Object.values(sessionPayments).some(payments => (payments || []).some(payment =>
     String(payment.receipt || "").trim() === cleanReceipt &&

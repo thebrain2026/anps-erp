@@ -3757,6 +3757,7 @@
       const session = voiceFeeActiveSession(erpState);
       const receiptYear = String(session || new Date().getFullYear()).split("-")[0] || String(new Date().getFullYear());
       const sessionPayments = erpState.collectedPayments?.[session] || {};
+      const deletedReceipts = erpState.deletedPaymentReceipts?.[session] || {};
       const usedReceipts = new Set();
       const highest = Object.values(sessionPayments).reduce((max, payments) => {
         if (!Array.isArray(payments)) return max;
@@ -3766,7 +3767,15 @@
         });
         return Math.max(max, ...payments.map(payment => voiceFeeReceiptSerial(payment?.receipt || payment?.receiptNo, receiptYear)));
       }, 0);
-      let nextSerial = highest + 1;
+      const highestDeleted = Object.values(deletedReceipts).reduce((max, receipts) => {
+        if (!receipts || typeof receipts !== "object") return max;
+        Object.keys(receipts).forEach(receipt => {
+          const cleanReceipt = String(receipt || "").trim();
+          if (cleanReceipt) usedReceipts.add(cleanReceipt);
+        });
+        return Math.max(max, ...Object.keys(receipts).map(receipt => voiceFeeReceiptSerial(receipt, receiptYear)));
+      }, 0);
+      let nextSerial = Math.max(highest, highestDeleted) + 1;
       let candidate = `ANPS/${receiptYear}-${String(nextSerial).padStart(3, "0")}`;
       while (usedReceipts.has(candidate)) {
         nextSerial += 1;
