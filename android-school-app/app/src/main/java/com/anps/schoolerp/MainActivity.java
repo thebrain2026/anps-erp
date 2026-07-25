@@ -14,6 +14,7 @@ import android.os.Bundle;
 import android.os.Build;
 import android.view.View;
 import android.webkit.JavascriptInterface;
+import android.webkit.PermissionRequest;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
@@ -33,6 +34,7 @@ public class MainActivity extends Activity {
     private LinearLayout offlineView;
     private ProgressBar progressBar;
     private String currentPushToken = "";
+    private PermissionRequest pendingAudioPermissionRequest;
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -81,6 +83,11 @@ public class MainActivity extends Activity {
                 progressBar.setProgress(newProgress);
                 progressBar.setVisibility(newProgress >= 100 ? View.GONE : View.VISIBLE);
             }
+
+            @Override
+            public void onPermissionRequest(PermissionRequest request) {
+                runOnUiThread(() -> handleWebPermissionRequest(request));
+            }
         });
 
         webView.setWebViewClient(new WebViewClient() {
@@ -127,6 +134,44 @@ public class MainActivity extends Activity {
     private void requestNotificationPermission() {
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, 201);
+        }
+    }
+
+    private void handleWebPermissionRequest(PermissionRequest request) {
+        if (request == null || !isAudioCaptureRequest(request)) {
+            if (request != null) request.deny();
+            return;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M
+                && checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            pendingAudioPermissionRequest = request;
+            requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, 202);
+            return;
+        }
+        request.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE});
+    }
+
+    private boolean isAudioCaptureRequest(PermissionRequest request) {
+        for (String resource : request.getResources()) {
+            if (PermissionRequest.RESOURCE_AUDIO_CAPTURE.equals(resource)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode != 202 || pendingAudioPermissionRequest == null) {
+            return;
+        }
+        PermissionRequest request = pendingAudioPermissionRequest;
+        pendingAudioPermissionRequest = null;
+        if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            request.grant(new String[]{PermissionRequest.RESOURCE_AUDIO_CAPTURE});
+        } else {
+            request.deny();
         }
     }
 
