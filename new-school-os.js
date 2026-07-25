@@ -966,6 +966,7 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
 }
 
 function mergeSetupSafeState(backendState = {}, localSnapshot = {}) {
+  const deletedMap = getDeletedPaymentReceiptMap(backendState.deletedPaymentReceipts, localSnapshot.deletedPaymentReceipts);
   return {
     ...backendState,
     customAdmissionClasses: mergePrimitiveList(backendState.customAdmissionClasses || [], localSnapshot.customAdmissionClasses || []),
@@ -982,7 +983,10 @@ function mergeSetupSafeState(backendState = {}, localSnapshot = {}) {
     transportVehicles: mergeObjectListByKey(backendState.transportVehicles || [], localSnapshot.transportVehicles || [], ["id", "vehicleNo"]),
     transportVehicleAssignments: mergeObjectListByKey(backendState.transportVehicleAssignments || [], localSnapshot.transportVehicleAssignments || [], ["routeName", "vehicleNo", "shift"]),
     transportRoutePickupPoints: mergeObjectListByKey(backendState.transportRoutePickupPoints || [], localSnapshot.transportRoutePickupPoints || [], ["routeName", "villageName", "shift"]),
-    financeSessions: mergeFinanceSessions(backendState.financeSessions || {}, localSnapshot.financeSessions || {})
+    financeSessions: mergeFinanceSessions(backendState.financeSessions || {}, localSnapshot.financeSessions || {}),
+    deletedPaymentReceipts: deletedMap,
+    collectedPayments: mergeCollectedPayments(backendState.collectedPayments || {}, localSnapshot.collectedPayments || {}, deletedMap),
+    receiptSerial: Math.max(Number(backendState.receiptSerial || 0), Number(localSnapshot.receiptSerial || 0))
   };
 }
 
@@ -1002,7 +1006,10 @@ function hasSetupSafeMergeChanges(mergedState = {}, backendState = {}) {
     "transportVehicles",
     "transportVehicleAssignments",
     "transportRoutePickupPoints",
-    "financeSessions"
+    "financeSessions",
+    "deletedPaymentReceipts",
+    "collectedPayments",
+    "receiptSerial"
   ].some(key => JSON.stringify(mergedState[key] || null) !== JSON.stringify(backendState[key] || null));
 }
 
