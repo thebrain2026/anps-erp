@@ -308,6 +308,7 @@ const titleMap = {
   dailyAssignment: "Daily Assignment",
   reportStudentInformation: "Student Information Report",
   dailyCollectionReport: "Daily Collection Report",
+  mobileReceiptLog: "Mobile Receipt Log",
   entireSchoolFeesReport: "Entire School Fees",
   classTimetable: "Class Timetable",
   teacherTimetable: "Teachers Time Table",
@@ -355,7 +356,7 @@ const ACCESS_PERMISSION_GROUPS = [
   {name: "Human Resources", modules: ["staffDetails", "staffAttendance", "applyLeave", "leaveType", "approveLeave", "teachersRating", "teacherAdvisory", "department", "designation", "disabledStaff"]},
   {name: "Communication", modules: ["noticeBoard", "teacherNoticeRequests", "sendSms"]},
   {name: "Homework", modules: ["addHomework", "teacherHomework", "homeworkDoubts", "dailyAssignment"]},
-  {name: "Reports", modules: ["reportStudentInformation", "dailyCollectionReport", "entireSchoolFeesReport"]},
+  {name: "Reports", modules: ["reportStudentInformation", "dailyCollectionReport", "mobileReceiptLog", "entireSchoolFeesReport"]},
   {name: "Academic", modules: ["classTimetable", "teacherTimetable", "classTeacherAssignment", "syllabus", "marksheet", "externalExamFees", "academicProfile", "teacherComplaint", "holidayReport", "annualCalendar"]},
   {name: "Certificate", modules: ["studentIdCard", "teacherIdCard"]},
   {name: "Settings", modules: ["masterAdmin", "schoolManagement", "userAccessSettings", "studentUserLogin", "mobileAppActivity"]},
@@ -1988,6 +1989,7 @@ function renderActiveView(viewName = document.querySelector(".view.active")?.id 
     renderStudentGenderRatioReport();
     renderStudentTeacherRatioReport();
   }
+  if (viewName === "mobileReceiptLog") renderMobileReceiptLog();
 }
 
 function setView(viewName, options = {}) {
@@ -2015,6 +2017,9 @@ function setView(viewName, options = {}) {
   }
   if (viewName === "dailyCollectionReport") {
     renderDailyCollectionReport();
+  }
+  if (viewName === "mobileReceiptLog") {
+    renderMobileReceiptLog();
   }
   if (viewName === "entireSchoolFeesReport") {
     const yearlyPanel = document.getElementById("entireSchoolYearlyFeesPanel");
@@ -3615,6 +3620,78 @@ function toggleDailyCollectionDetails(dateLabel = "") {
   }
   activeDailyCollectionDate = activeDailyCollectionDate === dateLabel ? "" : dateLabel;
   renderDailyCollectionReport();
+}
+
+function isMobileIssuedPayment(payment = {}) {
+  const source = String(payment.source || "").toLowerCase();
+  const remarks = String(payment.remarks || "").toLowerCase();
+  const by = String(payment.by || payment.role || "").toLowerCase();
+  return source.includes("voice fee")
+    || source.includes("mobile")
+    || remarks.includes("voice fee assistant")
+    || by.includes("mobile app");
+}
+
+function getMobileReceiptRows() {
+  return getAllLedgerPayments()
+    .filter(isMobileIssuedPayment)
+    .map(payment => ({
+      date: formatDateDDMMYYYY(payment.date),
+      receipt: payment.receipt || "-",
+      studentName: findStudentByAdmissionNo(payment.admissionNo)?.name || "-",
+      admissionNo: payment.admissionNo || "-",
+      head: payment.head || "-",
+      bank: Number(payment.bank || 0),
+      cash: Number(payment.cash || 0),
+      total: Number(payment.bank || 0) + Number(payment.cash || 0),
+      by: payment.by || "-",
+      remarks: payment.remarks || payment.source || "-"
+    }))
+    .sort((a, b) => {
+      const dateDiff = parseDateDDMMYYYY(b.date) - parseDateDDMMYYYY(a.date);
+      if (dateDiff) return dateDiff;
+      return String(b.receipt || "").localeCompare(String(a.receipt || ""), undefined, {numeric: true});
+    });
+}
+
+function renderMobileReceiptLog() {
+  const summary = document.getElementById("mobileReceiptSummary");
+  const rows = document.getElementById("mobileReceiptRows");
+  if (!summary || !rows) return;
+  const dateFilter = document.getElementById("mobileReceiptDateFilter");
+  const selectedDateLabel = dateFilter?.value ? normalizeCollectionHistoryDateValue(dateFilter.value) : "";
+  const allRows = getMobileReceiptRows();
+  const reportRows = selectedDateLabel ? allRows.filter(row => row.date === selectedDateLabel) : allRows;
+  const daySet = new Set(reportRows.map(row => row.date));
+  const studentSet = new Set(reportRows.map(row => row.admissionNo).filter(Boolean));
+  const totals = reportRows.reduce((sum, row) => {
+    sum.bank += Number(row.bank || 0);
+    sum.cash += Number(row.cash || 0);
+    sum.total += Number(row.total || 0);
+    return sum;
+  }, {bank: 0, cash: 0, total: 0});
+  summary.innerHTML = `
+    <article><span>${selectedDateLabel ? "Selected Date" : "Mobile Days"}</span><strong>${selectedDateLabel ? escapeHtml(selectedDateLabel) : daySet.size}</strong></article>
+    <article><span>Mobile Receipts</span><strong>${reportRows.length}</strong></article>
+    <article><span>Students</span><strong>${studentSet.size}</strong></article>
+    <article><span>Bank</span><strong>${formatRs(totals.bank)}</strong></article>
+    <article><span>Cash</span><strong>${formatRs(totals.cash)}</strong></article>
+    <article><span>Total</span><strong>${formatRs(totals.total)}</strong></article>
+  `;
+  rows.innerHTML = reportRows.map(row => `
+    <tr>
+      <td>${escapeHtml(row.date || "-")}</td>
+      <td><strong>${escapeHtml(row.receipt || "-")}</strong></td>
+      <td>${escapeHtml(row.studentName || "-")}</td>
+      <td>${escapeHtml(row.admissionNo || "-")}</td>
+      <td>${escapeHtml(row.head || "-")}</td>
+      <td>${formatRs(row.bank || 0)}</td>
+      <td>${formatRs(row.cash || 0)}</td>
+      <td><strong>${formatRs(row.total || 0)}</strong></td>
+      <td>${escapeHtml(row.by || "-")}</td>
+      <td>${escapeHtml(row.remarks || "-")}</td>
+    </tr>
+  `).join("") || `<tr><td colspan="10">${selectedDateLabel ? "No mobile receipt found for selected date." : "No mobile receipt found yet."}</td></tr>`;
 }
 
 function getMonthReceivedTotal(month) {
@@ -8741,6 +8818,7 @@ function mergePaymentsForReceipt(admissionNo, receiptNo) {
   const amount = payments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0) || (bankAmount + cashAmount);
   const remarks = [...new Set(payments.map(payment => String(payment.remarks || "").trim()).filter(Boolean))].join(" | ");
   const collectors = [...new Set(payments.map(payment => String(payment.by || "").trim()).filter(Boolean))].join(", ");
+  const sources = [...new Set(payments.map(payment => String(payment.source || "").trim()).filter(Boolean))].join(", ");
   return {
     ...payments[0],
     amount,
@@ -8750,6 +8828,7 @@ function mergePaymentsForReceipt(admissionNo, receiptNo) {
     mode: bankAmount > 0 && cashAmount > 0 ? "Bank + Cash" : bankAmount > 0 ? "Bank" : "Cash",
     by: collectors || payments[0].by,
     remarks,
+    source: sources || payments[0].source || "",
     allocations
   };
 }
@@ -8783,6 +8862,7 @@ function buildLedgerPaymentRow(student, payment) {
     fine,
     discount,
     remarks: payment.remarks || "",
+    source: payment.source || "",
     by: payment.by
   };
 }
@@ -8801,6 +8881,7 @@ function getLedgerPayments(student) {
         cashAmount: Number(existing.cashAmount || 0) + Number(payment.cashAmount || 0),
         discountAmount: Number(existing.discountAmount || 0) + Number(payment.discountAmount || 0),
         remarks: [...new Set([existing.remarks, payment.remarks].map(item => String(item || "").trim()).filter(Boolean))].join(" | "),
+        source: [...new Set([existing.source, payment.source].map(item => String(item || "").trim()).filter(Boolean))].join(", "),
         allocations: [...(existing.allocations || []), ...(payment.allocations || [])]
       });
     }
@@ -15419,6 +15500,21 @@ document.getElementById("dailyCollectionClearDate")?.addEventListener("click", (
   if (input) input.value = "";
   activeDailyCollectionDate = "";
   renderDailyCollectionReport();
+});
+document.getElementById("mobileReceiptDateFilter")?.addEventListener("change", event => {
+  normalizeCollectionHistoryDateInput(event.target);
+  renderMobileReceiptLog();
+});
+document.getElementById("mobileReceiptDateFilter")?.addEventListener("keydown", event => {
+  if (event.key !== "Enter") return;
+  event.preventDefault();
+  normalizeCollectionHistoryDateInput(event.target);
+  renderMobileReceiptLog();
+});
+document.getElementById("mobileReceiptClearDate")?.addEventListener("click", () => {
+  const input = document.getElementById("mobileReceiptDateFilter");
+  if (input) input.value = "";
+  renderMobileReceiptLog();
 });
 
 classTimetableForm.addEventListener("submit", event => {

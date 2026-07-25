@@ -100,6 +100,7 @@
           <div class="nav-sub">
             <button data-view="reportStudentInformation" type="button">Student Information</button>
             <button data-view="dailyCollectionReport" type="button">Daily Collection Report</button>
+            <button data-view="mobileReceiptLog" type="button">Mobile Receipt Log</button>
             <button data-view="entireSchoolFeesReport" type="button">Entire School Fees</button>
           </div>
         </div>
@@ -1806,6 +1807,33 @@
               <thead><tr><th>Date</th><th>Receipts</th><th>Students</th><th>Entry Role</th><th>Bank</th><th>Cash</th><th>Fine</th><th>Discount</th><th>Total Collection</th></tr></thead>
               <tbody id="dailyCollectionReportRows">
                 <tr><td colspan="9">No daily collection found yet.</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="mobileReceiptLog">
+        <div class="panel daily-collection-report-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Reports</p>
+              <h2>Mobile Receipt Log</h2>
+              <small>Mobile app theke issue hoya receipt day-wise dekhar report.</small>
+            </div>
+          </div>
+          <div class="daily-collection-filter">
+            <label>Date Filter
+              <input id="mobileReceiptDateFilter" type="text" placeholder="DD or DD-MM-YYYY" />
+            </label>
+            <button class="ghost-action" id="mobileReceiptClearDate" type="button">Clear</button>
+          </div>
+          <div class="daily-collection-summary" id="mobileReceiptSummary"></div>
+          <div class="report-table-panel table-wrap daily-collection-report-table">
+            <table>
+              <thead><tr><th>Date</th><th>Receipt No.</th><th>Student</th><th>Admission No.</th><th>Fee Head</th><th>Bank</th><th>Cash</th><th>Total</th><th>Issued By</th><th>Remarks</th></tr></thead>
+              <tbody id="mobileReceiptRows">
+                <tr><td colspan="10">No mobile receipt found yet.</td></tr>
               </tbody>
             </table>
           </div>
