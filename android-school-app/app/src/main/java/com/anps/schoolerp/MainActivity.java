@@ -228,6 +228,7 @@ public class MainActivity extends Activity {
             public void onPartialResults(Bundle partialResults) {
                 ArrayList<String> matches = partialResults.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
                 nativeSpeechLastPartial = matches == null || matches.isEmpty() ? "" : matches.get(0);
+                sendNativeSpeechPartial(nativeSpeechLastPartial);
             }
             @Override public void onEvent(int eventType, Bundle params) {}
 
@@ -365,6 +366,17 @@ public class MainActivity extends Activity {
                 + ",text:" + JSONObject.quote(text == null ? "" : text)
                 + ",error:" + JSONObject.quote(error == null ? "" : error)
                 + "});";
+        webView.post(() -> webView.evaluateJavascript(script, null));
+    }
+
+    private void sendNativeSpeechPartial(String text) {
+        String cleanText = text == null ? "" : text.trim();
+        if (cleanText.isEmpty()) {
+            return;
+        }
+        String script = "window.onAnpsNativeSpeechPartial && window.onAnpsNativeSpeechPartial("
+                + JSONObject.quote(cleanText)
+                + ");";
         webView.post(() -> webView.evaluateJavascript(script, null));
     }
 

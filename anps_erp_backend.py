@@ -1626,6 +1626,57 @@ def merge_state_without_losing_receipts(server_state, incoming_state):
     return merged
 
 
+def receipt_serial(receipt_no="", receipt_year=""):
+    match = re.match(r"^ANPS/(\d{4})-(\d+)$", str(receipt_no or "").strip(), re.IGNORECASE)
+    if not match or (receipt_year and match.group(1) != str(receipt_year)):
+        return 0
+    return int(match.group(2) or 0)
+
+
+def next_receipt_no_for_state(state, session):
+    receipt_year = str(session or datetime.now().year).split("-")[0] or str(datetime.now().year)
+    payments_by_student = ((state.get("collectedPayments") or {}).get(session) or {})
+    highest = 0
+    used = set()
+    if isinstance(payments_by_student, dict):
+        for payments in payments_by_student.values():
+            if not isinstance(payments, list):
+                continue
+            for payment in payments:
+                receipt = str((payment or {}).get("receipt") or "").strip()
+                if receipt:
+                    used.add(receipt)
+                    highest = max(highest, receipt_serial(receipt, receipt_year))
+    serial = highest + 1
+    while True:
+        candidate = f"ANPS/{receipt_year}-{serial:03d}"
+        if candidate not in used:
+            return candidate
+        serial += 1
+
+
+def find_student_by_admission(state, admission_no):
+    wanted = normalize_admission_no(admission_no)
+    for student in state.get("students", []) or []:
+        current = student.get("admissionNo") or student.get("id") or student.get("admission_no") or ""
+        if normalize_admission_no(current) == wanted:
+            return student
+    return {}
+
+
+def payment_receipt_owner(state, session, receipt_no):
+    receipt = str(receipt_no or "").strip().lower()
+    if not receipt:
+        return ""
+    session_payments = ((state.get("collectedPayments") or {}).get(session) or {})
+    if not isinstance(session_payments, dict):
+        return ""
+    for admission_no, payments in session_payments.items():
+        if any(str((payment or {}).get("receipt") or "").strip().lower() == receipt for payment in payments or []):
+            return admission_no
+    return ""
+
+
 def merge_object_lists(server_items, incoming_items, key_fields):
     merged = []
     index_by_key = {}
@@ -3981,6 +4032,8 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             return self.whatsapp_send_request()
         if path == "/api/mobile/push-token":
             return self.mobile_push_token_request()
+        if path == "/api/mobile/fee-payment":
+            return self.mobile_fee_payment_request()
         if path == "/api/notifications/notice":
             return self.notice_push_request()
         if path == "/api/notifications/homework":
@@ -4032,6 +4085,61 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
                 state = merge_state_without_losing_receipts(current_record.get("state") or {}, state)
             updated_at = write_state(state)
             self.json_response({"ok": True, "updated_at": updated_at, "state": state})
+        except Exception as exc:
+            self.json_response({"ok": False, "error": str(exc)}, status=400)
+
+    def mobile_fee_payment_request(self):
+        length = int(self.headers.get("Content-Length") or "0")
+        if length > MAX_BODY:
+            self.send_error(413, "Request body too large")
+            return
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+            admission_no = str(payload.get("admissionNo") or payload.get("admission_no") or "").strip()
+            payment = payload.get("payment") or {}
+            if not admission_no or not isinstance(payment, dict):
+                raise ValueError("admissionNo and payment are required")
+            record = read_state_record() or {"state": {}}
+            state = record.get("state") or {}
+            session = str(
+                payload.get("session")
+                or state.get("activeSession")
+                or state.get("selectedSession")
+                or state.get("settings", {}).get("academicYear")
+                or "2026-27"
+            )
+            student = find_student_by_admission(state, admission_no)
+            if not student:
+                raise ValueError("Student not found in ERP data")
+            canonical_admission = str(student.get("admissionNo") or student.get("id") or admission_no).strip()
+            state["collectedPayments"] = state.get("collectedPayments") if isinstance(state.get("collectedPayments"), dict) else {}
+            state["collectedPayments"].setdefault(session, {})
+            existing_key = next(
+                (
+                    key
+                    for key in state["collectedPayments"][session].keys()
+                    if normalize_admission_no(key) == normalize_admission_no(canonical_admission)
+                ),
+                canonical_admission,
+            )
+            state["collectedPayments"][session].setdefault(existing_key, [])
+            payment = dict(payment)
+            payment["id"] = payment.get("id") or f"PAY-{int(datetime.now().timestamp() * 1000)}"
+            receipt = str(payment.get("receipt") or "").strip()
+            owner = payment_receipt_owner(state, session, receipt)
+            if not receipt or (owner and normalize_admission_no(owner) != normalize_admission_no(existing_key)):
+                receipt = next_receipt_no_for_state(state, session)
+                payment["receipt"] = receipt
+            payments = [
+                row
+                for row in state["collectedPayments"][session].get(existing_key, [])
+                if str((row or {}).get("id") or "") != str(payment["id"])
+                and str((row or {}).get("receipt") or "").strip().lower() != receipt.lower()
+            ]
+            payments.insert(0, payment)
+            state["collectedPayments"][session][existing_key] = payments
+            updated_at = write_state(state)
+            self.json_response({"ok": True, "updated_at": updated_at, "payment": payment, "state": state})
         except Exception as exc:
             self.json_response({"ok": False, "error": str(exc)}, status=400)
 

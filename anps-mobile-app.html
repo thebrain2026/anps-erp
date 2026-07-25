@@ -2531,6 +2531,15 @@
         state.erpUpdatedAt = saved.updated_at || "";
         return result;
       },
+      async saveVoiceFeePayment(admissionNo, payment, session = "") {
+        const payload = await this.request("/mobile/fee-payment", {
+          method: "POST",
+          body: JSON.stringify({admissionNo, payment, session})
+        });
+        state.erpState = payload.state || state.erpState || {};
+        state.erpUpdatedAt = payload.updated_at || state.erpUpdatedAt || "";
+        return payload;
+      },
       async submitHomeworkDoubt(homework, message) {
         const text = normalizeText(message);
         if (!text) throw new Error("Write your homework doubt first.");
@@ -4015,51 +4024,53 @@
       }
       let savedPayment = null;
       try {
-        await AppApi.saveMutatedState(erpState => {
-          const student = voiceFeeFindStudentInState(erpState, formParsed.admissionNo);
-          if (!student) throw new Error("Student not found in latest ERP data.");
-          const saveParsed = {...formParsed, mode};
-          const draft = voiceFeePaymentDraft(erpState, student, saveParsed);
-          const totalAmount = Number(saveParsed.amount || 0);
-          const discountAmount = Math.max(0, Number(saveParsed.discountAmount || 0));
-          if (!draft.selectedItems.length || totalAmount + discountAmount <= 0) throw new Error("No payable Tuition or Transport due found.");
-          const bankAmount = Number(saveParsed.bankAmount || 0);
-          const cashAmount = Number(saveParsed.cashAmount || 0);
-          let remainingAmount = Math.min(totalAmount + discountAmount, Number(draft.grossAmount || 0));
-          const paymentDate = new Date();
-          const allocationDate = voiceFeeFormatDateDDMMYYYY(paymentDate);
-          const allocations = [];
-          draft.selectedItems.forEach(item => {
-            if (remainingAmount <= 0) return;
-            const finePaid = Math.min(Number(item.fine || 0), remainingAmount);
-            if (finePaid > 0) {
-              allocations.push({head: voiceFeeLateFineHead(item.head), amount: finePaid, month: item.month || undefined, date: allocationDate, paymentType: item.paymentType || undefined});
-              remainingAmount -= finePaid;
-            }
-            const feePaid = Math.min(Number(item.amount || 0), remainingAmount);
-            if (feePaid > 0) {
-              allocations.push({head: item.head, amount: feePaid, month: item.month || undefined, date: allocationDate, paymentType: item.paymentType || undefined});
-              remainingAmount -= feePaid;
-            }
-          });
-          if (!allocations.length) throw new Error("Nothing could be allocated to Tuition or Transport.");
-          savedPayment = {
-            id: voiceFeeCreatePaymentId(),
-            date: voiceFeeFormatDateDDMMYYYY(paymentDate),
-            receipt: voiceFeeNextReceiptNo(erpState),
-            mode,
-            by: state.user?.role || state.role || "Mobile App",
-            amount: totalAmount,
-            discountAmount,
-            remarks: saveParsed.remarks || `Voice Fee Assistant${state.user?.name ? ` - ${state.user.name}` : ""}`,
-            bankAmount,
-            cashAmount,
-            allocations,
-            source: "Voice Fee Assistant"
-          };
-          voiceFeePaymentBucket(erpState, student.admissionNo || formParsed.admissionNo).unshift(savedPayment);
-          return savedPayment;
+        const latest = await AppApi.request("/state", { method: "GET" });
+        const erpState = latest.state || state.erpState || {};
+        state.erpState = erpState;
+        state.erpUpdatedAt = latest.updated_at || state.erpUpdatedAt || "";
+        const student = voiceFeeFindStudentInState(erpState, formParsed.admissionNo);
+        if (!student) throw new Error("Student not found in latest ERP data.");
+        const saveParsed = {...formParsed, mode};
+        const draft = voiceFeePaymentDraft(erpState, student, saveParsed);
+        const totalAmount = Number(saveParsed.amount || 0);
+        const discountAmount = Math.max(0, Number(saveParsed.discountAmount || 0));
+        if (!draft.selectedItems.length || totalAmount + discountAmount <= 0) throw new Error("No payable Tuition or Transport due found.");
+        const bankAmount = Number(saveParsed.bankAmount || 0);
+        const cashAmount = Number(saveParsed.cashAmount || 0);
+        let remainingAmount = Math.min(totalAmount + discountAmount, Number(draft.grossAmount || 0));
+        const paymentDate = new Date();
+        const allocationDate = voiceFeeFormatDateDDMMYYYY(paymentDate);
+        const allocations = [];
+        draft.selectedItems.forEach(item => {
+          if (remainingAmount <= 0) return;
+          const finePaid = Math.min(Number(item.fine || 0), remainingAmount);
+          if (finePaid > 0) {
+            allocations.push({head: voiceFeeLateFineHead(item.head), amount: finePaid, month: item.month || undefined, date: allocationDate, paymentType: item.paymentType || undefined});
+            remainingAmount -= finePaid;
+          }
+          const feePaid = Math.min(Number(item.amount || 0), remainingAmount);
+          if (feePaid > 0) {
+            allocations.push({head: item.head, amount: feePaid, month: item.month || undefined, date: allocationDate, paymentType: item.paymentType || undefined});
+            remainingAmount -= feePaid;
+          }
         });
+        if (!allocations.length) throw new Error("Nothing could be allocated to Tuition or Transport.");
+        savedPayment = {
+          id: voiceFeeCreatePaymentId(),
+          date: voiceFeeFormatDateDDMMYYYY(paymentDate),
+          receipt: voiceFeeNextReceiptNo(erpState),
+          mode,
+          by: state.user?.role || state.role || "Mobile App",
+          amount: totalAmount,
+          discountAmount,
+          remarks: saveParsed.remarks || `Voice Fee Assistant${state.user?.name ? ` - ${state.user.name}` : ""}`,
+          bankAmount,
+          cashAmount,
+          allocations,
+          source: "Voice Fee Assistant"
+        };
+        const saved = await AppApi.saveVoiceFeePayment(student.admissionNo || formParsed.admissionNo, savedPayment, voiceFeeActiveSession(erpState));
+        savedPayment = saved.payment || savedPayment;
         toast(`Payment saved: ${savedPayment?.receipt || ""}`);
         renderVoiceFeeResult({...formParsed, mode, amount: savedPayment?.amount || formParsed.amount, savedReceipt: savedPayment?.receipt || ""});
       } catch (error) {
@@ -4231,6 +4242,13 @@
             $("#voiceFeeStatus").textContent = result?.error || "Voice input failed. Type the command manually.";
           }
           resetMicButton();
+        };
+        window.onAnpsNativeSpeechPartial = text => {
+          const partial = normalizeText(text || "");
+          if (!partial) return;
+          voiceFeeTranscriptBuffer = partial;
+          if (input) input.value = partial;
+          $("#voiceFeeStatus").textContent = "Listening... text is coming. Tap Done after full sentence.";
         };
         if (voiceFeeMicActive) {
           voiceFeeManualStopRequested = true;
