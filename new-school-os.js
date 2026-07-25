@@ -760,7 +760,10 @@ function getDeletedPaymentReceiptMap(...maps) {
 function isPaymentReceiptDeleted(deletedMap = {}, session = activeSession, admissionNo = "", receiptNo = "") {
   const normalizedAdmissionNo = normalizeAdmissionNo(admissionNo) || String(admissionNo || "").trim();
   const normalizedReceipt = String(receiptNo || "").trim().toLowerCase();
-  return Boolean(normalizedReceipt && deletedMap?.[session]?.[normalizedAdmissionNo]?.[normalizedReceipt]);
+  if (!normalizedReceipt) return false;
+  const sessionDeleted = deletedMap?.[session] || {};
+  if (sessionDeleted?.[normalizedAdmissionNo]?.[normalizedReceipt]) return true;
+  return Object.values(sessionDeleted).some(receipts => receipts && typeof receipts === "object" && receipts[normalizedReceipt]);
 }
 
 function markPaymentReceiptDeleted(admissionNo, receiptNo, session = activeSession) {
@@ -829,6 +832,17 @@ function mergeCollectedPayments(remoteCollected = {}, localCollected = {}, delet
     });
   });
   return merged;
+}
+
+function pruneDeletedCollectedPayments(targetCollected = collectedPayments, deletedMap = deletedPaymentReceipts) {
+  Object.entries(targetCollected || {}).forEach(([session, sessionRows]) => {
+    if (!sessionRows || typeof sessionRows !== "object") return;
+    Object.entries(sessionRows).forEach(([admissionNo, payments]) => {
+      if (!Array.isArray(payments)) return;
+      sessionRows[admissionNo] = payments.filter(payment => !isPaymentReceiptDeleted(deletedMap, session, admissionNo, payment?.receipt));
+    });
+  });
+  return targetCollected;
 }
 
 function mergeFinanceSessions(remoteSessions = {}, localSessions = {}) {
@@ -1259,6 +1273,7 @@ function applySavedState(saved = {}) {
       Object.keys(deletedPaymentReceipts).forEach(session => delete deletedPaymentReceipts[session]);
       Object.assign(deletedPaymentReceipts, getDeletedPaymentReceiptMap(saved.deletedPaymentReceipts));
     }
+    pruneDeletedCollectedPayments(collectedPayments, deletedPaymentReceipts);
     if (Number(saved.receiptSerial) > 0) {
       receiptSerial = Number(saved.receiptSerial);
     }

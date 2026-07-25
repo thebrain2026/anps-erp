@@ -1541,7 +1541,17 @@ def normalize_admission_no(value):
 def is_deleted_payment_receipt(deleted_map, session, admission_no, receipt_no):
     normalized_admission_no = normalize_admission_no(admission_no)
     normalized_receipt = str(receipt_no or "").strip().lower()
-    return bool(normalized_receipt and isinstance(deleted_map, dict) and deleted_map.get(str(session), {}).get(normalized_admission_no, {}).get(normalized_receipt))
+    if not normalized_receipt or not isinstance(deleted_map, dict):
+        return False
+    session_deleted = deleted_map.get(str(session), {})
+    if not isinstance(session_deleted, dict):
+        return False
+    if session_deleted.get(normalized_admission_no, {}).get(normalized_receipt):
+        return True
+    return any(
+        isinstance(receipts, dict) and receipts.get(normalized_receipt)
+        for receipts in session_deleted.values()
+    )
 
 
 def live_payment_list(payments, deleted_map, session, admission_no):
