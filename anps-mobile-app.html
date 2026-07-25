@@ -1098,6 +1098,43 @@
       font-weight: 800;
     }
 
+    .voice-fee-collection-panel {
+      border: 1px solid rgba(36, 107, 254, .14);
+      border-radius: 16px;
+      background: rgba(255,255,255,.84);
+      overflow: hidden;
+      margin-top: 12px;
+    }
+
+    .voice-fee-collection-head,
+    .voice-fee-collection-row {
+      display: grid;
+      grid-template-columns: minmax(110px, 1.4fr) .8fr .7fr .8fr;
+      gap: 8px;
+      align-items: center;
+      padding: 10px 12px;
+      font-size: .76rem;
+    }
+
+    .voice-fee-collection-head {
+      background: rgba(36, 107, 254, .08);
+      color: #10233f;
+      font-weight: 950;
+      text-transform: uppercase;
+      letter-spacing: .02em;
+    }
+
+    .voice-fee-collection-row {
+      border-top: 1px solid rgba(15, 23, 42, .08);
+      color: #23324d;
+      font-weight: 850;
+    }
+
+    .voice-fee-collection-row strong {
+      color: #10233f;
+      font-weight: 950;
+    }
+
     .voice-fee-copy {
       width: 100%;
       color: #fff;
@@ -3600,6 +3637,9 @@
       const lower = raw.toLowerCase();
       let match = lower.match(/\b(\d{1,2})[\/\-.](\d{1,2})(?:[\/\-.](\d{2,4}))?\b/);
       if (match) return voiceFeeDateFromParts(match[1], match[2], match[3] || "");
+      match = [...lower.matchAll(/\b(\d{1,2})\s+(\d{1,2})\s+(\d{2,4})\b/g)]
+        .find(item => voiceFeeDateFromParts(item[1], item[2], item[3]));
+      if (match) return voiceFeeDateFromParts(match[1], match[2], match[3]);
       match = lower.match(/\b(\d{1,2})\s+(april|apr|may|june|jun|july|jul|august|aug|september|sep|sept|october|oct|november|nov|december|dec|january|jan|february|feb|march|mar|এপ্রিল|মে|জুন|জুলাই|আগস্ট|সেপ্টেম্বর|অক্টোবর|নভেম্বর|ডিসেম্বর|জানুয়ারি|ফেব্রুয়ারি|মার্চ)(?:\s+(\d{2,4}))?\b/i);
       if (match) return voiceFeeDateFromParts(match[1], voiceFeeMonthIndex(voiceFeeMonthAliases[match[2]] || match[2]) + 1, match[3] || "");
       match = lower.match(/\b(april|apr|may|june|jun|july|jul|august|aug|september|sep|sept|october|oct|november|nov|december|dec|january|jan|february|feb|march|mar)\s+(\d{1,2})(?:\s+(\d{2,4}))?\b/i);
@@ -3687,6 +3727,15 @@
         return new Date();
       }
       return date;
+    }
+
+    function voiceFeeMonthFromDate(erpState = {}, dateValue = "") {
+      if (!dateValue) return "";
+      const date = voiceFeeParseDateDDMMYYYY(dateValue);
+      return academicMonths.find(month => {
+        const monthDate = academicMonthDate(erpState, month, 1);
+        return monthDate.getFullYear() === date.getFullYear() && monthDate.getMonth() === date.getMonth();
+      }) || "";
     }
 
     function voiceFeeCreatePaymentId() {
@@ -3908,6 +3957,8 @@
       const months = Array.isArray(item.months) && item.months.length ? item.months : academicMonths;
       const selectedMonths = voiceFeeSelectedMonths(parsed).filter(month => months.includes(month));
       if (selectedMonths.length) return selectedMonths;
+      const dateMonth = voiceFeeMonthFromDate(erpState, parsed.date || "");
+      if (dateMonth && months.includes(dateMonth)) return [dateMonth];
       const tillDate = selectedMonthsToDate(erpState, months);
       const dueMonth = item.monthRows.find(row => tillDate.includes(row.month) && row.balance > 0.01)?.month;
       const parsedMonth = voiceFeeNormalizeMonth(parsed.month || "");
@@ -3988,15 +4039,28 @@
     function voiceFeePreviewAllocation(erpState = {}, student = {}, parsed = {}, items = []) {
       if (parsed.intent !== "payment-draft" || !Number(parsed.amount || 0)) return "";
       const draft = voiceFeePaymentDraft(erpState, student, parsed);
+      const totals = draft.selectedItems.reduce((sum, item) => {
+        sum.amount += Number(item.amount || 0);
+        sum.fine += Number(item.fine || 0);
+        sum.total += Number(item.total || 0);
+        return sum;
+      }, { amount: 0, fine: 0, total: 0 });
       return `
-        <div class="voice-fee-summary">
-          <b>Draft Allocation Preview</b>
-          ${draft.allocations.length ? draft.allocations.map(row => `
-            <div class="voice-fee-month-row">
-              <b>${escapeHtml(row.head)} - ${escapeHtml(row.month)}</b>
-              <span>Use Rs. ${Math.round(row.amount)}</span>
-              <small>Balance after: Rs. ${Math.round(row.balanceAfter)}</small>
-            </div>`).join("") : `<div class="voice-fee-month-row"><b>No due found</b><span>Rs. 0 used</span><small>Check Fee Book before posting.</small></div>`}
+        <div class="voice-fee-collection-panel">
+          <div class="voice-fee-collection-head"><span>Fee Head</span><span>Amount</span><span>Fine</span><span>Total</span></div>
+          ${draft.selectedItems.length ? draft.selectedItems.map(item => `
+            <div class="voice-fee-collection-row">
+              <strong>${escapeHtml(item.head)}${item.month ? ` (${escapeHtml(item.month)})` : ""}</strong>
+              <span>Rs. ${Math.round(Number(item.amount || 0))}</span>
+              <span>Rs. ${Math.round(Number(item.fine || 0))}</span>
+              <strong>Rs. ${Math.round(Number(item.total || 0))}</strong>
+            </div>`).join("") : `<div class="voice-fee-collection-row"><strong>No monthly dues found</strong><span>-</span><span>-</span><strong>Rs. 0</strong></div>`}
+          <div class="voice-fee-collection-row">
+            <strong>Total</strong>
+            <span>Rs. ${Math.round(totals.amount)}</span>
+            <span>Rs. ${Math.round(totals.fine)}</span>
+            <strong>Rs. ${Math.round(totals.total)}</strong>
+          </div>
           ${draft.remainingAmount > 0 ? `<div class="voice-fee-line"><span>Amount left after current dues</span><b>Rs. ${Math.round(draft.remainingAmount)}</b></div>` : ""}
         </div>`;
     }
