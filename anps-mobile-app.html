@@ -3579,6 +3579,34 @@
       return months.sort((a, b) => voiceFeeMonthIndex(a) - voiceFeeMonthIndex(b));
     }
 
+    function voiceFeeDateFromParts(day, month, year = "") {
+      const parsedDay = Number(day || 0);
+      const parsedMonth = Number(month || 0);
+      let parsedYear = Number(year || 0);
+      if (!parsedDay || !parsedMonth) return "";
+      if (!parsedYear) {
+        const today = new Date();
+        parsedYear = today.getFullYear();
+      } else if (parsedYear < 100) {
+        parsedYear += 2000;
+      }
+      const date = new Date(parsedYear, parsedMonth - 1, parsedDay);
+      if (date.getFullYear() !== parsedYear || date.getMonth() !== parsedMonth - 1 || date.getDate() !== parsedDay) return "";
+      return voiceFeeFormatDateDDMMYYYY(date);
+    }
+
+    function voiceFeeExtractDate(text = "") {
+      const raw = normalizeText(text);
+      const lower = raw.toLowerCase();
+      let match = lower.match(/\b(\d{1,2})[\/\-.](\d{1,2})(?:[\/\-.](\d{2,4}))?\b/);
+      if (match) return voiceFeeDateFromParts(match[1], match[2], match[3] || "");
+      match = lower.match(/\b(\d{1,2})\s+(april|apr|may|june|jun|july|jul|august|aug|september|sep|sept|october|oct|november|nov|december|dec|january|jan|february|feb|march|mar|এপ্রিল|মে|জুন|জুলাই|আগস্ট|সেপ্টেম্বর|অক্টোবর|নভেম্বর|ডিসেম্বর|জানুয়ারি|ফেব্রুয়ারি|মার্চ)(?:\s+(\d{2,4}))?\b/i);
+      if (match) return voiceFeeDateFromParts(match[1], voiceFeeMonthIndex(voiceFeeMonthAliases[match[2]] || match[2]) + 1, match[3] || "");
+      match = lower.match(/\b(april|apr|may|june|jun|july|jul|august|aug|september|sep|sept|october|oct|november|nov|december|dec|january|jan|february|feb|march|mar)\s+(\d{1,2})(?:\s+(\d{2,4}))?\b/i);
+      if (match) return voiceFeeDateFromParts(match[2], voiceFeeMonthIndex(voiceFeeMonthAliases[match[1]] || match[1]) + 1, match[3] || "");
+      return "";
+    }
+
     function voiceFeeParseCommand(text = "") {
       const raw = normalizeText(text);
       const lower = raw.toLowerCase();
@@ -3590,9 +3618,10 @@
       const feeHead = voiceFeeHeadAliases.find(item => item.tests.some(test => lower.includes(test)))?.head || "";
       const months = voiceFeeExtractMonths(raw);
       const month = months[0] || "";
+      const date = voiceFeeExtractDate(raw);
       const mode = lower.includes("cash") ? "Cash" : lower.includes("bank") || lower.includes("upi") || lower.includes("online") ? "Bank" : "";
       const intent = /due|dues|baki|pending|outstanding|balance/.test(lower) ? "due-check" : "payment-draft";
-      return { raw, admissionNo, amount, feeHead, month, months, mode, intent };
+      return { raw, admissionNo, amount, feeHead, month, months, date, mode, intent };
     }
 
     function voiceFeeStudentLine(student = {}) {
@@ -3643,6 +3672,21 @@
       const date = value instanceof Date ? value : new Date(value);
       if (Number.isNaN(date.getTime())) return voiceFeeFormatDateDDMMYYYY(new Date());
       return `${String(date.getDate()).padStart(2, "0")}-${String(date.getMonth() + 1).padStart(2, "0")}-${date.getFullYear()}`;
+    }
+
+    function voiceFeeParseDateDDMMYYYY(value = "") {
+      const match = String(value || "").trim().match(/^(\d{1,2})-(\d{1,2})-(\d{4})$/);
+      if (!match) return new Date();
+      const date = new Date(Number(match[3]), Number(match[2]) - 1, Number(match[1]));
+      if (
+        Number.isNaN(date.getTime()) ||
+        date.getFullYear() !== Number(match[3]) ||
+        date.getMonth() !== Number(match[2]) - 1 ||
+        date.getDate() !== Number(match[1])
+      ) {
+        return new Date();
+      }
+      return date;
     }
 
     function voiceFeeCreatePaymentId() {
@@ -3834,7 +3878,7 @@
       return 0;
     }
 
-    function voiceFeeMonthlyItems(erpState = {}, student = {}) {
+    function voiceFeeMonthlyItems(erpState = {}, student = {}, paymentDateValue = new Date()) {
       const payments = sessionPaymentsForStudent(erpState, student.admissionNo);
       return [
         { head: "Tuition Fee", amount: Number(student.tuitionFee || 0), months: student.feeMonths || academicMonths },
@@ -3850,7 +3894,7 @@
           const paid = Number(paidInfo.fee || 0);
           const finePaid = Number(paidInfo.fine || 0);
           const feeDue = Math.max(0, item.amount - paid);
-          const expectedFine = feeDue > 0 ? voiceFeeExpectedFine(erpState, item.head, month, new Date()) : 0;
+          const expectedFine = feeDue > 0 ? voiceFeeExpectedFine(erpState, item.head, month, paymentDateValue) : 0;
           const repeatFineWaived = (finePaid > 0 || voiceFeeHasAnyFinePaid(payments, month)) && feeDue > 0 && feeDue <= 500;
           const fineDue = repeatFineWaived ? 0 : Math.max(0, expectedFine - finePaid);
           const totalDue = feeDue + fineDue;
@@ -3872,7 +3916,7 @@
       return [...new Set(visible)].filter(month => months.includes(month)).slice(0, 2);
     }
 
-    function voiceFeeDraftRows(erpState = {}, student = {}, parsed = {}, items = voiceFeeMonthlyItems(erpState, student)) {
+    function voiceFeeDraftRows(erpState = {}, student = {}, parsed = {}, items = voiceFeeMonthlyItems(erpState, student, voiceFeeParseDateDDMMYYYY(parsed.date))) {
       const normalizedHead = voiceFeeNormalizeHead(parsed.feeHead || "");
       const monthlyHeads = ["Tuition Fee", "Transport Fees"];
       const targets = monthlyHeads.includes(normalizedHead)
@@ -3895,7 +3939,7 @@
     }
 
     function voiceFeePaymentDraft(erpState = {}, student = {}, parsed = {}) {
-      const items = voiceFeeMonthlyItems(erpState, student);
+      const items = voiceFeeMonthlyItems(erpState, student, voiceFeeParseDateDDMMYYYY(parsed.date));
       const selectedItems = voiceFeeDraftRows(erpState, student, parsed, items);
       const grossAmount = selectedItems.reduce((sum, item) => sum + Number(item.total || 0), 0);
       let remaining = Math.min(Number(parsed.amount || 0) + Number(parsed.discountAmount || 0), grossAmount);
@@ -3958,7 +4002,7 @@
     }
 
     function voiceFeeRenderMonthlyStatus(erpState = {}, student = {}, parsed = {}) {
-      const items = voiceFeeMonthlyItems(erpState, student);
+      const items = voiceFeeMonthlyItems(erpState, student, voiceFeeParseDateDDMMYYYY(parsed.date));
       if (!items.length) return `<div class="voice-fee-summary warning"><b>No tuition or transport setup found.</b><p>Fee Book may not have monthly fee amount for this student.</p></div>`;
       const totals = { tuition: 0, transport: 0, fine: 0, payable: 0 };
       const statusCards = items.map(item => {
@@ -4038,7 +4082,7 @@
         const bankAmount = Number(saveParsed.bankAmount || 0);
         const cashAmount = Number(saveParsed.cashAmount || 0);
         let remainingAmount = Math.min(totalAmount + discountAmount, Number(draft.grossAmount || 0));
-        const paymentDate = new Date();
+        const paymentDate = voiceFeeParseDateDDMMYYYY(saveParsed.date);
         const allocationDate = voiceFeeFormatDateDDMMYYYY(paymentDate);
         const allocations = [];
         draft.selectedItems.forEach(item => {
