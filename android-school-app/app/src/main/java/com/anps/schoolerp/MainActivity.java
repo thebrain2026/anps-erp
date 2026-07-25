@@ -149,6 +149,11 @@ public class MainActivity extends Activity {
         public void startVoiceInput() {
             runOnUiThread(() -> startNativeSpeechRecognition());
         }
+
+        @JavascriptInterface
+        public void stopVoiceInput() {
+            runOnUiThread(() -> stopNativeSpeechRecognition());
+        }
     }
 
     private void requestNotificationPermission() {
@@ -228,6 +233,12 @@ public class MainActivity extends Activity {
         intent.putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, false);
         intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak fee command");
         speechRecognizer.startListening(intent);
+    }
+
+    private void stopNativeSpeechRecognition() {
+        if (speechRecognizer != null) {
+            speechRecognizer.stopListening();
+        }
     }
 
     private String speechErrorMessage(int error) {

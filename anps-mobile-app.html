@@ -4202,29 +4202,49 @@
         if (input) input.value = "";
         $("#voiceFeeResult").innerHTML = "";
       });
+      let voiceFeeRecognition = null;
+      let voiceFeeMicActive = false;
       $("#voiceFeeMicBtn")?.addEventListener("click", () => {
         const micBtn = $("#voiceFeeMicBtn");
         const resetMicButton = () => {
           if (!micBtn) return;
           micBtn.textContent = "Start Mic";
           micBtn.disabled = false;
+          voiceFeeMicActive = false;
+          voiceFeeRecognition = null;
+        };
+        const markListening = () => {
+          $("#voiceFeeStatus").textContent = "Listening... speak fully, then tap Done.";
+          if (!micBtn) return;
+          micBtn.textContent = "Done";
+          micBtn.disabled = false;
+          voiceFeeMicActive = true;
         };
         window.onAnpsNativeSpeechResult = result => {
           if (result?.ok && result.text) {
             if (input) input.value = result.text;
-            $("#voiceFeeStatus").textContent = "Voice captured. Please review before posting in Fee Book.";
-            parseCurrent();
+            $("#voiceFeeStatus").textContent = "Voice captured. Review the text, then tap Check.";
           } else {
             $("#voiceFeeStatus").textContent = result?.error || "Voice input failed. Type the command manually.";
           }
           resetMicButton();
         };
-        if (window.AnpsNative?.startVoiceInput) {
-          $("#voiceFeeStatus").textContent = "Listening...";
-          if (micBtn) {
-            micBtn.textContent = "Listening...";
-            micBtn.disabled = true;
+        if (voiceFeeMicActive) {
+          if (window.AnpsNative?.stopVoiceInput) {
+            $("#voiceFeeStatus").textContent = "Finishing voice capture...";
+            window.AnpsNative.stopVoiceInput();
+            return;
           }
+          if (voiceFeeRecognition) {
+            $("#voiceFeeStatus").textContent = "Finishing voice capture...";
+            voiceFeeRecognition.stop();
+            return;
+          }
+          resetMicButton();
+          return;
+        }
+        if (window.AnpsNative?.startVoiceInput) {
+          markListening();
           try {
             window.AnpsNative.startVoiceInput();
           } catch (error) {
@@ -4244,19 +4264,15 @@
           return;
         }
         const recognition = new Recognition();
+        voiceFeeRecognition = recognition;
         recognition.lang = "en-IN";
         recognition.interimResults = false;
         recognition.maxAlternatives = 1;
-        $("#voiceFeeStatus").textContent = "Listening...";
-        if (micBtn) {
-          micBtn.textContent = "Listening...";
-          micBtn.disabled = true;
-        }
+        markListening();
         recognition.onresult = event => {
           const transcript = event.results?.[0]?.[0]?.transcript || "";
           if (input) input.value = transcript;
-          $("#voiceFeeStatus").textContent = "Voice captured. Please review before posting in Fee Book.";
-          parseCurrent();
+          $("#voiceFeeStatus").textContent = "Voice captured. Review the text, then tap Check.";
         };
         recognition.onerror = event => {
           const reason = event?.error || "";
@@ -4271,7 +4287,7 @@
           resetMicButton();
         };
         recognition.onend = () => {
-          if ($("#voiceFeeStatus")?.textContent === "Listening...") $("#voiceFeeStatus").textContent = "Mic stopped.";
+          if ($("#voiceFeeStatus")?.textContent === "Listening... speak fully, then tap Done.") $("#voiceFeeStatus").textContent = "Mic stopped. Review the text, then tap Check.";
           resetMicButton();
         };
         try {
