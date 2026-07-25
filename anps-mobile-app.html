@@ -4209,6 +4209,30 @@
           micBtn.textContent = "Start Mic";
           micBtn.disabled = false;
         };
+        window.onAnpsNativeSpeechResult = result => {
+          if (result?.ok && result.text) {
+            if (input) input.value = result.text;
+            $("#voiceFeeStatus").textContent = "Voice captured. Please review before posting in Fee Book.";
+            parseCurrent();
+          } else {
+            $("#voiceFeeStatus").textContent = result?.error || "Voice input failed. Type the command manually.";
+          }
+          resetMicButton();
+        };
+        if (window.AnpsNative?.startVoiceInput) {
+          $("#voiceFeeStatus").textContent = "Listening...";
+          if (micBtn) {
+            micBtn.textContent = "Listening...";
+            micBtn.disabled = true;
+          }
+          try {
+            window.AnpsNative.startVoiceInput();
+          } catch (error) {
+            $("#voiceFeeStatus").textContent = "Mic could not start. Close other mic apps and try again.";
+            resetMicButton();
+          }
+          return;
+        }
         const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!Recognition) {
           $("#voiceFeeStatus").textContent = "This browser does not support voice input. Use Chrome/Android Chrome or type the command.";

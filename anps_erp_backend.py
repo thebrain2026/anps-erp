@@ -3776,7 +3776,7 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "SAMEORIGIN")
         self.send_header("Referrer-Policy", "strict-origin-when-cross-origin")
-        self.send_header("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()")
+        self.send_header("Permissions-Policy", "camera=(), microphone=(self), geolocation=(), payment=()")
         self.send_header("Cross-Origin-Resource-Policy", "same-origin")
         self.send_header(
             "Content-Security-Policy",
