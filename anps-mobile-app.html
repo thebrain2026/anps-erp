@@ -845,6 +845,14 @@
       font-size: .94rem;
       text-shadow: 0 2px 8px rgba(16,26,74,.22);
     }
+    .module[data-nav="notice"] .module-icon {
+      background: linear-gradient(135deg, #0f766e, #22c8a6 52%, #f8bd45);
+      color: #fff;
+    }
+    .module[data-nav="voiceFee"] .module-icon {
+      background: linear-gradient(135deg, #101a4a, #7659ff 54%, #f06c9b);
+      color: #fff;
+    }
     .module[data-nav="calendar"] .module-icon {
       background: linear-gradient(135deg, #185ca8, #22c8a6 54%, #f8bd45);
       color: #fff;
@@ -894,6 +902,215 @@
     .card-head { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
     .card h3 { margin-bottom: 4px; font-size: 1rem; }
     .card p { margin-bottom: 0; color: var(--muted); font-weight: 650; }
+
+    .voice-fee-card {
+      position: relative;
+      overflow: hidden;
+      border-color: rgba(36, 107, 254, .2);
+      background:
+        radial-gradient(circle at 96% 0%, rgba(27, 182, 217, .24), transparent 34%),
+        radial-gradient(circle at 0% 100%, rgba(248, 189, 69, .22), transparent 34%),
+        linear-gradient(145deg, rgba(255,255,255,.96), rgba(239,246,255,.9));
+    }
+
+    .voice-fee-card::before {
+      content: "";
+      position: absolute;
+      inset: 0 0 auto;
+      height: 4px;
+      background: linear-gradient(90deg, #246bfe, #1bb6d9, #22c8a6, #f8bd45);
+    }
+
+    .voice-fee-panel {
+      display: grid;
+      gap: 12px;
+      margin-top: 12px;
+    }
+
+    .voice-fee-textarea {
+      width: 100%;
+      min-height: 110px;
+      border: 1px solid rgba(36, 107, 254, .2);
+      border-radius: 16px;
+      padding: 12px 13px;
+      background: rgba(255,255,255,.92);
+      color: #10233f;
+      font-weight: 850;
+      line-height: 1.44;
+      resize: vertical;
+      outline: none;
+    }
+
+    .voice-fee-select {
+      width: 100%;
+      min-height: 44px;
+      border: 1px solid rgba(36, 107, 254, .2);
+      border-radius: 14px;
+      padding: 0 12px;
+      background: rgba(255,255,255,.95);
+      color: #10233f;
+      font-weight: 900;
+      outline: none;
+    }
+
+    .voice-fee-actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+
+    .voice-fee-actions button,
+    .voice-fee-copy {
+      min-height: 42px;
+      border: 0;
+      border-radius: 14px;
+      padding: 0 12px;
+      font-weight: 950;
+      box-shadow: 0 12px 26px rgba(16, 26, 74, .12);
+    }
+
+    .voice-fee-mic {
+      color: #fff;
+      background: linear-gradient(135deg, #246bfe, #1bb6d9);
+    }
+
+    .voice-fee-parse {
+      color: #fff;
+      background: linear-gradient(135deg, #101a4a, #22c8a6);
+    }
+
+    .voice-fee-save {
+      color: #fff;
+      background: linear-gradient(135deg, #0f766e, #16a34a);
+    }
+
+    .voice-fee-save:disabled {
+      opacity: .62;
+      cursor: not-allowed;
+      box-shadow: none;
+    }
+
+    .voice-fee-input {
+      min-height: 42px;
+      width: 100%;
+      border: 1px solid rgba(95,107,136,.18);
+      border-radius: 14px;
+      padding: 0 12px;
+      background: rgba(255,255,255,.95);
+      color: #10233f;
+      font-weight: 850;
+      outline: none;
+      text-align: right;
+    }
+
+    .voice-fee-input.text {
+      text-align: left;
+    }
+
+    .voice-fee-clear {
+      color: #334155;
+      background: rgba(255,255,255,.9);
+      border: 1px solid rgba(95,107,136,.16) !important;
+    }
+
+    .voice-fee-result {
+      display: grid;
+      gap: 9px;
+    }
+
+    .voice-fee-summary {
+      padding: 12px;
+      border: 1px solid rgba(34, 200, 166, .22);
+      border-radius: 16px;
+      background: rgba(236, 253, 245, .86);
+    }
+
+    .voice-fee-summary.warning {
+      border-color: rgba(248, 189, 69, .3);
+      background: rgba(255, 251, 235, .9);
+    }
+
+    .voice-fee-summary.bad {
+      border-color: rgba(226, 80, 80, .24);
+      background: rgba(254, 242, 242, .9);
+    }
+
+    .voice-fee-summary b,
+    .voice-fee-line b {
+      color: #10233f;
+    }
+
+    .voice-fee-line {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 9px 10px;
+      border: 1px solid rgba(36, 107, 254, .12);
+      border-radius: 13px;
+      background: rgba(255,255,255,.82);
+      color: #526079;
+      font-size: .84rem;
+      font-weight: 850;
+    }
+
+    .voice-fee-status-grid {
+      display: grid;
+      gap: 10px;
+      margin-top: 12px;
+    }
+
+    .voice-fee-fee-card {
+      border: 1px solid rgba(36, 107, 254, .14);
+      border-radius: 16px;
+      background: rgba(255,255,255,.8);
+      overflow: hidden;
+    }
+
+    .voice-fee-fee-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      padding: 11px 12px;
+      background: rgba(36, 107, 254, .08);
+      color: #10233f;
+      font-weight: 950;
+    }
+
+    .voice-fee-month-row {
+      display: grid;
+      grid-template-columns: 48px 1fr auto;
+      gap: 8px;
+      align-items: center;
+      padding: 9px 12px;
+      border-top: 1px solid rgba(15, 23, 42, .08);
+      font-size: .78rem;
+      color: #23324d;
+    }
+
+    .voice-fee-month-row b {
+      font-weight: 950;
+      color: #10233f;
+    }
+
+    .voice-fee-month-row small {
+      color: rgba(16,35,63,.62);
+      font-weight: 800;
+    }
+
+    .voice-fee-copy {
+      width: 100%;
+      color: #fff;
+      background: linear-gradient(135deg, #f06c9b, #7659ff);
+    }
+
+    .voice-fee-note {
+      display: block;
+      color: #64748b;
+      font-size: .76rem;
+      font-weight: 850;
+      line-height: 1.38;
+    }
 
     .bus-location-card {
       position: relative;
@@ -1448,6 +1665,7 @@
 
     .tab { display: grid; place-items: center; gap: 3px; min-height: 58px; color: var(--muted); background: transparent; font-size: .67rem; }
     .tab i { font-style: normal; font-size: 1.1rem; }
+    .tab i svg { width: 19px; height: 19px; stroke: currentColor; fill: none; stroke-width: 2.3; stroke-linecap: round; stroke-linejoin: round; }
     .tab.active { color: #fff; background: linear-gradient(135deg, var(--deep), var(--blue)); }
     body.student-theme .tab.active { background: linear-gradient(135deg, #0f3d91, #1bb6d9); }
     body.teacher-theme .tab.active { background: linear-gradient(135deg, #40238f, #f06c9b); }
@@ -2048,6 +2266,16 @@
           <div class="stack" id="advisoryList"></div>
         </section>
 
+        <section class="view" id="voiceFeeView">
+          <div class="section-title"><h2>Voice Fee Assistant</h2><span id="voiceFeeScope">Staff only</span></div>
+          <div class="stack" id="voiceFeeHost"></div>
+        </section>
+
+        <section class="view" id="voiceFeeResultView">
+          <div class="section-title"><h2>Voice Fee Result</h2><span>Review only</span></div>
+          <div class="stack" id="voiceFeeResultPageHost"></div>
+        </section>
+
         <section class="view" id="ratingView">
           <div class="section-title"><h2 id="ratingTitle">Teacher Rating</h2><span id="ratingTotal"></span></div>
           <div class="stack" id="ratingFormHost"></div>
@@ -2127,6 +2355,8 @@
     const $ = selector => document.querySelector(selector);
     const attendanceLogo = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 3v3"/><path d="M16 3v3"/><path d="M4 8h16"/><rect x="4" y="5" width="16" height="16" rx="3"/><path d="m8 14 2.2 2.2L16 10.5"/></svg>`;
     const leaveLogo = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v5h5"/><path d="M9 14h6"/><path d="M9 17h4"/><path d="M9 11h2"/></svg>`;
+    const noticeLogo = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 9v6"/><path d="M10 8l8-4v16l-8-4"/><path d="M6 9h4v6H6a3 3 0 0 1 0-6Z"/><path d="m8 15 2 5"/></svg>`;
+    const voiceAssistantLogo = `<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0"/><path d="M12 18v3"/><path d="M8 21h8"/><path d="M17.5 5.5 20 4"/><path d="M6.5 5.5 4 4"/></svg>`;
     let state = { role: null, user: null, workspace: null, attendanceClass: "", teacherTimetableClass: "", language: "en" };
     let activitySession = { startedAt: "", lastSavedAt: 0, timer: null };
     let lastRegisteredPushToken = "";
@@ -3218,7 +3448,7 @@
       { id: "syllabus", label: "Syllabus", icon: "SY" },
       { id: "homework", label: "Homework", icon: "HW" },
       { id: "classwork", label: "Classwork", icon: "CW" },
-      { id: "notice", label: "Notice", icon: "NT" },
+      { id: "notice", label: "Notice", icon: noticeLogo },
       { id: "reminder", label: "Reminder", icon: "RM" },
       { id: "calendar", label: "Academic Calendar", icon: "AC" },
       { id: "holidayReport", label: "Holiday Report", icon: "HR" },
@@ -3237,8 +3467,9 @@
       { id: "homework", label: "Homework Entry", icon: "HW" },
       { id: "homeworkDoubts", label: "Homework Doubts", icon: "HD" },
       { id: "classwork", label: "Classwork Entry", icon: "CW" },
-      { id: "notice", label: "Notice", icon: "NT" },
+      { id: "notice", label: "Notice", icon: noticeLogo },
       { id: "advisory", label: "Teacher Advisory", icon: "TA" },
+      { id: "voiceFee", label: "Voice Fee Assistant", icon: voiceAssistantLogo },
       { id: "reminder", label: "Reminder", icon: "RM" },
       { id: "calendar", label: "Academic Calendar", icon: "AC" },
       { id: "complaints", label: "Complaints", icon: "CP" },
@@ -3256,6 +3487,746 @@
 
     function card({ title, meta, body, badge, status = "ok", className = "" }) {
       return `<article class="card ${className}"><div class="card-head"><div><h3>${title}</h3><p>${meta}</p></div>${badge ? `<span class="status ${status}">${badge}</span>` : ""}</div>${body ? `<p>${body}</p>` : ""}</article>`;
+    }
+
+    const voiceFeeMonthAliases = {
+      april: "Apr", apr: "Apr", epril: "Apr", "এপ্রিল": "Apr", "4": "Apr",
+      may: "May", "5": "May",
+      "মে": "May",
+      june: "Jun", jun: "Jun", "জুন": "Jun", "6": "Jun",
+      july: "Jul", jul: "Jul", julai: "Jul", "জুলাই": "Jul", "7": "Jul",
+      august: "Aug", aug: "Aug", agust: "Aug", "আগস্ট": "Aug", "8": "Aug",
+      september: "Sep", sep: "Sep", sept: "Sep", "সেপ্টেম্বর": "Sep", "9": "Sep",
+      october: "Oct", oct: "Oct", "অক্টোবর": "Oct", "10": "Oct",
+      november: "Nov", nov: "Nov", "নভেম্বর": "Nov", "11": "Nov",
+      december: "Dec", dec: "Dec", "ডিসেম্বর": "Dec", "12": "Dec",
+      january: "Jan", jan: "Jan", "জানুয়ারি": "Jan", "1": "Jan",
+      february: "Feb", feb: "Feb", "ফেব্রুয়ারি": "Feb", "2": "Feb",
+      march: "Mar", mar: "Mar", "মার্চ": "Mar", "3": "Mar"
+    };
+
+    const voiceFeeHeadAliases = [
+      { head: "Transport Fees", tests: ["transport", "transport fee", "transport fees", "bus", "vehicle", "route"] },
+      { head: "Tuition Fee", tests: ["tuition", "tuition fee", "tuition fees", "tution", "tution fee", "school fee", "monthly fee", "monthly"] },
+      { head: "Admission Fee", tests: ["admission fee", "admission fees"] },
+      { head: "Annual Fee", tests: ["annual", "annual fee", "annual fees", "yearly", "yearly fee"] },
+      { head: "Form Fee", tests: ["form fee", "form fees", "form"] },
+      { head: "Robotics Fees", tests: ["robotic", "robotics", "robotics fee", "robotics fees"] },
+      { head: "Day Boarding Fees", tests: ["day boarding", "day boarding fee", "day boarding fees", "boarding"] },
+      { head: "Tiffin Fees", tests: ["tiffin", "tiffin fee", "tiffin fees"] },
+      { head: "Others Fees", tests: ["others", "others fee", "others fees", "other fee", "other fees"] }
+    ];
+
+    const voiceFeeHeads = [...new Set(voiceFeeHeadAliases.map(item => item.head))];
+
+    function canUseVoiceFeeAssistant() {
+      if (state.role === "student") return false;
+      const text = normalizeText([
+        state.user?.role,
+        state.user?.department,
+        state.user?.designation,
+        state.user?.name
+      ].join(" ")).toLowerCase();
+      return ["admin", "front office", "assistant manager", "manager", "account", "cashier", "office"].some(word => text.includes(word));
+    }
+
+    function currentAcademicMonthLabel(erpState = {}) {
+      const today = new Date();
+      const yearInfo = sessionYears(erpState);
+      return academicMonths.find(month => {
+        const monthDate = academicMonthDate(erpState, month, 1);
+        return monthDate.getFullYear() === today.getFullYear() && monthDate.getMonth() === today.getMonth();
+      }) || (today.getFullYear() === yearInfo.endYear ? "Jan" : "Apr");
+    }
+
+    function voiceFeeFindStudentInState(erpState = {}, admissionText = "") {
+      const clean = normalizeAdmission(admissionText);
+      const digits = clean.replace(/\D/g, "");
+      const students = activeStudents(erpState);
+      return students.find(student => normalizeAdmission(student.admissionNo) === clean)
+        || students.find(student => {
+          const admissionDigits = normalizeAdmission(student.admissionNo).replace(/\D/g, "");
+          return digits && admissionDigits.endsWith(digits);
+        })
+        || students.find(student => normalizeText(student.name).toLowerCase() === normalizeText(admissionText).toLowerCase())
+        || null;
+    }
+
+    function voiceFeeFindStudent(admissionText = "") {
+      return voiceFeeFindStudentInState(state.erpState || {}, admissionText);
+    }
+
+    function voiceFeeExtractMonths(text = "") {
+      const lower = normalizeText(text).toLowerCase();
+      const months = [];
+      Object.entries(voiceFeeMonthAliases).forEach(([alias, month]) => {
+        if (/^\d+$/.test(alias)) return;
+        const found = /[a-z]/i.test(alias)
+          ? new RegExp(`\\b${alias}\\b`, "i").test(lower)
+          : lower.includes(alias);
+        if (!found) return;
+        if (!months.includes(month)) months.push(month);
+      });
+      return months.sort((a, b) => voiceFeeMonthIndex(a) - voiceFeeMonthIndex(b));
+    }
+
+    function voiceFeeParseCommand(text = "") {
+      const raw = normalizeText(text);
+      const lower = raw.toLowerCase();
+      const numbers = [...lower.matchAll(/\b\d{1,7}\b/g)].map(match => match[0]);
+      const admissionMatch = lower.match(/(?:admission|adm|student|number|no\.?|id)\D{0,12}(\d{1,5})/);
+      const admissionNo = admissionMatch?.[1] || numbers[0] || "";
+      const amountMatch = lower.match(/(?:rs|rupees|taka|amount|paid|payment|pay|collect|bank|cash)\D{0,12}(\d[\d,]*)/);
+      const amount = Number((amountMatch?.[1] || numbers.find(item => item !== admissionNo && Number(item) > 50) || "0").replace(/,/g, "")) || 0;
+      const feeHead = voiceFeeHeadAliases.find(item => item.tests.some(test => lower.includes(test)))?.head || "";
+      const months = voiceFeeExtractMonths(raw);
+      const month = months[0] || "";
+      const mode = lower.includes("cash") ? "Cash" : lower.includes("bank") || lower.includes("upi") || lower.includes("online") ? "Bank" : "";
+      const intent = /due|dues|baki|pending|outstanding|balance/.test(lower) ? "due-check" : "payment-draft";
+      return { raw, admissionNo, amount, feeHead, month, months, mode, intent };
+    }
+
+    function voiceFeeStudentLine(student = {}) {
+      return `${student.name || "Student"} | ${getClassName(student)}`;
+    }
+
+    function voiceFeeNormalizeHead(head = "") {
+      const text = normalizeText(head).toLowerCase();
+      if (text.includes("tuition late fine")) return "Tuition Late Fine";
+      if (text.includes("transport late fine")) return "Transport Late Fine";
+      if (text.includes("transport")) return "Transport Fees";
+      if (text.includes("tuition") || text.includes("tution")) return "Tuition Fee";
+      return normalizeText(head);
+    }
+
+    function voiceFeeNormalizeMonth(month = "") {
+      const text = normalizeText(month).toLowerCase();
+      return voiceFeeMonthAliases[text] || academicMonths.find(item => item.toLowerCase() === text.slice(0, 3)) || "";
+    }
+
+    function voiceFeeMonthIndex(month = "") {
+      const normalized = voiceFeeNormalizeMonth(month);
+      return academicMonths.indexOf(normalized);
+    }
+
+    function voiceFeeNextMonth(month = "", allowedMonths = academicMonths) {
+      const startIndex = voiceFeeMonthIndex(month);
+      if (startIndex < 0) return "";
+      const allowed = new Set((Array.isArray(allowedMonths) && allowedMonths.length ? allowedMonths : academicMonths)
+        .map(voiceFeeNormalizeMonth)
+        .filter(Boolean));
+      for (let step = 1; step < academicMonths.length; step += 1) {
+        const next = academicMonths[(startIndex + step) % academicMonths.length];
+        if (allowed.has(next)) return next;
+      }
+      return "";
+    }
+
+    function voiceFeeSelectedMonths(parsed = {}) {
+      const months = Array.isArray(parsed.months) ? parsed.months : [];
+      const selected = months.map(voiceFeeNormalizeMonth).filter(Boolean);
+      const fallback = voiceFeeNormalizeMonth(parsed.month || "");
+      if (fallback && !selected.includes(fallback)) selected.push(fallback);
+      return [...new Set(selected)].sort((a, b) => voiceFeeMonthIndex(a) - voiceFeeMonthIndex(b));
+    }
+
+    function voiceFeeFormatDateDDMMYYYY(value = new Date()) {
+      const date = value instanceof Date ? value : new Date(value);
+      if (Number.isNaN(date.getTime())) return voiceFeeFormatDateDDMMYYYY(new Date());
+      return `${String(date.getDate()).padStart(2, "0")}-${String(date.getMonth() + 1).padStart(2, "0")}-${date.getFullYear()}`;
+    }
+
+    function voiceFeeCreatePaymentId() {
+      return `PAY-${Date.now()}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+    }
+
+    function voiceFeeActiveSession(erpState = {}) {
+      const paymentBooks = erpState.collectedPayments || {};
+      return erpState.activeSession || erpState.selectedSession || Object.keys(paymentBooks)[0] || "2026-27";
+    }
+
+    function voiceFeeReceiptSerial(receiptNo = "", receiptYear = "") {
+      const match = String(receiptNo || "").trim().match(/^ANPS\/(\d{4})-(\d+)$/i);
+      if (!match || (receiptYear && match[1] !== String(receiptYear))) return 0;
+      return Number(match[2] || 0);
+    }
+
+    function voiceFeeNextReceiptNo(erpState = {}) {
+      const session = voiceFeeActiveSession(erpState);
+      const receiptYear = String(session || new Date().getFullYear()).split("-")[0] || String(new Date().getFullYear());
+      const sessionPayments = erpState.collectedPayments?.[session] || {};
+      const usedReceipts = new Set();
+      const highest = Object.values(sessionPayments).reduce((max, payments) => {
+        if (!Array.isArray(payments)) return max;
+        payments.forEach(payment => {
+          const receipt = String(payment?.receipt || payment?.receiptNo || "").trim();
+          if (receipt) usedReceipts.add(receipt);
+        });
+        return Math.max(max, ...payments.map(payment => voiceFeeReceiptSerial(payment?.receipt || payment?.receiptNo, receiptYear)));
+      }, 0);
+      let nextSerial = highest + 1;
+      let candidate = `ANPS/${receiptYear}-${String(nextSerial).padStart(3, "0")}`;
+      while (usedReceipts.has(candidate)) {
+        nextSerial += 1;
+        candidate = `ANPS/${receiptYear}-${String(nextSerial).padStart(3, "0")}`;
+      }
+      return candidate;
+    }
+
+    function voiceFeePaymentBucket(erpState = {}, admissionNo = "") {
+      const session = voiceFeeActiveSession(erpState);
+      erpState.collectedPayments = erpState.collectedPayments && typeof erpState.collectedPayments === "object" ? erpState.collectedPayments : {};
+      erpState.collectedPayments[session] = erpState.collectedPayments[session] && typeof erpState.collectedPayments[session] === "object" ? erpState.collectedPayments[session] : {};
+      const normalizedAdmission = normalizeAdmission(admissionNo);
+      const existingKey = Object.keys(erpState.collectedPayments[session]).find(key => normalizeAdmission(key) === normalizedAdmission);
+      const key = existingKey || admissionNo;
+      erpState.collectedPayments[session][key] = Array.isArray(erpState.collectedPayments[session][key]) ? erpState.collectedPayments[session][key] : [];
+      return erpState.collectedPayments[session][key];
+    }
+
+    function voiceFeeFineDays(fromDate, toDate) {
+      if (toDate < fromDate) return 0;
+      const dayMs = 24 * 60 * 60 * 1000;
+      const start = new Date(fromDate.getFullYear(), fromDate.getMonth(), fromDate.getDate());
+      const end = new Date(toDate.getFullYear(), toDate.getMonth(), toDate.getDate());
+      return Math.floor((end - start) / dayMs) + 1;
+    }
+
+    function voiceFeeAcademicMonthIndexForDate(erpState = {}, dateValue = new Date()) {
+      const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+      const {startYear} = sessionYears(erpState);
+      return ((date.getFullYear() - startYear) * 12) + (date.getMonth() - 3);
+    }
+
+    function voiceFeeTuitionFineForMonth(erpState = {}, month = "", paymentDateValue = new Date()) {
+      const dueMonthIndex = voiceFeeMonthIndex(month);
+      if (dueMonthIndex < 0) return 0;
+      const setup = {dailyRate: 5, nextMonth: 75, secondMonth: 100, laterMonth: 150, ...(erpState.tuitionFineSetup || {})};
+      const paymentDate = paymentDateValue instanceof Date ? paymentDateValue : new Date(paymentDateValue);
+      const monthStart = academicMonthDate(erpState, month, 1);
+      const noFineTill = academicMonthDate(erpState, month, 15);
+      const fineStart = academicMonthDate(erpState, month, 16);
+      const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0);
+      if (paymentDate <= noFineTill) return 0;
+      const dueMonthFineEnd = paymentDate <= monthEnd ? paymentDate : monthEnd;
+      const dueMonthFine = voiceFeeFineDays(fineStart, dueMonthFineEnd) * Number(setup.dailyRate || 0);
+      if (paymentDate <= monthEnd) return dueMonthFine;
+      const monthGap = voiceFeeAcademicMonthIndexForDate(erpState, paymentDate) - dueMonthIndex;
+      if (monthGap <= 0) return dueMonthFine;
+      let fine = dueMonthFine + Number(setup.nextMonth || 0);
+      if (monthGap >= 2) fine += Number(setup.secondMonth || 0);
+      if (monthGap >= 3) fine += (monthGap - 2) * Number(setup.laterMonth || 0);
+      return fine;
+    }
+
+    function voiceFeeTransportFineForMonth(erpState = {}, month = "", paymentDateValue = new Date()) {
+      const dueMonthIndex = voiceFeeMonthIndex(month);
+      if (dueMonthIndex < 0) return 0;
+      const setup = {sameMonth: 110, nextMonth: 150, secondMonth: 180, laterMonth: 200, ...(erpState.transportFineSetup || {})};
+      const paymentDate = paymentDateValue instanceof Date ? paymentDateValue : new Date(paymentDateValue);
+      const noFineTill = academicMonthDate(erpState, month, 15);
+      const monthStart = academicMonthDate(erpState, month, 1);
+      const monthEnd = new Date(monthStart.getFullYear(), monthStart.getMonth() + 1, 0);
+      if (paymentDate <= noFineTill) return 0;
+      let fine = Number(setup.sameMonth || 0);
+      if (paymentDate <= monthEnd) return fine;
+      const monthGap = voiceFeeAcademicMonthIndexForDate(erpState, paymentDate) - dueMonthIndex;
+      if (monthGap >= 1) fine += Number(setup.nextMonth || 0);
+      if (monthGap >= 2) fine += Number(setup.secondMonth || 0);
+      if (monthGap >= 3) fine += (monthGap - 2) * Number(setup.laterMonth || 0);
+      return fine;
+    }
+
+    function voiceFeeLateFineHead(head = "") {
+      return voiceFeeNormalizeHead(head) === "Transport Fees" ? "Transport Late Fine" : "Tuition Late Fine";
+    }
+
+    function voiceFeeAllocationRows(payments = [], head = "") {
+      const target = voiceFeeNormalizeHead(head);
+      const rows = [];
+      payments.forEach(payment => {
+        const allocations = Array.isArray(payment.allocations) ? payment.allocations : [];
+        if (allocations.length) {
+          allocations.forEach(allocation => {
+            if (voiceFeeNormalizeHead(allocation.head) !== target) return;
+            rows.push({
+              month: voiceFeeNormalizeMonth(allocation.month),
+              amount: Number(allocation.amount || 0),
+              receipt: payment.receipt || payment.receiptNo || "-",
+              date: allocation.date || payment.date || payment.paymentDate || "-",
+              mode: payment.mode || payment.paymentMode || payment.type || "-"
+            });
+          });
+          return;
+        }
+        if (voiceFeeNormalizeHead(payment.head || payment.feeHead) !== target) return;
+        const months = String(payment.feeMonth || payment.month || "")
+          .split(",")
+          .map(voiceFeeNormalizeMonth)
+          .filter(Boolean);
+        const amount = Number(payment.amount || payment.paid || payment.total || payment.netPaid || 0);
+        const perMonthAmount = months.length > 1 ? amount / months.length : amount;
+        months.forEach(month => rows.push({
+            month,
+            amount: perMonthAmount,
+            receipt: payment.receipt || payment.receiptNo || "-",
+            date: payment.date || payment.paymentDate || "-",
+            mode: payment.mode || payment.paymentMode || payment.type || "-"
+          }));
+      });
+      return rows;
+    }
+
+    function voiceFeePaidInfo(payments = [], head = "", month = "") {
+      const target = voiceFeeNormalizeHead(head);
+      const fineTarget = voiceFeeLateFineHead(target);
+      const targetMonth = voiceFeeNormalizeMonth(month);
+      return payments.reduce((totals, payment) => {
+        const allocations = Array.isArray(payment.allocations) ? payment.allocations : [];
+        if (allocations.length) {
+          allocations.forEach(allocation => {
+            const allocationHead = voiceFeeNormalizeHead(allocation.head);
+            const allocationMonth = voiceFeeNormalizeMonth(allocation.month);
+            if (allocationMonth !== targetMonth) return;
+            if (allocationHead === target) totals.fee += Number(allocation.amount || 0);
+            if (allocationHead === fineTarget) totals.fine += Number(allocation.amount || 0);
+          });
+          return totals;
+        }
+        const paymentHead = voiceFeeNormalizeHead(payment.head || payment.feeHead);
+        if (paymentHead !== target) return totals;
+        const months = String(payment.feeMonth || payment.month || "")
+          .split(",")
+          .map(voiceFeeNormalizeMonth)
+          .filter(Boolean);
+        if (!months.includes(targetMonth)) return totals;
+        const amount = Number(payment.amount || payment.paid || payment.total || payment.netPaid || payment.net_paid || 0);
+        const fine = Number(payment.fine || 0);
+        const feeAmount = Math.max(amount - fine, 0);
+        totals.fee += months.length > 1 ? feeAmount / months.length : feeAmount;
+        totals.fine += months.length > 1 ? fine / months.length : fine;
+        return totals;
+      }, { fee: 0, fine: 0 });
+    }
+
+    function voiceFeeHasAnyFinePaid(payments = [], month = "") {
+      const targetMonth = voiceFeeNormalizeMonth(month);
+      return payments.some(payment => (Array.isArray(payment.allocations) ? payment.allocations : []).some(allocation =>
+        voiceFeeNormalizeMonth(allocation.month) === targetMonth
+        && /fine/i.test(String(allocation.head || ""))
+        && Number(allocation.amount || 0) > 0
+      ));
+    }
+
+    function voiceFeeExpectedFine(erpState = {}, head = "", month = "", paymentDate = new Date()) {
+      const normalizedHead = voiceFeeNormalizeHead(head);
+      if (normalizedHead === "Transport Fees") return voiceFeeTransportFineForMonth(erpState, month, paymentDate);
+      if (normalizedHead === "Tuition Fee") return voiceFeeTuitionFineForMonth(erpState, month, paymentDate);
+      return 0;
+    }
+
+    function voiceFeeMonthlyItems(erpState = {}, student = {}) {
+      const payments = sessionPaymentsForStudent(erpState, student.admissionNo);
+      return [
+        { head: "Tuition Fee", amount: Number(student.tuitionFee || 0), months: student.feeMonths || academicMonths },
+        { head: "Transport Fees", amount: Number(student.transportFee || 0), months: student.transportMonths || academicMonths }
+      ].filter(item => item.amount > 0).map(item => {
+        const months = (Array.isArray(item.months) && item.months.length ? item.months : academicMonths)
+          .map(voiceFeeNormalizeMonth)
+          .filter(Boolean);
+        const rows = voiceFeeAllocationRows(payments, item.head);
+        const monthRows = months.map(month => {
+          const paidRows = rows.filter(row => row.month === month);
+          const paidInfo = voiceFeePaidInfo(payments, item.head, month);
+          const paid = Number(paidInfo.fee || 0);
+          const finePaid = Number(paidInfo.fine || 0);
+          const feeDue = Math.max(0, item.amount - paid);
+          const expectedFine = feeDue > 0 ? voiceFeeExpectedFine(erpState, item.head, month, new Date()) : 0;
+          const repeatFineWaived = (finePaid > 0 || voiceFeeHasAnyFinePaid(payments, month)) && feeDue > 0 && feeDue <= 500;
+          const fineDue = repeatFineWaived ? 0 : Math.max(0, expectedFine - finePaid);
+          const totalDue = feeDue + fineDue;
+          return { month, paidRows, paid, finePaid, expectedFine, feeDue, fineDue, totalDue, balance: totalDue, last: paidRows[paidRows.length - 1] || {} };
+        });
+        return { ...item, months, rows, monthRows };
+      });
+    }
+
+    function voiceFeeVisibleMonths(erpState = {}, item = {}, parsed = {}) {
+      const months = Array.isArray(item.months) && item.months.length ? item.months : academicMonths;
+      const selectedMonths = voiceFeeSelectedMonths(parsed).filter(month => months.includes(month));
+      if (selectedMonths.length) return selectedMonths;
+      const tillDate = selectedMonthsToDate(erpState, months);
+      const dueMonth = item.monthRows.find(row => tillDate.includes(row.month) && row.balance > 0.01)?.month;
+      const parsedMonth = voiceFeeNormalizeMonth(parsed.month || "");
+      const primary = parsedMonth && months.includes(parsedMonth) ? parsedMonth : dueMonth || currentAcademicMonthLabel(erpState);
+      const visible = [primary, voiceFeeNextMonth(primary, months)].filter(Boolean);
+      return [...new Set(visible)].filter(month => months.includes(month)).slice(0, 2);
+    }
+
+    function voiceFeeDraftRows(erpState = {}, student = {}, parsed = {}, items = voiceFeeMonthlyItems(erpState, student)) {
+      const normalizedHead = voiceFeeNormalizeHead(parsed.feeHead || "");
+      const monthlyHeads = ["Tuition Fee", "Transport Fees"];
+      const targets = monthlyHeads.includes(normalizedHead)
+        ? items.filter(item => item.head === normalizedHead)
+        : items.filter(item => monthlyHeads.includes(item.head));
+      return targets.flatMap(item => {
+        const visibleMonths = voiceFeeVisibleMonths(erpState, item, parsed);
+        return item.monthRows
+          .filter(row => visibleMonths.includes(row.month) && row.totalDue > 0.01)
+          .sort((a, b) => voiceFeeMonthIndex(a.month) - voiceFeeMonthIndex(b.month))
+          .map(row => ({
+            head: item.head,
+            month: row.month,
+            amount: row.feeDue,
+            fine: row.fineDue,
+            total: row.totalDue,
+            paymentType: voiceFeeNormalizeHead(item.head) === "Transport Fees" ? "transport" : "tuition"
+          }));
+      });
+    }
+
+    function voiceFeePaymentDraft(erpState = {}, student = {}, parsed = {}) {
+      const items = voiceFeeMonthlyItems(erpState, student);
+      const selectedItems = voiceFeeDraftRows(erpState, student, parsed, items);
+      const grossAmount = selectedItems.reduce((sum, item) => sum + Number(item.total || 0), 0);
+      let remaining = Math.min(Number(parsed.amount || 0) + Number(parsed.discountAmount || 0), grossAmount);
+      const allocations = [];
+      selectedItems.forEach(item => {
+        if (remaining <= 0) return;
+        const finePaid = Math.min(Number(item.fine || 0), remaining);
+        if (finePaid > 0) {
+          allocations.push({ head: voiceFeeLateFineHead(item.head), month: item.month, amount: finePaid, balanceAfter: Math.max(0, item.fine - finePaid), kind: "fine" });
+          remaining -= finePaid;
+        }
+        const feePaid = Math.min(Number(item.amount || 0), remaining);
+        if (feePaid > 0) {
+          allocations.push({ head: item.head, month: item.month, amount: feePaid, balanceAfter: Math.max(0, item.amount - feePaid), kind: "fee" });
+          remaining -= feePaid;
+        }
+      });
+      return {
+        items,
+        selectedItems,
+        allocations,
+        grossAmount,
+        remainingAmount: Math.max(0, (Number(parsed.amount || 0) + Number(parsed.discountAmount || 0)) - grossAmount)
+      };
+    }
+
+    function voiceFeeReadSaveInputs(parsed = {}) {
+      const totalInput = Number($("#voiceFeeSaveAmount")?.value || parsed.amount || 0);
+      const bankInput = Number($("#voiceFeeBankAmount")?.value || parsed.bankAmount || 0);
+      const cashInput = Number($("#voiceFeeCashAmount")?.value || parsed.cashAmount || 0);
+      const discountAmount = Math.max(0, Number($("#voiceFeeDiscountAmount")?.value || parsed.discountAmount || 0));
+      const remarks = normalizeText($("#voiceFeeRemarks")?.value || parsed.remarks || "");
+      let bankAmount = Math.max(0, bankInput);
+      let cashAmount = Math.max(0, cashInput);
+      const totalAmount = Math.max(0, totalInput);
+      if (!bankAmount && !cashAmount && totalAmount > 0) {
+        if (parsed.mode === "Cash") cashAmount = totalAmount;
+        else bankAmount = totalAmount;
+      }
+      let amount = bankAmount + cashAmount;
+      if (!amount && totalAmount > 0) amount = totalAmount;
+      const mode = bankAmount > 0 && cashAmount > 0 ? "Bank + Cash" : bankAmount > 0 ? "Bank" : cashAmount > 0 ? "Cash" : "";
+      return {...parsed, mode, amount, bankAmount, cashAmount, discountAmount, remarks};
+    }
+
+    function voiceFeePreviewAllocation(erpState = {}, student = {}, parsed = {}, items = []) {
+      if (parsed.intent !== "payment-draft" || !Number(parsed.amount || 0)) return "";
+      const draft = voiceFeePaymentDraft(erpState, student, parsed);
+      return `
+        <div class="voice-fee-summary">
+          <b>Draft Allocation Preview</b>
+          ${draft.allocations.length ? draft.allocations.map(row => `
+            <div class="voice-fee-month-row">
+              <b>${escapeHtml(row.head)} - ${escapeHtml(row.month)}</b>
+              <span>Use Rs. ${Math.round(row.amount)}</span>
+              <small>Balance after: Rs. ${Math.round(row.balanceAfter)}</small>
+            </div>`).join("") : `<div class="voice-fee-month-row"><b>No due found</b><span>Rs. 0 used</span><small>Check Fee Book before posting.</small></div>`}
+          ${draft.remainingAmount > 0 ? `<div class="voice-fee-line"><span>Amount left after current dues</span><b>Rs. ${Math.round(draft.remainingAmount)}</b></div>` : ""}
+        </div>`;
+    }
+
+    function voiceFeeRenderMonthlyStatus(erpState = {}, student = {}, parsed = {}) {
+      const items = voiceFeeMonthlyItems(erpState, student);
+      if (!items.length) return `<div class="voice-fee-summary warning"><b>No tuition or transport setup found.</b><p>Fee Book may not have monthly fee amount for this student.</p></div>`;
+      const totals = { tuition: 0, transport: 0, fine: 0, payable: 0 };
+      const statusCards = items.map(item => {
+        const months = voiceFeeVisibleMonths(erpState, item, parsed);
+        const headKey = item.head === "Transport Fees" ? "transport" : "tuition";
+        months.forEach(month => {
+          const monthRow = item.monthRows.find(row => row.month === month) || {};
+          const feeDue = Math.max(0, Number(monthRow.feeDue || 0));
+          const fineDue = Math.max(0, Number(monthRow.fineDue || 0));
+          totals[headKey] += feeDue;
+          totals.fine += fineDue;
+          totals.payable += feeDue + fineDue;
+        });
+        return `
+          <div class="voice-fee-fee-card">
+            <div class="voice-fee-fee-head"><span>${escapeHtml(item.head)}</span><span>Rs. ${item.amount}/month</span></div>
+            ${months.map(month => {
+              const monthRow = item.monthRows.find(row => row.month === month) || { paid: 0, balance: item.amount, last: {} };
+              const paid = monthRow.paid;
+              const last = monthRow.last || {};
+              const isPaid = paid + 0.01 >= item.amount && Number(monthRow.fineDue || 0) <= 0;
+              const balance = Math.max(0, Number(monthRow.feeDue || 0));
+              const fineDue = Math.max(0, Number(monthRow.fineDue || 0));
+              const totalDue = Math.max(0, Number(monthRow.totalDue || 0));
+              return `
+                <div class="voice-fee-month-row">
+                  <b>${escapeHtml(month)}</b>
+                  <span>${isPaid ? `Paid Rs. ${paid}` : `Fee Due Rs. ${Math.round(balance)} | Fine Rs. ${Math.round(fineDue)}`}</span>
+                  <small>${isPaid ? escapeHtml(last.receipt || "Paid") : `Total Due Rs. ${Math.round(totalDue)}`}</small>
+                </div>`;
+            }).join("")}
+          </div>`;
+      }).join("");
+      return `${voiceFeePreviewAllocation(erpState, student, parsed, items)}<div class="voice-fee-status-grid">${statusCards}</div>
+        <div class="voice-fee-summary">
+          <b>Total Fees</b>
+          <div class="voice-fee-line"><span>Tuition Fee</span><b>Rs. ${Math.round(totals.tuition)}</b></div>
+          <div class="voice-fee-line"><span>Transport Fees</span><b>Rs. ${Math.round(totals.transport)}</b></div>
+          <div class="voice-fee-line"><span>Fine</span><b>Rs. ${Math.round(totals.fine)}</b></div>
+          <div class="voice-fee-line"><span>Total Payable</span><b>Rs. ${Math.round(totals.payable)}</b></div>
+        </div>`;
+    }
+
+    async function saveVoiceFeePayment(parsed = {}) {
+      const formParsed = voiceFeeReadSaveInputs(parsed);
+      const mode = formParsed.mode || "";
+      if (!["Bank", "Cash", "Bank + Cash"].includes(mode)) {
+        toast("Enter Bank Amount or Cash Amount before saving.");
+        return;
+      }
+      if (!Number(formParsed.amount || 0) && !Number(formParsed.discountAmount || 0)) {
+        toast("Enter payment amount before saving.");
+        return;
+      }
+      if (Math.abs(Number(formParsed.amount || 0) - (Number(formParsed.bankAmount || 0) + Number(formParsed.cashAmount || 0))) > 0.01) {
+        toast("Bank Amount plus Cash Amount must match the received amount.");
+        return;
+      }
+      const button = $("[data-voice-save]");
+      if (button) {
+        button.disabled = true;
+        button.textContent = "Saving...";
+      }
+      let savedPayment = null;
+      try {
+        await AppApi.saveMutatedState(erpState => {
+          const student = voiceFeeFindStudentInState(erpState, formParsed.admissionNo);
+          if (!student) throw new Error("Student not found in latest ERP data.");
+          const saveParsed = {...formParsed, mode};
+          const draft = voiceFeePaymentDraft(erpState, student, saveParsed);
+          const totalAmount = Number(saveParsed.amount || 0);
+          const discountAmount = Math.max(0, Number(saveParsed.discountAmount || 0));
+          if (!draft.selectedItems.length || totalAmount + discountAmount <= 0) throw new Error("No payable Tuition or Transport due found.");
+          const bankAmount = Number(saveParsed.bankAmount || 0);
+          const cashAmount = Number(saveParsed.cashAmount || 0);
+          let remainingAmount = Math.min(totalAmount + discountAmount, Number(draft.grossAmount || 0));
+          const paymentDate = new Date();
+          const allocationDate = voiceFeeFormatDateDDMMYYYY(paymentDate);
+          const allocations = [];
+          draft.selectedItems.forEach(item => {
+            if (remainingAmount <= 0) return;
+            const finePaid = Math.min(Number(item.fine || 0), remainingAmount);
+            if (finePaid > 0) {
+              allocations.push({head: voiceFeeLateFineHead(item.head), amount: finePaid, month: item.month || undefined, date: allocationDate, paymentType: item.paymentType || undefined});
+              remainingAmount -= finePaid;
+            }
+            const feePaid = Math.min(Number(item.amount || 0), remainingAmount);
+            if (feePaid > 0) {
+              allocations.push({head: item.head, amount: feePaid, month: item.month || undefined, date: allocationDate, paymentType: item.paymentType || undefined});
+              remainingAmount -= feePaid;
+            }
+          });
+          if (!allocations.length) throw new Error("Nothing could be allocated to Tuition or Transport.");
+          savedPayment = {
+            id: voiceFeeCreatePaymentId(),
+            date: voiceFeeFormatDateDDMMYYYY(paymentDate),
+            receipt: voiceFeeNextReceiptNo(erpState),
+            mode,
+            by: state.user?.role || state.role || "Mobile App",
+            amount: totalAmount,
+            discountAmount,
+            remarks: saveParsed.remarks || `Voice Fee Assistant${state.user?.name ? ` - ${state.user.name}` : ""}`,
+            bankAmount,
+            cashAmount,
+            allocations,
+            source: "Voice Fee Assistant"
+          };
+          voiceFeePaymentBucket(erpState, student.admissionNo || formParsed.admissionNo).unshift(savedPayment);
+          return savedPayment;
+        });
+        toast(`Payment saved: ${savedPayment?.receipt || ""}`);
+        renderVoiceFeeResult({...formParsed, mode, amount: savedPayment?.amount || formParsed.amount, savedReceipt: savedPayment?.receipt || ""});
+      } catch (error) {
+        toast(error.message || "Payment could not be saved.");
+        if (button) {
+          button.disabled = false;
+          button.textContent = "Confirm & Save Payment";
+        }
+      }
+    }
+
+    function renderVoiceFeeResult(parsed = {}) {
+      const host = $("#voiceFeeResultPageHost") || $("#voiceFeeResult");
+      const inlineHost = $("#voiceFeeResult");
+      if (!host) return;
+      if (inlineHost) inlineHost.innerHTML = parsed.raw ? `<small class="voice-fee-note">Result opened on a separate review page.</small>` : "";
+      if (!parsed.raw) {
+        host.innerHTML = `<div class="voice-fee-summary warning"><b>Say or type a command first.</b><p>Example only: Admission number 150 due this month.</p></div>`;
+        return;
+      }
+      const student = voiceFeeFindStudent(parsed.admissionNo);
+      if (!student) {
+        host.innerHTML = `
+          <article class="card voice-fee-card">
+            <div class="voice-fee-summary bad"><b>Student not found.</b><p>Check the admission number and try again.</p></div>
+            <button class="voice-fee-clear" type="button" data-voice-back="1">Back to Assistant</button>
+          </article>`;
+        host.querySelector("[data-voice-back]")?.addEventListener("click", () => openView("voiceFee"));
+        return;
+      }
+      const dueAmount = studentDueAmount(state.erpState || {}, student);
+      const selectedMonths = voiceFeeSelectedMonths(parsed);
+      const month = selectedMonths.length ? selectedMonths.join(", ") : parsed.month || currentAcademicMonthLabel(state.erpState || {});
+      const feeHead = parsed.feeHead || "Auto: Tuition Fee first, then Transport Fees";
+      const savedReceipt = parsed.savedReceipt || "";
+      if (parsed.intent === "due-check") {
+        host.innerHTML = `
+          <article class="card voice-fee-card">
+            <div class="voice-fee-summary ${dueAmount ? "warning" : ""}">
+              <b>${escapeHtml(student.name || "Student")}</b>
+              <p>${dueAmount ? `Current due is Rs. ${dueAmount}.` : "No due found in the current ERP data."}</p>
+            </div>
+            <div class="voice-fee-line"><span>Admission No</span><b>${escapeHtml(student.admissionNo || "-")}</b></div>
+            <div class="voice-fee-line"><span>Class</span><b>${escapeHtml(getClassName(student))}</b></div>
+            <div class="voice-fee-line"><span>Due Amount</span><b>Rs. ${dueAmount}</b></div>
+            ${voiceFeeRenderMonthlyStatus(state.erpState || {}, student, parsed)}
+            <button class="voice-fee-clear" type="button" data-voice-back="1">Back to Assistant</button>
+          </article>`;
+        host.querySelector("[data-voice-back]")?.addEventListener("click", () => openView("voiceFee"));
+        return;
+      }
+      const summary = {
+        date: parsed.date || voiceFeeFormatDateDDMMYYYY(new Date()),
+        month,
+        amount: parsed.amount || 0,
+        bankAmount: Number(parsed.bankAmount || 0),
+        cashAmount: Number(parsed.cashAmount || 0),
+        discountAmount: Number(parsed.discountAmount || 0),
+        remarks: parsed.remarks || "",
+        note: "Review and save from this page."
+      };
+      const bankDefault = summary.bankAmount || (parsed.mode === "Bank" ? Number(summary.amount || 0) : 0);
+      const cashDefault = summary.cashAmount || (parsed.mode === "Cash" ? Number(summary.amount || 0) : 0);
+      host.innerHTML = `
+        <article class="card voice-fee-card">
+          <div class="voice-fee-summary ${savedReceipt ? "" : "warning"}">
+            <b>${savedReceipt ? "Payment saved" : "Payment ready for review"}</b>
+            <p>${savedReceipt ? `Receipt ${escapeHtml(savedReceipt)} has been posted to ERP.` : "Check Tuition Fee, Transport Fees, fine, bank/cash amount, and discount before saving."}</p>
+          </div>
+          <div class="voice-fee-line"><span>Admission No</span><b>${escapeHtml(student.admissionNo || "-")}</b></div>
+          <div class="voice-fee-line"><span>Student</span><b>${escapeHtml(student.name || "Student")}</b></div>
+          <div class="voice-fee-line"><span>Class</span><b>${escapeHtml(getClassName(student))}</b></div>
+          <div class="voice-fee-line"><span>Date</span><b>${escapeHtml(summary.date)}</b></div>
+          <div class="voice-fee-line"><span>Month</span><b>${escapeHtml(summary.month)}</b></div>
+          <label class="voice-fee-line" for="voiceFeeSaveAmount"><span>Total Received</span><input class="voice-fee-input" id="voiceFeeSaveAmount" type="number" min="0" step="1" value="${escapeHtml(String(summary.amount || ""))}" ${savedReceipt ? "disabled" : ""}></label>
+          <label class="voice-fee-line" for="voiceFeeBankAmount"><span>Bank Amount</span><input class="voice-fee-input" id="voiceFeeBankAmount" type="number" min="0" step="1" value="${escapeHtml(String(bankDefault || ""))}" ${savedReceipt ? "disabled" : ""}></label>
+          <label class="voice-fee-line" for="voiceFeeCashAmount"><span>Cash Amount</span><input class="voice-fee-input" id="voiceFeeCashAmount" type="number" min="0" step="1" value="${escapeHtml(String(cashDefault || ""))}" ${savedReceipt ? "disabled" : ""}></label>
+          <label class="voice-fee-line" for="voiceFeeDiscountAmount"><span>Discount</span><input class="voice-fee-input" id="voiceFeeDiscountAmount" type="number" min="0" step="1" value="${escapeHtml(String(summary.discountAmount || ""))}" ${savedReceipt ? "disabled" : ""}></label>
+          <label class="voice-fee-line" for="voiceFeeRemarks"><span>Remarks / UTR</span><input class="voice-fee-input text" id="voiceFeeRemarks" type="text" value="${escapeHtml(summary.remarks)}" placeholder="UTR, screenshot note, or office remark" ${savedReceipt ? "disabled" : ""}></label>
+          ${voiceFeeRenderMonthlyStatus(state.erpState || {}, student, parsed)}
+          <div class="voice-fee-actions">
+            ${savedReceipt ? `<button class="voice-fee-copy" type="button" data-voice-copy="${escapeHtml(JSON.stringify({...summary, receipt: savedReceipt}))}">Copy Receipt</button>` : `<button class="voice-fee-copy" type="button" data-voice-preview="1">Update Preview</button><button class="voice-fee-save" type="button" data-voice-save="1">Confirm & Save Payment</button>`}
+            <button class="voice-fee-clear" type="button" data-voice-back="1">Back</button>
+          </div>
+          <small class="voice-fee-note">${savedReceipt ? "Fee Book, Search Due Fees, and reports will read this same ERP payment record." : "This uses the same fine-first Tuition/Transport allocation structure as main ERP collection."}</small>
+        </article>`;
+      host.querySelector("[data-voice-preview]")?.addEventListener("click", () => renderVoiceFeeResult(voiceFeeReadSaveInputs(parsed)));
+      host.querySelector("[data-voice-save]")?.addEventListener("click", () => saveVoiceFeePayment(parsed));
+      host.querySelector("[data-voice-copy]")?.addEventListener("click", async event => {
+        try {
+          await navigator.clipboard.writeText(event.currentTarget.dataset.voiceCopy || "");
+          toast("Draft copied.");
+        } catch (error) {
+          toast("Copy not available on this device.");
+        }
+      });
+      host.querySelector("[data-voice-back]")?.addEventListener("click", () => openView("voiceFee"));
+    }
+
+    function renderVoiceFeeAssistant() {
+      const host = $("#voiceFeeHost");
+      if (!host) return;
+      if (!canUseVoiceFeeAssistant()) {
+        host.innerHTML = card({ title: "Voice Fee Assistant Locked", meta: "Authorized office roles only", body: "This tool is available for Admin, Front Office, Assistant Manager, Manager, and Accounts roles.", badge: "Restricted", status: "warn", className: "voice-fee-card" });
+        return;
+      }
+      $("#voiceFeeScope").textContent = "Draft and due check";
+      host.innerHTML = `
+        <article class="card voice-fee-card">
+          <div class="card-head">
+            <div>
+              <h3>Speak or type a fee command</h3>
+            </div>
+            <span class="status warn">Review & Save</span>
+          </div>
+          <div class="voice-fee-panel">
+            <textarea class="voice-fee-textarea" id="voiceFeeCommand" placeholder="Type or speak here. Example only: Admission no 150 paid Rs 3000 for June by bank."></textarea>
+            <div class="voice-fee-actions">
+              <button class="voice-fee-mic" type="button" id="voiceFeeMicBtn">Start Mic</button>
+              <button class="voice-fee-parse" type="button" id="voiceFeeParseBtn">Check</button>
+              <button class="voice-fee-clear" type="button" id="voiceFeeDueExampleBtn">Due Example</button>
+              <button class="voice-fee-clear" type="button" id="voiceFeeClearBtn">Clear</button>
+            </div>
+            <small class="voice-fee-note" id="voiceFeeStatus">Review the Tuition/Transport rows first. Payment is saved only after Confirm & Save.</small>
+            <div class="voice-fee-result" id="voiceFeeResult"></div>
+          </div>
+        </article>`;
+      const input = $("#voiceFeeCommand");
+      const parseCurrent = () => {
+        const parsed = voiceFeeParseCommand(input?.value || "");
+        renderVoiceFeeResult(parsed);
+        if (parsed.raw) openView("voiceFeeResult");
+      };
+      $("#voiceFeeParseBtn")?.addEventListener("click", parseCurrent);
+      $("#voiceFeeDueExampleBtn")?.addEventListener("click", () => {
+        if (input) input.value = "Admission number 150 due this month";
+        parseCurrent();
+      });
+      $("#voiceFeeClearBtn")?.addEventListener("click", () => {
+        if (input) input.value = "";
+        $("#voiceFeeResult").innerHTML = "";
+      });
+      $("#voiceFeeMicBtn")?.addEventListener("click", () => {
+        const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+        if (!Recognition) {
+          toast("Voice input is not supported on this browser.");
+          return;
+        }
+        const recognition = new Recognition();
+        recognition.lang = "en-IN";
+        recognition.interimResults = false;
+        recognition.maxAlternatives = 1;
+        $("#voiceFeeStatus").textContent = "Listening...";
+        recognition.onresult = event => {
+          const transcript = event.results?.[0]?.[0]?.transcript || "";
+          if (input) input.value = transcript;
+          $("#voiceFeeStatus").textContent = "Voice captured. Please review before posting in Fee Book.";
+          parseCurrent();
+        };
+        recognition.onerror = () => {
+          $("#voiceFeeStatus").textContent = "Voice input failed. Type the command manually.";
+        };
+        recognition.onend = () => {
+          if ($("#voiceFeeStatus")?.textContent === "Listening...") $("#voiceFeeStatus").textContent = "Mic stopped.";
+        };
+        recognition.start();
+      });
     }
 
     function teacherAdvisoryCard(item = {}) {
@@ -4014,8 +4985,11 @@
     }
 
     function visibleModulesForCurrentUser(modules) {
-      if (state.role !== "student") return modules;
-      return modules.filter(item => item.id !== "busLocation" || studentBusLocationEnabled());
+      return modules.filter(item => {
+        if (item.id === "busLocation") return state.role !== "student" || studentBusLocationEnabled();
+        if (item.id === "voiceFee") return canUseVoiceFeeAssistant();
+        return true;
+      });
     }
 
     function renderNav(modules) {
@@ -4417,6 +5391,7 @@
       $("#advisoryList").innerHTML = (ws.teacherAdvisories || []).length
         ? (ws.teacherAdvisories || []).map(item => teacherAdvisoryCard(item)).join("")
         : card({ title: "No Teacher Advisory", meta: "No advisory has been sent to you.", body: "Private advisories from the school ERP will appear here.", badge: "Clear", status: "ok" });
+      renderVoiceFeeAssistant();
       $("#homeworkDoubtTotal").textContent = `${(ws.homeworkDoubts || []).length} chats`;
       $("#homeworkDoubtList").innerHTML = (ws.homeworkDoubts || []).length
         ? (ws.homeworkDoubts || []).map(item => teacherHomeworkDoubtCard(item)).join("")

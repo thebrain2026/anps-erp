@@ -2084,6 +2084,14 @@ function openFeeBookReturnPage() {
   return openPreviousViewFromHistory();
 }
 
+function openViewFromHash() {
+  const viewName = String(window.location.hash || "").replace(/^#/, "").trim();
+  if (!viewName || !document.getElementById(viewName) || !titleMap[viewName]) return false;
+  if (!canCurrentRoleAccessView(viewName)) return false;
+  setView(viewName, {skipHistory: true});
+  return true;
+}
+
 function setClassTimetableBuilderVisible(isVisible) {
   const panel = document.getElementById("classTimetableBuilderPanel");
   const overview = document.getElementById("classTimetableOverviewPanel");
@@ -11741,6 +11749,24 @@ function setSecurityBackups(backups) {
   localStorage.setItem(SECURITY_BACKUP_KEY, JSON.stringify(backups.slice(0, 10)));
 }
 
+function importSecuritySavedBackupList(importedBackups = []) {
+  const existingBackups = getSecurityBackups();
+  const backupMap = new Map();
+  [...importedBackups, ...existingBackups].forEach(backup => {
+    if (!backup || typeof backup !== "object") return;
+    const key = String(backup.id || backup.createdAt || JSON.stringify(backup.records || {}));
+    if (!key) return;
+    backupMap.set(key, backup);
+  });
+  const mergedBackups = [...backupMap.values()].sort((a, b) => {
+    const bTime = new Date(b?.createdAt || 0).getTime() || 0;
+    const aTime = new Date(a?.createdAt || 0).getTime() || 0;
+    return bTime - aTime;
+  });
+  setSecurityBackups(mergedBackups);
+  return {imported: importedBackups.length, total: getSecurityBackups().length};
+}
+
 function getSecurityRecordCounts() {
   const sessionPayments = collectedPayments[activeSession] || {};
   const paymentCount = Object.values(sessionPayments).reduce((sum, payments) => sum + (Array.isArray(payments) ? payments.length : 0), 0);
@@ -11764,7 +11790,6 @@ function getSecurityRecordCounts() {
 }
 
 function getSecuritySnapshot() {
-  saveAppState();
   const stateText = localStorage.getItem(STORAGE_KEY) || "{}";
   const backups = getSecurityBackups();
   const counts = getSecurityRecordCounts();
@@ -12142,6 +12167,16 @@ function restoreSecurityDataFromFile(file) {
   reader.onload = () => {
     try {
       const parsed = JSON.parse(String(reader.result || "{}"));
+      if (Array.isArray(parsed.backups)) {
+        const result = importSecuritySavedBackupList(parsed.backups);
+        renderSecurityMaintenance(`
+          <strong>Saved browser backup imported.</strong><br>
+          ${result.imported} backup file item(s) added to this browser.<br>
+          Current ERP data was not replaced. Use "Show Backups" to check it, or "Restore Fee Master" if you only need Fee Master from this backup.
+        `);
+        showToast("Saved backup imported.");
+        return;
+      }
       const state = parsed.state && typeof parsed.state === "object" ? parsed.state : parsed;
       if (!state || typeof state !== "object") throw new Error("Invalid JSON");
       if (!confirm("Restore this JSON data? Current local data will be replaced.")) return;
@@ -12463,38 +12498,51 @@ function showSmartDataEngine() {
     return groups;
   }, {});
   const status = report.danger ? "Critical Review" : report.warning ? "Review Needed" : "Healthy";
+  const tone = report.danger ? "danger" : report.warning ? "warning" : "healthy";
   const output = document.getElementById("smartEngineOutput") || document.getElementById("securityOutput");
   if (!output) return;
   output.innerHTML = `
-    <div class="system-health-summary">
-      <article><span>Smart Score</span><strong>${report.score}%</strong></article>
-      <article><span>Status</span><strong>${escapeHtml(status)}</strong></article>
+    <div class="smart-engine-result-header ${tone}">
+      <div>
+        <span>Overall Status</span>
+        <strong>${escapeHtml(status)}</strong>
+        <small>Scan completed without changing ERP data.</small>
+      </div>
+      <div class="smart-engine-score">
+        <strong>${report.score}%</strong>
+        <span>Smart Score</span>
+      </div>
+    </div>
+    <div class="smart-engine-metrics">
       <article><span>Critical</span><strong>${report.danger}</strong></article>
       <article><span>Warning</span><strong>${report.warning}</strong></article>
+      <article><span>Info</span><strong>${report.info}</strong></article>
+      <article><span>Total Checks</span><strong>${report.issues.length}</strong></article>
     </div>
-    <div class="system-health-summary">
+    <div class="smart-engine-metrics setup">
       ${report.setupCards.map(card => `<article><span>${escapeHtml(card.label)}</span><strong>${escapeHtml(String(card.value))}</strong></article>`).join("")}
     </div>
-    <div class="system-health-group">
-      <strong>Read-only scan</strong>
-      <ul>
-        <li class="info"><b>No data changed</b><span>This engine only checks saved ERP data, payment records, master setup and backup coverage.</span></li>
-      </ul>
+    <div class="smart-engine-check-note">
+      <b>No data changed</b>
+      <span>This engine only checks saved ERP data, payment records, master setup and backup coverage.</span>
     </div>
     ${report.issues.length ? Object.entries(grouped).map(([type, items]) => `
-      <div class="system-health-group">
-        <strong>${escapeHtml(type)}</strong>
-        <ul>
+      <section class="smart-engine-issue-group">
+        <header>
+          <strong>${escapeHtml(type)}</strong>
+          <span>${items.length} item(s)</span>
+        </header>
+        <div class="smart-engine-issues">
           ${items.slice(0, 60).map(issue => `
-            <li class="${escapeHtml(issue.severity)}">
+            <article class="${escapeHtml(issue.severity)}">
               <b>${escapeHtml(issue.title)}</b>
               <span>${escapeHtml(issue.details || "")}${issue.recommendation ? `<br>${escapeHtml(issue.recommendation)}` : ""}</span>
-            </li>
+            </article>
           `).join("")}
-        </ul>
+        </div>
         ${items.length > 60 ? `<small>${items.length - 60} more item(s) hidden to keep the page fast.</small>` : ""}
-      </div>
-    `).join("") : "<strong>Smart Data Engine: Healthy</strong><br>No high-risk data, payment, master setup or backup issue found."}
+      </section>
+    `).join("") : `<div class="smart-engine-empty"><strong>Smart Data Engine: Healthy</strong><span>No high-risk data, payment, master setup or backup issue found.</span></div>`}
   `;
   showToast("Smart Data Engine scan completed.");
 }
@@ -16790,7 +16838,10 @@ document.body.addEventListener("click", event => {
 loadAppState();
 applyProductionCleanSeedOnce();
 setNextReceiptNo();
-renderDashboardOnly();
+if (!openViewFromHash()) {
+  renderDashboardOnly();
+  setTimeout(() => openViewFromHash(), 250);
+}
 if (complaintRegisterForm) complaintRegisterForm.elements.date.value = toDateInputValue(new Date());
 if (teacherComplaintForm) teacherComplaintForm.elements.date.value = toDateInputValue(new Date());
 renderStaffTeachingSubjectField();
@@ -16801,6 +16852,12 @@ renderAdmissionVillageTownOptions();
 renderAdmissionSectionOptions();
 renderFeeMasterClassOptions();
 setTopbarNetworkStatus();
+window.addEventListener("hashchange", () => {
+  openViewFromHash();
+});
+window.addEventListener("load", () => {
+  openViewFromHash();
+});
 document.addEventListener("submit", blockOfflineWriteAction, true);
 if (localStorage.getItem(BACKEND_TOKEN_KEY)) {
   initializeBackendSync();

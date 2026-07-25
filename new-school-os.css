@@ -5173,6 +5173,276 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   padding-left: 18px;
 }
 
+.smart-engine-page {
+  gap: 18px;
+}
+
+.smart-engine-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-height: 128px;
+  border: 0;
+  background: linear-gradient(135deg, #10213d 0%, #145064 56%, #176b57 100%);
+  color: #ffffff;
+  box-shadow: 0 18px 38px rgba(15, 33, 61, .2);
+}
+
+.smart-engine-hero .eyebrow,
+.smart-engine-hero small {
+  color: rgba(255, 255, 255, .78);
+}
+
+.smart-engine-hero h2 {
+  margin: 4px 0 8px;
+  color: #ffffff;
+  font-size: clamp(1.55rem, 2vw, 2.2rem);
+}
+
+.smart-engine-hero-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.smart-engine-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 255, 255, .32);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, .12);
+  color: #e9fbff;
+  font-size: .72rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.smart-engine-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 290px;
+  gap: 16px;
+  align-items: start;
+}
+
+.smart-engine-panel,
+.smart-engine-side-panel {
+  border-color: #cbdbea;
+  background: #ffffff;
+  box-shadow: 0 14px 32px rgba(31, 50, 72, .08);
+}
+
+.smart-engine-output {
+  min-height: 420px;
+  background: #f8fafc;
+  color: #0f172a;
+  font-weight: 800;
+}
+
+.smart-engine-side-panel h3 {
+  margin: 2px 0 12px;
+  color: #10213d;
+  font-size: 1.05rem;
+}
+
+.smart-engine-side-panel ul {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.smart-engine-side-panel li {
+  padding: 10px 11px;
+  border: 1px solid #d8e5f4;
+  border-radius: 8px;
+  background: #f8fbff;
+  color: #334155;
+  font-size: .82rem;
+  font-weight: 850;
+}
+
+.smart-engine-result-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 12px;
+  padding: 14px;
+  border: 1px solid #cbdbea;
+  border-radius: 10px;
+  background: linear-gradient(135deg, #eef6ff, #ffffff);
+}
+
+.smart-engine-result-header.warning {
+  border-color: #f6d98f;
+  background: linear-gradient(135deg, #fff7df, #ffffff);
+}
+
+.smart-engine-result-header.danger {
+  border-color: #fecdd3;
+  background: linear-gradient(135deg, #fff1f2, #ffffff);
+}
+
+.smart-engine-result-header span,
+.smart-engine-score span,
+.smart-engine-metrics span {
+  color: #64748b;
+  font-size: .68rem;
+  font-weight: 950;
+  text-transform: uppercase;
+}
+
+.smart-engine-result-header strong {
+  display: block;
+  margin: 3px 0;
+  color: #10213d;
+  font-size: 1.3rem;
+  line-height: 1.1;
+}
+
+.smart-engine-result-header small {
+  color: #64748b;
+  font-size: .76rem;
+}
+
+.smart-engine-score {
+  display: grid;
+  place-items: center;
+  min-width: 106px;
+  min-height: 78px;
+  border-radius: 10px;
+  background: #10213d;
+  color: #ffffff;
+}
+
+.smart-engine-score strong,
+.smart-engine-score span {
+  color: #ffffff;
+}
+
+.smart-engine-metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(100px, 1fr));
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.smart-engine-metrics.setup {
+  grid-template-columns: repeat(auto-fit, minmax(128px, 1fr));
+}
+
+.smart-engine-metrics article {
+  display: grid;
+  gap: 5px;
+  min-height: 68px;
+  padding: 10px;
+  border: 1px solid #d7e4f2;
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.smart-engine-metrics strong {
+  color: #0f3b67;
+  font-size: 1.05rem;
+}
+
+.smart-engine-check-note,
+.smart-engine-empty {
+  display: grid;
+  gap: 4px;
+  margin: 12px 0;
+  padding: 11px 12px;
+  border: 1px solid #bfdbfe;
+  border-left: 4px solid #2563eb;
+  border-radius: 8px;
+  background: #eff6ff;
+}
+
+.smart-engine-check-note b,
+.smart-engine-empty strong {
+  color: #172033;
+}
+
+.smart-engine-check-note span,
+.smart-engine-empty span {
+  color: #52647a;
+  font-size: .8rem;
+}
+
+.smart-engine-issue-group {
+  margin-top: 12px;
+  border: 1px solid #d9e6f2;
+  border-radius: 10px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.smart-engine-issue-group header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 11px 12px;
+  border-bottom: 1px solid #e2eaf4;
+  background: #f8fbff;
+}
+
+.smart-engine-issue-group header strong {
+  color: #12345d;
+}
+
+.smart-engine-issue-group header span,
+.smart-engine-issue-group small {
+  color: #64748b;
+  font-size: .72rem;
+  font-weight: 900;
+}
+
+.smart-engine-issues {
+  display: grid;
+  gap: 8px;
+  padding: 10px;
+}
+
+.smart-engine-issues article {
+  display: grid;
+  gap: 3px;
+  padding: 10px 11px;
+  border-left: 4px solid #94a3b8;
+  border-radius: 7px;
+  background: #f8fafc;
+}
+
+.smart-engine-issues article.danger {
+  border-left-color: #dc2626;
+  background: #fff1f2;
+}
+
+.smart-engine-issues article.warning {
+  border-left-color: #d97706;
+  background: #fffbeb;
+}
+
+.smart-engine-issues article.info {
+  border-left-color: #2563eb;
+  background: #eff6ff;
+}
+
+.smart-engine-issues b {
+  color: #172033;
+}
+
+.smart-engine-issues span {
+  color: #64748b;
+  font-size: .78rem;
+}
+
 .system-health-summary {
   display: grid;
   grid-template-columns: repeat(4, minmax(92px, 1fr));
@@ -9881,6 +10151,12 @@ body.modal-open {
   .id-card-tools { grid-template-columns: 1fr; }
   .security-action-grid,
   .security-status-grid { grid-template-columns: 1fr; }
+  .smart-engine-hero { align-items: stretch; flex-direction: column; }
+  .smart-engine-hero-actions { justify-content: flex-start; }
+  .smart-engine-layout { grid-template-columns: 1fr; }
+  .smart-engine-result-header { align-items: stretch; flex-direction: column; }
+  .smart-engine-score { width: 100%; }
+  .smart-engine-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .system-health-summary,
   .role-health-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .timetable-selector-row,

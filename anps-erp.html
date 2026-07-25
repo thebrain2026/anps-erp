@@ -2894,27 +2894,41 @@
       </section>
 
       <section class="view" id="securitySmartEngine">
-        <div class="security-dashboard">
-          <section class="panel security-hero-panel">
-            <div class="panel-head">
-              <div>
-                <p class="eyebrow">Security</p>
-                <h2>Smart Data Engine</h2>
-                <small>Read-only checks for payment, master data, transport fee and backup safety.</small>
-              </div>
+        <div class="security-dashboard smart-engine-page">
+          <section class="panel smart-engine-hero">
+            <div class="smart-engine-hero-copy">
+              <p class="eyebrow">Security Intelligence</p>
+              <h2>Smart Data Engine</h2>
+              <small>Read-only control room for payment, master data, transport fee and backup safety.</small>
+            </div>
+            <div class="smart-engine-hero-actions">
+              <span class="smart-engine-pill">Read-only scan</span>
               <button class="primary-action" id="runSmartDataEngineBtn" type="button">Run Scan</button>
             </div>
           </section>
 
-          <section class="panel">
-            <div class="panel-head">
-              <div>
-                <p class="eyebrow">Smart Scan</p>
-                <h2>Data Safety Report</h2>
+          <div class="smart-engine-layout">
+            <section class="panel smart-engine-panel">
+              <div class="panel-head">
+                <div>
+                  <p class="eyebrow">Live Audit</p>
+                  <h2>Data Safety Report</h2>
+                </div>
               </div>
-            </div>
-            <div class="security-output" id="smartEngineOutput">Click Run Scan to check data safety.</div>
-          </section>
+              <div class="security-output smart-engine-output" id="smartEngineOutput">Click Run Scan to check data safety.</div>
+            </section>
+
+            <aside class="panel smart-engine-side-panel">
+              <p class="eyebrow">Checks</p>
+              <h3>Coverage</h3>
+              <ul>
+                <li>Payment receipts and allocations</li>
+                <li>Fee master and pickup fee setup</li>
+                <li>Student, staff and class setup</li>
+                <li>Browser and server backup safety</li>
+              </ul>
+            </aside>
+          </div>
         </div>
       </section>
 
@@ -3806,6 +3820,6 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="./new-school-os.js?v=20260719-staff-restore"></script>
+  <script src="./new-school-os.js?v=20260725-security-route"></script>
 </body>
 </html>

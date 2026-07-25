@@ -23,7 +23,7 @@ android {
         applicationId "com.anps.schoolerp"
         minSdk 23
         targetSdk 35
-        versionCode 2
+        versionCode 3
         versionName "1.0.1"
 
         buildConfigField "String", "APP_URL", "\"https://anps.thebrainerp.com/anps-mobile-app.html\""
