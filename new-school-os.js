@@ -3445,6 +3445,28 @@ function getDateGapDays(firstDate = "", secondDate = "") {
   return Math.abs(Math.round((first - second) / 86400000));
 }
 
+function getBankStatementDateRange(bankRows = []) {
+  const dates = bankRows
+    .map(row => parseDateDDMMYYYY(row.date))
+    .filter(date => !Number.isNaN(date.getTime()))
+    .sort((a, b) => a - b);
+  if (!dates.length) return {from: null, to: null, label: ""};
+  const from = dates[0];
+  const to = dates[dates.length - 1];
+  return {
+    from,
+    to,
+    label: `${formatDateDDMMYYYY(from)} to ${formatDateDDMMYYYY(to)}`
+  };
+}
+
+function isDateWithinRange(dateValue = "", range = {}) {
+  if (!range.from || !range.to) return true;
+  const date = parseDateDDMMYYYY(dateValue);
+  if (Number.isNaN(date.getTime())) return false;
+  return date >= range.from && date <= range.to;
+}
+
 function scoreBankBookMatch(bankRow, erpRow) {
   const amountMatches = Number(erpRow.bankAmount || 0) === Number(bankRow.amount || 0);
   if (!amountMatches) return null;
@@ -3503,10 +3525,12 @@ function renderBankReconciliation(bankRows = []) {
   const summary = document.getElementById("bankReconSummary");
   const body = document.getElementById("bankReconRows");
   if (!summary || !body) return;
-  const erpRows = getBankBookRows();
+  const allErpRows = getBankBookRows();
+  const statementRange = getBankStatementDateRange(bankRows);
+  const erpRows = allErpRows.filter(row => isDateWithinRange(row.date, statementRange));
   if (!bankRows.length) {
     summary.innerHTML = `
-      <article><span>Bank Book Entries</span><strong>${erpRows.length}</strong></article>
+      <article><span>Bank Book Entries</span><strong>${allErpRows.length}</strong></article>
       <article><span>CSV Credits</span><strong>0</strong></article>
       <article><span>Status</span><strong>Upload CSV</strong></article>
     `;
@@ -3545,6 +3569,8 @@ function renderBankReconciliation(bankRows = []) {
     return sum;
   }, {bank: 0, matchedAmount: 0, confirmed: 0, review: 0, extraBank: 0, notFound: 0});
   summary.innerHTML = `
+    <article><span>Statement Period</span><strong>${escapeHtml(statementRange.label || "-")}</strong></article>
+    <article><span>Bank Book In Period</span><strong>${erpRows.length}</strong></article>
     <article><span>CSV Credits</span><strong>${bankRows.length}</strong></article>
     <article><span>Confirmed</span><strong>${totals.confirmed}</strong></article>
     <article><span>Need Review</span><strong>${totals.review}</strong></article>
