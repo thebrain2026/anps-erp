@@ -4204,6 +4204,11 @@
       });
       $("#voiceFeeMicBtn")?.addEventListener("click", () => {
         const micBtn = $("#voiceFeeMicBtn");
+        const resetMicButton = () => {
+          if (!micBtn) return;
+          micBtn.textContent = "Start Mic";
+          micBtn.disabled = false;
+        };
         const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
         if (!Recognition) {
           $("#voiceFeeStatus").textContent = "This browser does not support voice input. Use Chrome/Android Chrome or type the command.";
@@ -4239,22 +4244,17 @@
             "no-speech": "No voice detected. Tap Start Mic and speak closer to the phone."
           };
           $("#voiceFeeStatus").textContent = messages[reason] || "Voice input failed. Type the command manually.";
+          resetMicButton();
         };
         recognition.onend = () => {
           if ($("#voiceFeeStatus")?.textContent === "Listening...") $("#voiceFeeStatus").textContent = "Mic stopped.";
-          if (micBtn) {
-            micBtn.textContent = "Start Mic";
-            micBtn.disabled = false;
-          }
+          resetMicButton();
         };
         try {
           recognition.start();
         } catch (error) {
           $("#voiceFeeStatus").textContent = "Mic could not start. Close other mic apps and try again.";
-          if (micBtn) {
-            micBtn.textContent = "Start Mic";
-            micBtn.disabled = false;
-          }
+          resetMicButton();
         }
       });
     }
