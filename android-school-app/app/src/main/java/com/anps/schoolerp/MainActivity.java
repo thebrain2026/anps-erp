@@ -13,6 +13,8 @@ import android.net.Network;
 import android.net.NetworkCapabilities;
 import android.os.Bundle;
 import android.os.Build;
+import android.os.Handler;
+import android.os.Looper;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
@@ -45,6 +47,10 @@ public class MainActivity extends Activity {
     private PermissionRequest pendingAudioPermissionRequest;
     private boolean pendingNativeSpeechStart = false;
     private SpeechRecognizer speechRecognizer;
+    private boolean nativeSpeechDoneRequested = false;
+    private boolean nativeSpeechCompleted = false;
+    private StringBuilder nativeSpeechBuffer = new StringBuilder();
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     @SuppressLint("SetJavaScriptEnabled")
     @Override
@@ -196,6 +202,16 @@ public class MainActivity extends Activity {
             requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}, 202);
             return;
         }
+        nativeSpeechDoneRequested = false;
+        nativeSpeechCompleted = false;
+        nativeSpeechBuffer = new StringBuilder();
+        beginNativeSpeechCycle();
+    }
+
+    private void beginNativeSpeechCycle() {
+        if (nativeSpeechCompleted) {
+            return;
+        }
         if (speechRecognizer != null) {
             speechRecognizer.destroy();
         }
@@ -211,18 +227,36 @@ public class MainActivity extends Activity {
 
             @Override
             public void onError(int error) {
+                if (nativeSpeechCompleted) {
+                    return;
+                }
+                if (nativeSpeechDoneRequested) {
+                    finishNativeSpeechWithBufferOrError(speechErrorMessage(error));
+                    return;
+                }
+                if (error == SpeechRecognizer.ERROR_NO_MATCH
+                        || error == SpeechRecognizer.ERROR_SPEECH_TIMEOUT
+                        || error == SpeechRecognizer.ERROR_CLIENT) {
+                    restartNativeSpeechCycle();
+                    return;
+                }
+                nativeSpeechCompleted = true;
                 sendNativeSpeechResult(false, "", speechErrorMessage(error));
             }
 
             @Override
             public void onResults(Bundle results) {
-                ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
-                String text = matches == null || matches.isEmpty() ? "" : matches.get(0);
-                if (text.trim().isEmpty()) {
-                    sendNativeSpeechResult(false, "", "No voice detected. Tap Start Mic and speak closer to the phone.");
+                if (nativeSpeechCompleted) {
                     return;
                 }
-                sendNativeSpeechResult(true, text, "");
+                ArrayList<String> matches = results.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                String text = matches == null || matches.isEmpty() ? "" : matches.get(0);
+                appendNativeSpeechText(text);
+                if (nativeSpeechDoneRequested) {
+                    finishNativeSpeechWithBufferOrError("No voice detected. Tap Start Mic and speak closer to the phone.");
+                } else {
+                    restartNativeSpeechCycle();
+                }
             }
         });
 
@@ -232,13 +266,63 @@ public class MainActivity extends Activity {
         intent.putExtra(RecognizerIntent.EXTRA_LANGUAGE_PREFERENCE, "en-IN");
         intent.putExtra(RecognizerIntent.EXTRA_ONLY_RETURN_LANGUAGE_PREFERENCE, false);
         intent.putExtra(RecognizerIntent.EXTRA_PROMPT, "Speak fee command");
+        intent.putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true);
+        intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_COMPLETE_SILENCE_LENGTH_MILLIS, 6000);
+        intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_POSSIBLY_COMPLETE_SILENCE_LENGTH_MILLIS, 6000);
+        intent.putExtra(RecognizerIntent.EXTRA_SPEECH_INPUT_MINIMUM_LENGTH_MILLIS, 20000);
         speechRecognizer.startListening(intent);
     }
 
     private void stopNativeSpeechRecognition() {
+        nativeSpeechDoneRequested = true;
         if (speechRecognizer != null) {
             speechRecognizer.stopListening();
+            mainHandler.postDelayed(() -> {
+                if (nativeSpeechDoneRequested && !nativeSpeechCompleted && nativeSpeechBuffer.length() > 0) {
+                    finishNativeSpeechWithBufferOrError("");
+                }
+            }, 1200);
+        } else {
+            finishNativeSpeechWithBufferOrError("No voice detected. Tap Start Mic and speak closer to the phone.");
         }
+    }
+
+    private void restartNativeSpeechCycle() {
+        mainHandler.postDelayed(() -> {
+            if (!nativeSpeechDoneRequested && !nativeSpeechCompleted) {
+                beginNativeSpeechCycle();
+            }
+        }, 150);
+    }
+
+    private void appendNativeSpeechText(String text) {
+        String cleanText = text == null ? "" : text.trim();
+        if (cleanText.isEmpty()) {
+            return;
+        }
+        if (nativeSpeechBuffer.length() > 0) {
+            nativeSpeechBuffer.append(" ");
+        }
+        nativeSpeechBuffer.append(cleanText);
+    }
+
+    private void finishNativeSpeechWithBufferOrError(String fallbackError) {
+        if (nativeSpeechCompleted) {
+            return;
+        }
+        nativeSpeechCompleted = true;
+        if (speechRecognizer != null) {
+            speechRecognizer.destroy();
+            speechRecognizer = null;
+        }
+        String finalText = nativeSpeechBuffer.toString().trim();
+        if (finalText.isEmpty()) {
+            sendNativeSpeechResult(false, "", fallbackError == null || fallbackError.isEmpty()
+                    ? "No voice detected. Tap Start Mic and speak closer to the phone."
+                    : fallbackError);
+            return;
+        }
+        sendNativeSpeechResult(true, finalText, "");
     }
 
     private String speechErrorMessage(int error) {

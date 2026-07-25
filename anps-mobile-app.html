@@ -4204,6 +4204,8 @@
       });
       let voiceFeeRecognition = null;
       let voiceFeeMicActive = false;
+      let voiceFeeManualStopRequested = false;
+      let voiceFeeTranscriptBuffer = "";
       $("#voiceFeeMicBtn")?.addEventListener("click", () => {
         const micBtn = $("#voiceFeeMicBtn");
         const resetMicButton = () => {
@@ -4211,6 +4213,7 @@
           micBtn.textContent = "Start Mic";
           micBtn.disabled = false;
           voiceFeeMicActive = false;
+          voiceFeeManualStopRequested = false;
           voiceFeeRecognition = null;
         };
         const markListening = () => {
@@ -4230,6 +4233,7 @@
           resetMicButton();
         };
         if (voiceFeeMicActive) {
+          voiceFeeManualStopRequested = true;
           if (window.AnpsNative?.stopVoiceInput) {
             $("#voiceFeeStatus").textContent = "Finishing voice capture...";
             window.AnpsNative.stopVoiceInput();
@@ -4244,6 +4248,7 @@
           return;
         }
         if (window.AnpsNative?.startVoiceInput) {
+          voiceFeeTranscriptBuffer = "";
           markListening();
           try {
             window.AnpsNative.startVoiceInput();
@@ -4268,14 +4273,25 @@
         recognition.lang = "en-IN";
         recognition.interimResults = false;
         recognition.maxAlternatives = 1;
+        voiceFeeTranscriptBuffer = "";
+        voiceFeeManualStopRequested = false;
         markListening();
         recognition.onresult = event => {
           const transcript = event.results?.[0]?.[0]?.transcript || "";
-          if (input) input.value = transcript;
-          $("#voiceFeeStatus").textContent = "Voice captured. Review the text, then tap Check.";
+          voiceFeeTranscriptBuffer = [voiceFeeTranscriptBuffer, transcript].filter(Boolean).join(" ").trim();
+          if (input) input.value = voiceFeeTranscriptBuffer;
+          $("#voiceFeeStatus").textContent = voiceFeeManualStopRequested
+            ? "Voice captured. Review the text, then tap Check."
+            : "Voice captured. Continue speaking, or tap Done.";
         };
         recognition.onerror = event => {
           const reason = event?.error || "";
+          if (!voiceFeeManualStopRequested && (reason === "no-speech" || reason === "aborted")) {
+            try {
+              recognition.start();
+              return;
+            } catch (error) {}
+          }
           const messages = {
             "not-allowed": "Microphone permission blocked. Allow microphone access, then try again.",
             "service-not-allowed": "Voice service is blocked by this browser/device. Try Chrome/Android Chrome.",
@@ -4287,6 +4303,15 @@
           resetMicButton();
         };
         recognition.onend = () => {
+          if (!voiceFeeManualStopRequested && voiceFeeMicActive) {
+            try {
+              recognition.start();
+              $("#voiceFeeStatus").textContent = voiceFeeTranscriptBuffer
+                ? "Voice captured. Continue speaking, or tap Done."
+                : "Listening... speak fully, then tap Done.";
+              return;
+            } catch (error) {}
+          }
           if ($("#voiceFeeStatus")?.textContent === "Listening... speak fully, then tap Done.") $("#voiceFeeStatus").textContent = "Mic stopped. Review the text, then tap Check.";
           resetMicButton();
         };
