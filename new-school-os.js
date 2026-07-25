@@ -135,7 +135,7 @@ let backendLastLocalSaveAt = 0;
 let backendNetworkFailCount = 0;
 let backendLastHealthOkAt = 0;
 const BACKEND_SAVE_DEBOUNCE_MS = 250;
-const BACKEND_AUTO_SYNC_INTERVAL_MS = 8000;
+const BACKEND_AUTO_SYNC_INTERVAL_MS = 3000;
 const BACKEND_LOCAL_SAVE_GUARD_MS = 5000;
 const BACKEND_OFFLINE_FAIL_THRESHOLD = 5;
 const BACKEND_HEALTH_GRACE_MS = 60000;
@@ -13060,6 +13060,11 @@ function startBackendAutoSync() {
   backendAutoSyncTimer = setInterval(() => pullBackendStateIfChanged(false), BACKEND_AUTO_SYNC_INTERVAL_MS);
 }
 
+function requestImmediateBackendPull() {
+  if (!backendSyncReady || document.hidden) return;
+  window.setTimeout(() => pullBackendStateIfChanged(false), 50);
+}
+
 async function initializeBackendSync() {
   try {
     setTopbarNetworkStatus(navigator.onLine ? "checking" : "offline");
@@ -16872,9 +16877,10 @@ if (localStorage.getItem(BACKEND_TOKEN_KEY)) {
   showLoginOverlay();
 }
 document.addEventListener("visibilitychange", () => {
-  if (!document.hidden) pullBackendStateIfChanged(true);
+  requestImmediateBackendPull();
 });
-window.addEventListener("focus", () => pullBackendStateIfChanged(true));
+window.addEventListener("focus", requestImmediateBackendPull);
+window.addEventListener("pageshow", requestImmediateBackendPull);
 window.addEventListener("online", () => {
   setTopbarNetworkStatus("checking");
   initializeBackendSync();
