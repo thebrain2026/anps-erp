@@ -3354,6 +3354,13 @@ function parseBankAmount(value = "") {
 function normalizeBankDate(value = "") {
   const raw = String(value || "").trim();
   if (!raw) return "";
+  const ddMonYYYY = raw.match(/^(\d{1,2})[\/\-. ]([A-Za-z]{3,})[\/\-. ](\d{2,4})/);
+  if (ddMonYYYY) {
+    const months = {jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06", jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12"};
+    const [, dd, mon, yy] = ddMonYYYY;
+    const month = months[String(mon || "").slice(0, 3).toLowerCase()];
+    if (month) return `${dd.padStart(2, "0")}-${month}-${yy.length === 2 ? `20${yy}` : yy}`;
+  }
   const ddmmyyyy = raw.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})/);
   if (ddmmyyyy) {
     const [, dd, mm, yy] = ddmmyyyy;
@@ -3373,12 +3380,48 @@ function normalizeReference(value = "") {
   return String(value || "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
+function normalizeBankTime(value = "") {
+  const raw = String(value || "").trim();
+  const match = raw.match(/(\d{1,2}:\d{2}(?::\d{2})?\s*(?:AM|PM)?)/i);
+  return match ? match[1].toUpperCase().replace(/\s+/g, " ") : "";
+}
+
+function findBankStatementHeaderIndex(rows = []) {
+  return rows.findIndex(row => {
+    const headers = (row || []).map(normalizeBankHeader);
+    const hasDate = headers.some(header => ["valuedate", "transactiondate", "trandate", "date"].some(alias => header.includes(alias)));
+    const hasDeposit = headers.some(header => ["deposit", "credit", "cramount", "amountcr"].some(alias => header.includes(alias)));
+    const hasRemarks = headers.some(header => ["transactionremarks", "remarks", "narration", "description", "particulars"].some(alias => header.includes(alias)));
+    return hasDate && hasDeposit && hasRemarks;
+  });
+}
+
+function getReferenceLast4Set(value = "") {
+  const tokens = String(value || "")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .map(item => item.trim())
+    .filter(item => item.length >= 4);
+  const normalized = normalizeReference(value);
+  if (normalized.length >= 4) tokens.push(normalized);
+  return new Set(tokens.map(item => item.slice(-4)).filter(Boolean));
+}
+
+function getReferenceLast4Overlap(bankRemarks = "", erpText = "") {
+  const bankTokens = getReferenceLast4Set(bankRemarks);
+  const erpTokens = getReferenceLast4Set(erpText);
+  return [...erpTokens].find(token => bankTokens.has(token)) || "";
+}
+
 function buildBankStatementRows(csvText = "") {
   const parsed = parseBankCsv(csvText);
   if (parsed.length < 2) return [];
-  const headers = parsed[0].map(normalizeBankHeader);
-  return parsed.slice(1).map((row, index) => {
+  const headerIndex = findBankStatementHeaderIndex(parsed);
+  if (headerIndex < 0) return [];
+  const headers = parsed[headerIndex].map(normalizeBankHeader);
+  return parsed.slice(headerIndex + 1).map((row, index) => {
     const date = normalizeBankDate(getBankCsvValue(row, headers, ["valuedate", "transactiondate", "trandate", "date", "posteddate"]));
+    const postedAt = getBankCsvValue(row, headers, ["transactionposteddate", "posteddate", "postdate", "postingdate"]);
     const remarks = getBankCsvValue(row, headers, ["transactionremarks", "remarks", "narration", "description", "particulars", "refno", "referenceno"]);
     const deposit = parseBankAmount(getBankCsvValue(row, headers, ["depositcr", "deposit", "credit", "cramount", "amountcr"]));
     const withdrawal = parseBankAmount(getBankCsvValue(row, headers, ["withdrawaldr", "withdrawal", "debit", "dramount"]));
@@ -3387,6 +3430,7 @@ function buildBankStatementRows(csvText = "") {
     return {
       id: `bank-${index}`,
       date,
+      time: normalizeBankTime(postedAt),
       amount,
       remarks: remarks || row.join(" "),
       raw: row
@@ -3394,20 +3438,65 @@ function buildBankStatementRows(csvText = "") {
   }).filter(row => Number(row.amount || 0) > 0);
 }
 
-function findBankBookMatch(bankRow, erpRows, usedReceipts) {
-  const sameDateAmount = erpRows.filter(row => !usedReceipts.has(row.receipt) && row.date === bankRow.date && Number(row.bankAmount || 0) === Number(bankRow.amount || 0));
-  if (sameDateAmount.length === 1) return {row: sameDateAmount[0], status: "Matched", note: "Exact date and amount match"};
+function getDateGapDays(firstDate = "", secondDate = "") {
+  const first = parseDateDDMMYYYY(firstDate);
+  const second = parseDateDDMMYYYY(secondDate);
+  if (Number.isNaN(first.getTime()) || Number.isNaN(second.getTime())) return 999;
+  return Math.abs(Math.round((first - second) / 86400000));
+}
+
+function scoreBankBookMatch(bankRow, erpRow) {
+  const amountMatches = Number(erpRow.bankAmount || 0) === Number(bankRow.amount || 0);
+  if (!amountMatches) return null;
+  const dateGap = getDateGapDays(bankRow.date, erpRow.date);
+  const erpReferenceText = [erpRow.receipt, erpRow.studentName, erpRow.admissionNo, erpRow.remarks].join(" ");
+  const last4 = getReferenceLast4Overlap(bankRow.remarks, erpReferenceText);
   const bankRef = normalizeReference(bankRow.remarks);
-  const referenceMatch = sameDateAmount.find(row => {
-    const erpRef = normalizeReference([row.receipt, row.studentName, row.admissionNo, row.remarks].join(" "));
-    return erpRef && bankRef && (bankRef.includes(erpRef) || erpRef.includes(bankRef) || normalizeReference(row.admissionNo).slice(-3) && bankRef.includes(normalizeReference(row.admissionNo).slice(-3)));
-  });
-  if (referenceMatch) return {row: referenceMatch, status: "Matched", note: "Date, amount, and reference match"};
-  if (sameDateAmount.length > 1) return {row: sameDateAmount[0], status: "Review", note: `${sameDateAmount.length} ERP entries have the same date and amount`};
-  const amountOnly = erpRows.filter(row => !usedReceipts.has(row.receipt) && Number(row.bankAmount || 0) === Number(bankRow.amount || 0));
-  if (amountOnly.length === 1) return {row: amountOnly[0], status: "Review", note: "Amount matches, date is different"};
-  if (amountOnly.length > 1) return {row: amountOnly[0], status: "Review", note: `${amountOnly.length} ERP entries have this amount`};
-  return {row: null, status: "Unmatched", note: "No ERP Bank Book entry found"};
+  const erpRef = normalizeReference(erpReferenceText);
+  let score = 50;
+  const notes = ["amount exact"];
+  if (dateGap === 0) {
+    score += 25;
+    notes.push("date exact");
+  } else if (dateGap <= 1) {
+    score += 12;
+    notes.push("date within 1 day");
+  } else if (dateGap <= 2) {
+    score += 6;
+    notes.push("date within 2 days");
+  } else {
+    notes.push(`${dateGap} day date gap`);
+  }
+  if (last4) {
+    score += 35;
+    notes.push(`UTR/ref last 4 matched: ${last4.toUpperCase()}`);
+  } else if (bankRef && erpRef && (bankRef.includes(erpRef) || erpRef.includes(bankRef))) {
+    score += 18;
+    notes.push("reference text matched");
+  } else {
+    const admissionTail = normalizeReference(erpRow.admissionNo).slice(-3);
+    if (admissionTail && bankRef.includes(admissionTail)) {
+      score += 8;
+      notes.push("admission tail found in bank remarks");
+    }
+  }
+  const status = score >= 75 ? "Confirmed" : "Need Review";
+  return {row: erpRow, status, score, note: `Smart match ${score}/100: ${notes.join(", ")}`};
+}
+
+function findBankBookMatch(bankRow, erpRows, usedReceipts) {
+  const candidates = erpRows
+    .filter(row => !usedReceipts.has(row.receipt))
+    .map(row => scoreBankBookMatch(bankRow, row))
+    .filter(Boolean)
+    .sort((a, b) => b.score - a.score);
+  if (!candidates.length) return {row: null, status: "Extra Bank Credit", score: 0, note: "Bank credit found, but no ERP Bank Book entry matched"};
+  const best = candidates[0];
+  const sameScoreCount = candidates.filter(item => item.score === best.score).length;
+  if (sameScoreCount > 1 && best.status === "Confirmed") {
+    return {...best, status: "Need Review", note: `${best.note}; ${sameScoreCount} possible ERP entries`};
+  }
+  return best;
 }
 
 function renderBankReconciliation(bankRows = []) {
@@ -3415,38 +3504,63 @@ function renderBankReconciliation(bankRows = []) {
   const body = document.getElementById("bankReconRows");
   if (!summary || !body) return;
   const erpRows = getBankBookRows();
+  if (!bankRows.length) {
+    summary.innerHTML = `
+      <article><span>Bank Book Entries</span><strong>${erpRows.length}</strong></article>
+      <article><span>CSV Credits</span><strong>0</strong></article>
+      <article><span>Status</span><strong>Upload CSV</strong></article>
+    `;
+    body.innerHTML = `<tr><td colspan="11">Upload a bank CSV statement and click Match Statement.</td></tr>`;
+    return;
+  }
   const usedReceipts = new Set();
-  const results = bankRows.map(bankRow => {
+  const bankResults = bankRows.map(bankRow => {
     const match = findBankBookMatch(bankRow, erpRows, usedReceipts);
-    if (match.row && match.status === "Matched") usedReceipts.add(match.row.receipt);
+    if (match.row && match.status === "Confirmed") usedReceipts.add(match.row.receipt);
     return {bankRow, ...match};
   });
+  const erpMissingResults = erpRows
+    .filter(row => Number(row.bankAmount || 0) > 0 && !usedReceipts.has(row.receipt))
+    .filter(row => !bankResults.some(item => item.row?.receipt === row.receipt))
+    .map(row => ({
+      bankRow: {date: "-", time: "-", amount: 0, remarks: "-"},
+      row,
+      status: "Not Found in Bank",
+      score: 0,
+      note: "ERP Bank Book entry not confirmed in uploaded statement"
+    }));
+  const results = [...bankResults, ...erpMissingResults];
   const totals = results.reduce((sum, item) => {
     sum.bank += Number(item.bankRow.amount || 0);
-    if (item.status === "Matched") {
-      sum.matched += 1;
+    if (item.status === "Confirmed") {
+      sum.confirmed += 1;
       sum.matchedAmount += Number(item.bankRow.amount || 0);
-    } else if (item.status === "Review") {
+    } else if (item.status === "Need Review") {
       sum.review += 1;
-    } else {
-      sum.unmatched += 1;
+    } else if (item.status === "Extra Bank Credit") {
+      sum.extraBank += 1;
+    } else if (item.status === "Not Found in Bank") {
+      sum.notFound += 1;
     }
     return sum;
-  }, {bank: 0, matchedAmount: 0, matched: 0, review: 0, unmatched: 0});
+  }, {bank: 0, matchedAmount: 0, confirmed: 0, review: 0, extraBank: 0, notFound: 0});
   summary.innerHTML = `
-    <article><span>CSV Credits</span><strong>${results.length}</strong></article>
-    <article><span>Matched</span><strong>${totals.matched}</strong></article>
+    <article><span>CSV Credits</span><strong>${bankRows.length}</strong></article>
+    <article><span>Confirmed</span><strong>${totals.confirmed}</strong></article>
     <article><span>Need Review</span><strong>${totals.review}</strong></article>
-    <article><span>Unmatched</span><strong>${totals.unmatched}</strong></article>
+    <article><span>Extra Bank Credit</span><strong>${totals.extraBank}</strong></article>
+    <article><span>Not Found in Bank</span><strong>${totals.notFound}</strong></article>
     <article><span>CSV Total</span><strong>${formatRs(totals.bank)}</strong></article>
-    <article><span>Matched Amount</span><strong>${formatRs(totals.matchedAmount)}</strong></article>
+    <article><span>Confirmed Amount</span><strong>${formatRs(totals.matchedAmount)}</strong></article>
   `;
   body.innerHTML = results.map(item => {
     const row = item.row || {};
+    const statusClass = String(item.status || "").toLowerCase().replace(/\s+/g, "-");
     return `
-      <tr class="bank-recon-${String(item.status || "").toLowerCase()}">
+      <tr class="bank-recon-${statusClass}">
         <td><span class="bank-recon-status">${escapeHtml(item.status)}</span></td>
         <td>${escapeHtml(item.bankRow.date || "-")}</td>
+        <td>${escapeHtml(item.bankRow.time || "-")}</td>
         <td><strong>${formatRs(item.bankRow.amount || 0)}</strong></td>
         <td>${escapeHtml(item.bankRow.remarks || "-")}</td>
         <td>${escapeHtml(row.receipt || "-")}</td>
@@ -3457,7 +3571,7 @@ function renderBankReconciliation(bankRows = []) {
         <td>${escapeHtml(item.note || "-")}</td>
       </tr>
     `;
-  }).join("") || `<tr><td colspan="10">No credit rows found in the uploaded CSV.</td></tr>`;
+  }).join("") || `<tr><td colspan="11">No credit rows found in the uploaded CSV.</td></tr>`;
 }
 
 function shortCollectionDateLabel(value = "") {

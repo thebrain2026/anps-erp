@@ -3482,27 +3482,35 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   font-weight: 950;
 }
 
-.bank-recon-matched .bank-recon-status {
+.bank-recon-matched .bank-recon-status,
+.bank-recon-confirmed .bank-recon-status {
   background: #167b45;
 }
 
-.bank-recon-review .bank-recon-status {
+.bank-recon-review .bank-recon-status,
+.bank-recon-need-review .bank-recon-status {
   background: #a16207;
 }
 
-.bank-recon-unmatched .bank-recon-status {
+.bank-recon-unmatched .bank-recon-status,
+.bank-recon-extra-bank-credit .bank-recon-status,
+.bank-recon-not-found-in-bank .bank-recon-status {
   background: #b42318;
 }
 
-.bank-recon-matched td {
+.bank-recon-matched td,
+.bank-recon-confirmed td {
   background: #f1fbf4 !important;
 }
 
-.bank-recon-review td {
+.bank-recon-review td,
+.bank-recon-need-review td {
   background: #fff8e6 !important;
 }
 
-.bank-recon-unmatched td {
+.bank-recon-unmatched td,
+.bank-recon-extra-bank-credit td,
+.bank-recon-not-found-in-bank td {
   background: #fff1f1 !important;
 }
 

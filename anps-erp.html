@@ -743,14 +743,14 @@
             <button class="ghost-action" id="bankReconClearBtn" type="button">Clear</button>
           </div>
           <div class="bank-reconciliation-help">
-            CSV should include transaction date, remarks/reference, and deposit/credit amount columns. Excel files are not required.
+            Report only: Bank Book entries are matched with the uploaded bank statement by amount, date, time, and UTR/reference last 4. No ERP entry is created or changed.
           </div>
           <div class="bank-book-summary" id="bankReconSummary"></div>
           <div class="report-table-panel table-wrap bank-book-table bank-reconciliation-table">
             <table>
-              <thead><tr><th>Status</th><th>Bank Date</th><th>Bank Amount</th><th>Bank Reference / Remarks</th><th>ERP Receipt</th><th>Student</th><th>Admission No.</th><th>ERP Date</th><th>ERP Amount</th><th>Match Note</th></tr></thead>
+              <thead><tr><th>Status</th><th>Bank Date</th><th>Time</th><th>Bank Amount</th><th>Bank Reference / Remarks</th><th>ERP Receipt</th><th>Student</th><th>Admission No.</th><th>ERP Date</th><th>ERP Amount</th><th>Smart Match Note</th></tr></thead>
               <tbody id="bankReconRows">
-                <tr><td colspan="10">Upload a bank CSV statement and click Match Statement.</td></tr>
+                <tr><td colspan="11">Upload a bank CSV statement and click Match Statement.</td></tr>
               </tbody>
             </table>
           </div>
