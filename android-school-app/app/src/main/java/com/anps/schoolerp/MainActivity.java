@@ -50,6 +50,7 @@ public class MainActivity extends Activity {
     private boolean nativeSpeechDoneRequested = false;
     private boolean nativeSpeechCompleted = false;
     private StringBuilder nativeSpeechBuffer = new StringBuilder();
+    private String nativeSpeechLastPartial = "";
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
 
     @SuppressLint("SetJavaScriptEnabled")
@@ -205,6 +206,7 @@ public class MainActivity extends Activity {
         nativeSpeechDoneRequested = false;
         nativeSpeechCompleted = false;
         nativeSpeechBuffer = new StringBuilder();
+        nativeSpeechLastPartial = "";
         beginNativeSpeechCycle();
     }
 
@@ -222,7 +224,11 @@ public class MainActivity extends Activity {
             @Override public void onRmsChanged(float rmsdB) {}
             @Override public void onBufferReceived(byte[] buffer) {}
             @Override public void onEndOfSpeech() {}
-            @Override public void onPartialResults(Bundle partialResults) {}
+            @Override
+            public void onPartialResults(Bundle partialResults) {
+                ArrayList<String> matches = partialResults.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                nativeSpeechLastPartial = matches == null || matches.isEmpty() ? "" : matches.get(0);
+            }
             @Override public void onEvent(int eventType, Bundle params) {}
 
             @Override
@@ -275,6 +281,7 @@ public class MainActivity extends Activity {
 
     private void stopNativeSpeechRecognition() {
         nativeSpeechDoneRequested = true;
+        appendNativeSpeechText(nativeSpeechLastPartial);
         if (speechRecognizer != null) {
             speechRecognizer.stopListening();
             mainHandler.postDelayed(() -> {
@@ -298,6 +305,10 @@ public class MainActivity extends Activity {
     private void appendNativeSpeechText(String text) {
         String cleanText = text == null ? "" : text.trim();
         if (cleanText.isEmpty()) {
+            return;
+        }
+        String currentText = nativeSpeechBuffer.toString().trim();
+        if (cleanText.equalsIgnoreCase(currentText) || currentText.toLowerCase().endsWith(cleanText.toLowerCase())) {
             return;
         }
         if (nativeSpeechBuffer.length() > 0) {
