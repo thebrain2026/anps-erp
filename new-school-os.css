@@ -3398,6 +3398,12 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   min-width: 1320px;
 }
 
+.bank-reconciliation-table th:nth-child(5),
+.bank-reconciliation-table td:nth-child(5) {
+  width: 260px;
+  max-width: 260px;
+}
+
 .entire-school-fees-table table {
   min-width: 1380px;
 }
@@ -3480,6 +3486,56 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   background: #64748b;
   font-size: .76rem;
   font-weight: 950;
+}
+
+.bank-recon-reference {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  max-width: 250px;
+  line-height: 1.25;
+}
+
+.bank-recon-reference strong {
+  display: block;
+  color: #123f66;
+  font-size: .82rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bank-recon-reference span {
+  display: block;
+  max-height: 36px;
+  overflow: auto;
+  color: #475569;
+  font-size: .74rem;
+}
+
+.bank-recon-reference details {
+  max-width: 100%;
+}
+
+.bank-recon-reference summary {
+  cursor: pointer;
+  color: #177e89;
+  font-size: .72rem;
+  font-weight: 900;
+}
+
+.bank-recon-reference small {
+  display: block;
+  max-height: 76px;
+  overflow: auto;
+  padding: 6px;
+  border: 1px solid #d8e6f2;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #334155;
+  font-size: .72rem;
+  white-space: normal;
+  word-break: break-word;
 }
 
 .bank-recon-matched .bank-recon-status,

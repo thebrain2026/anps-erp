@@ -3521,6 +3521,37 @@ function findBankBookMatch(bankRow, erpRows, usedReceipts) {
   return best;
 }
 
+function renderCompactBankReference(remarks = "") {
+  const raw = String(remarks || "-").trim();
+  if (!raw || raw === "-") return "-";
+  const parts = raw.split("/").map(part => part.trim()).filter(Boolean);
+  const upperFirst = String(parts[0] || "").toUpperCase();
+  let primary = parts[0] || raw;
+  let secondaryParts = [];
+  if (upperFirst === "UPI" && parts.length > 1) {
+    primary = `UPI ${parts[1]}`;
+    secondaryParts = [parts[3], parts[4]].filter(Boolean);
+  } else if (upperFirst === "IMPS" || upperFirst === "NEFT" || upperFirst === "RTGS" || upperFirst === "MMT") {
+    primary = [upperFirst, parts[1]].filter(Boolean).join(" ");
+    secondaryParts = [parts[2], parts[3]].filter(Boolean);
+  } else {
+    const refToken = parts.find(part => /[a-z0-9]{8,}/i.test(part)) || raw.split(/\s+/).find(part => /[a-z0-9]{8,}/i.test(part));
+    primary = refToken || raw.slice(0, 32);
+    secondaryParts = parts.filter(part => part !== primary).slice(0, 2);
+  }
+  const secondary = secondaryParts.join(" | ");
+  return `
+    <div class="bank-recon-reference" title="${escapeHtml(raw)}">
+      <strong>${escapeHtml(primary)}</strong>
+      ${secondary ? `<span>${escapeHtml(secondary)}</span>` : ""}
+      <details>
+        <summary>More</summary>
+        <small>${escapeHtml(raw)}</small>
+      </details>
+    </div>
+  `;
+}
+
 function renderBankReconciliation(bankRows = []) {
   const summary = document.getElementById("bankReconSummary");
   const body = document.getElementById("bankReconRows");
@@ -3588,7 +3619,7 @@ function renderBankReconciliation(bankRows = []) {
         <td>${escapeHtml(item.bankRow.date || "-")}</td>
         <td>${escapeHtml(item.bankRow.time || "-")}</td>
         <td><strong>${formatRs(item.bankRow.amount || 0)}</strong></td>
-        <td>${escapeHtml(item.bankRow.remarks || "-")}</td>
+        <td>${renderCompactBankReference(item.bankRow.remarks || "-")}</td>
         <td>${escapeHtml(row.receipt || "-")}</td>
         <td>${escapeHtml(row.studentName || "-")}</td>
         <td>${escapeHtml(row.admissionNo || "-")}</td>
