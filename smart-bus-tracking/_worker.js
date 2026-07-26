@@ -39,6 +39,10 @@ function officePinFor(env) {
   return String(env.SMART_BUS_OFFICE_PIN || "");
 }
 
+function driverPinFor(env) {
+  return String(env.SMART_BUS_DRIVER_PIN || "");
+}
+
 function studentLinkSecret(env) {
   return String(env.SMART_BUS_STUDENT_LINK_SECRET || env.SMART_BUS_ERP_TOKEN || "");
 }
@@ -165,6 +169,46 @@ async function signDriverParams(params, env) {
   return base64Url(await crypto.subtle.sign("HMAC", key, data));
 }
 
+async function signDriverSession(expiresAt, env) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(tokenFor(env)),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const data = new TextEncoder().encode(`driver-session:${expiresAt}`);
+  return base64Url(await crypto.subtle.sign("HMAC", key, data));
+}
+
+async function verifyDriverSession(url, env) {
+  const token = tokenFor(env);
+  const session = url.searchParams.get("driver_session") || "";
+  const [expiresAtRaw, suppliedSig] = session.split(".");
+  const expiresAt = Number(expiresAtRaw || 0);
+  if (!token) {
+    return { ok: false, status: 503, error: "Smart Bus driver token is not configured." };
+  }
+  if (!expiresAt || !suppliedSig) {
+    return { ok: false, status: 401, error: "Driver PIN login required." };
+  }
+  if (Date.now() / 1000 > expiresAt) {
+    return { ok: false, status: 403, error: "Driver PIN login expired. Login again." };
+  }
+  const expectedSig = await signDriverSession(expiresAt, env);
+  if (expectedSig !== suppliedSig) {
+    return { ok: false, status: 403, error: "Invalid driver login session." };
+  }
+  return { ok: true };
+}
+
+async function verifyDriverAccess(url, env) {
+  if (url.searchParams.get("source") === "erp-driver" || url.searchParams.get("sig")) {
+    return verifySignedDriverLink(url, env);
+  }
+  return verifyDriverSession(url, env);
+}
+
 async function signedDriverUrlForVehicle(vehicle, request, env) {
   const url = new URL(request.url);
   const issuedAt = Math.floor(Date.now() / 1000);
@@ -225,9 +269,14 @@ function loginRateKey(request) {
   return `office-login-attempt:${ip}`;
 }
 
-async function readLoginAttempts(request, env) {
+function driverLoginRateKey(request) {
+  const ip = request.headers.get("cf-connecting-ip") || "unknown";
+  return `driver-login-attempt:${ip}`;
+}
+
+async function readLoginAttempts(request, env, key = loginRateKey(request)) {
   if (!env.SMART_BUS_KV) return { blocked: true, count: 0 };
-  const raw = await env.SMART_BUS_KV.get(loginRateKey(request));
+  const raw = await env.SMART_BUS_KV.get(key);
   if (!raw) return { blocked: false, count: 0 };
   try {
     const data = JSON.parse(raw);
@@ -238,18 +287,18 @@ async function readLoginAttempts(request, env) {
   }
 }
 
-async function recordFailedLogin(request, env) {
+async function recordFailedLogin(request, env, key = loginRateKey(request)) {
   if (!env.SMART_BUS_KV) return;
-  const attempts = await readLoginAttempts(request, env);
+  const attempts = await readLoginAttempts(request, env, key);
   const next = {
     count: Number(attempts.count || 0) + 1,
     reset_at: attempts.reset_at || Date.now() + (15 * 60 * 1000),
   };
-  await env.SMART_BUS_KV.put(loginRateKey(request), JSON.stringify(next), { expirationTtl: 15 * 60 });
+  await env.SMART_BUS_KV.put(key, JSON.stringify(next), { expirationTtl: 15 * 60 });
 }
 
-async function clearFailedLogin(request, env) {
-  if (env.SMART_BUS_KV) await env.SMART_BUS_KV.delete(loginRateKey(request));
+async function clearFailedLogin(request, env, key = loginRateKey(request)) {
+  if (env.SMART_BUS_KV) await env.SMART_BUS_KV.delete(key);
 }
 
 async function handleOfficeLogin(request, env) {
@@ -274,6 +323,27 @@ async function handleOfficeLogin(request, env) {
       "set-cookie": `anps_bus_office=${expiresAt}.${sig}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=7200`,
     },
   });
+}
+
+async function handleDriverLogin(request, env) {
+  if (!tokenFor(env) || !driverPinFor(env)) {
+    return json({ ok: false, error: "Driver PIN is not configured." }, { status: 503 });
+  }
+  const rateKey = driverLoginRateKey(request);
+  const attempts = await readLoginAttempts(request, env, rateKey);
+  if (attempts.blocked) {
+    return json({ ok: false, error: "Too many wrong PIN attempts. Please try again after 15 minutes." }, { status: 429 });
+  }
+  const payload = await request.json().catch(() => ({}));
+  const suppliedPin = String(payload.pin || "").trim();
+  if (!suppliedPin || suppliedPin !== driverPinFor(env)) {
+    await recordFailedLogin(request, env, rateKey);
+    return json({ ok: false, error: "Wrong Driver PIN." }, { status: 401 });
+  }
+  await clearFailedLogin(request, env, rateKey);
+  const expiresAt = Math.floor(Date.now() / 1000) + (12 * 60 * 60);
+  const sig = await signDriverSession(expiresAt, env);
+  return json({ ok: true, driver_session: `${expiresAt}.${sig}`, expires_at: expiresAt });
 }
 
 async function readState(env) {
@@ -367,9 +437,11 @@ async function handleOfficeSummary(env) {
   });
 }
 
-async function handleDriverVehicles(env, vehicleId) {
+async function handleDriverVehicles(env, vehicleId = "") {
   const state = await readState(env);
-  const vehicles = (state.vehicles || []).filter((vehicle) => String(vehicle.vehicle_id || "") === String(vehicleId || ""));
+  const vehicles = vehicleId
+    ? (state.vehicles || []).filter((vehicle) => String(vehicle.vehicle_id || "") === String(vehicleId || ""))
+    : (state.vehicles || []);
   return json({
     ok: true,
     school_id: state.school_id || SCHOOL_ID,
@@ -406,11 +478,12 @@ async function handleOfficeDriverLink(request, env) {
 }
 
 async function handleDriverLocation(request, env) {
-  const auth = await verifySignedDriverLink(new URL(request.url), env);
+  const url = new URL(request.url);
+  const auth = await verifyDriverAccess(url, env);
   if (!auth.ok) return json({ ok: false, error: auth.error }, { status: auth.status });
   const payload = await request.json().catch(() => ({}));
   const vehicleId = String(payload.vehicle_id || "").trim();
-  if (vehicleId !== auth.vehicleId) {
+  if (auth.vehicleId && vehicleId !== auth.vehicleId) {
     return json({ ok: false, error: "Driver GPS link does not match selected vehicle." }, { status: 403 });
   }
   const lat = Number(payload.lat);
@@ -540,6 +613,7 @@ export default {
     if (request.method === "OPTIONS") return json({ ok: true });
     if (url.pathname === "/api/student/bus-location") return handleStudentLocation(request, env);
     if (url.pathname === "/api/office/login" && request.method === "POST") return handleOfficeLogin(request, env);
+    if (url.pathname === "/api/driver/login" && request.method === "POST") return handleDriverLogin(request, env);
     if (url.pathname === "/api/office/session") {
       const session = await verifyOfficeSession(request, env);
       return json({ ok: session.ok, error: session.ok ? "" : session.error }, { status: session.ok ? 200 : session.status });
@@ -563,7 +637,7 @@ export default {
       return handleOfficeDriverLink(request, env);
     }
     if (url.pathname === "/api/driver/vehicles" && request.method === "GET") {
-      const auth = await verifySignedDriverLink(url, env);
+      const auth = await verifyDriverAccess(url, env);
       if (!auth.ok) return json({ ok: false, error: auth.error }, { status: auth.status });
       return handleDriverVehicles(env, auth.vehicleId);
     }

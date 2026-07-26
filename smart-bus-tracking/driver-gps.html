@@ -16,10 +16,14 @@
         <p>Keep this page open while the trip is running.</p>
       </section>
       <section class="phone-body">
-        <div id="driverMessage" class="student-message" role="status">Loading assigned vehicles…</div>
+        <div id="driverMessage" class="student-message" role="status">Enter Driver PIN, load route, then start trip.</div>
 
         <label class="driver-field">
-          <span>Bus and route</span>
+          <span>Driver PIN</span>
+          <input id="driverPin" type="password" inputmode="numeric" autocomplete="one-time-code" placeholder="Enter Driver PIN" aria-label="Driver PIN">
+        </label>
+        <label class="driver-field">
+          <span>Select route / bus</span>
           <select id="driverVehicle" aria-label="Bus and route"></select>
         </label>
         <label class="driver-field">
@@ -29,7 +33,7 @@
             <option value="drop">Drop trip</option>
           </select>
         </label>
-        <button id="loadDriverVehiclesBtn" class="ghost" type="button">Refresh Bus</button>
+        <button id="loadDriverVehiclesBtn" class="ghost" type="button">Login & Load Routes</button>
 
         <div class="driver-actions">
           <button id="startTripBtn" class="primary" type="button">Start Trip</button>
@@ -46,10 +50,10 @@
           <div class="student-row"><span>Sent</span><strong id="gpsSent">-</strong></div>
         </div>
 
-        <p class="driver-note">Location is sent only during an active trip. Open this page from the signed Driver GPS link in ERP.</p>
+        <p class="driver-note">Location is sent only during an active trip. Driver PIN can be changed by office when needed.</p>
       </section>
     </main>
   </div>
-  <script src="./driver-gps.js?v=signed-driver-link"></script>
+  <script src="./driver-gps.js?v=pin-route-select"></script>
 </body>
 </html>

@@ -2,6 +2,7 @@ const DRIVER_API = "";
 const DRIVER_SCHOOL_ID = "anps";
 const DRIVER_SEND_INTERVAL_MS = 5000;
 const DRIVER_LINK_QUERY = window.location.search || "";
+const DRIVER_SESSION_KEY = "anpsSmartBusDriverSession";
 
 const driverElement = (id) => document.getElementById(id);
 let driverVehicles = [];
@@ -23,7 +24,7 @@ function selectedDriverVehicle() {
 function renderDriverSelection() {
   const select = driverElement("driverVehicle");
   select.innerHTML = driverVehicles.map((vehicle) => (
-    `<option value="${escapeDriverHtml(vehicle.vehicle_id)}">${escapeDriverHtml(vehicle.vehicle_name)} · ${escapeDriverHtml(vehicle.route_name || "No route")}</option>`
+    `<option value="${escapeDriverHtml(vehicle.vehicle_id)}">${escapeDriverHtml(vehicle.route_name || "No route")} · ${escapeDriverHtml(vehicle.vehicle_name)}${vehicle.driver_name ? ` · ${escapeDriverHtml(vehicle.driver_name)}` : ""}</option>`
   )).join("");
   updateSelectedDriverReadout();
 }
@@ -33,12 +34,37 @@ function updateSelectedDriverReadout() {
   driverElement("gpsBus").textContent = vehicle ? vehicle.vehicle_name : "-";
 }
 
+function driverSession() {
+  return sessionStorage.getItem(DRIVER_SESSION_KEY) || "";
+}
+
+async function ensureDriverSession() {
+  if (DRIVER_LINK_QUERY.includes("sig=")) return "";
+  const existing = driverSession();
+  if (existing) return existing;
+  const pin = driverElement("driverPin").value.trim();
+  if (!pin) throw new Error("Driver PIN দিন, তারপর Login & Load Routes চাপুন.");
+  const response = await fetch(`${DRIVER_API}/api/driver/login`, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({pin}),
+  });
+  const data = await response.json();
+  if (!response.ok || !data.ok || !data.driver_session) throw new Error(data.error || "Driver login failed.");
+  sessionStorage.setItem(DRIVER_SESSION_KEY, data.driver_session);
+  return data.driver_session;
+}
+
+async function driverQuery() {
+  if (DRIVER_LINK_QUERY.includes("sig=")) return DRIVER_LINK_QUERY;
+  const session = await ensureDriverSession();
+  return `?driver_session=${encodeURIComponent(session)}`;
+}
+
 async function loadDriverVehicles() {
-  if (!DRIVER_LINK_QUERY.includes("sig=")) {
-    throw new Error("Open Driver GPS from ERP Smart Bus Tracking signed link.");
-  }
-  const separator = DRIVER_LINK_QUERY.includes("?") ? "&" : "?";
-  const response = await fetch(`${DRIVER_API}/api/driver/vehicles${DRIVER_LINK_QUERY}${separator}school_id=${encodeURIComponent(DRIVER_SCHOOL_ID)}`);
+  const query = await driverQuery();
+  const separator = query.includes("?") ? "&" : "?";
+  const response = await fetch(`${DRIVER_API}/api/driver/vehicles${query}${separator}school_id=${encodeURIComponent(DRIVER_SCHOOL_ID)}`);
   const data = await response.json();
   if (!response.ok || !data.ok) throw new Error(data.error || "Unable to load vehicles");
   driverVehicles = (data.vehicles || [])
@@ -50,7 +76,7 @@ async function loadDriverVehicles() {
     }));
   if (!driverVehicles.length) throw new Error("No assigned bus, route and driver found. Sync route, vehicle and driver from ERP first.");
   renderDriverSelection();
-  setDriverMessage("Confirm the bus, then start tracking.");
+  setDriverMessage("Route/bus select করুন, তারপর Start Trip চাপুন.");
 }
 
 function driverPayload(position, status = "running") {
@@ -77,8 +103,9 @@ async function sendDriverPosition(position, status = "running", force = false) {
   if (!force && (driverSending || now - driverLastSentAt < DRIVER_SEND_INTERVAL_MS)) return;
   driverSending = true;
   try {
-    const separator = DRIVER_LINK_QUERY.includes("?") ? "&" : "?";
-    const response = await fetch(`${DRIVER_API}/api/driver/location${DRIVER_LINK_QUERY}${separator}school_id=${encodeURIComponent(DRIVER_SCHOOL_ID)}`, {
+    const query = await driverQuery();
+    const separator = query.includes("?") ? "&" : "?";
+    const response = await fetch(`${DRIVER_API}/api/driver/location${query}${separator}school_id=${encodeURIComponent(DRIVER_SCHOOL_ID)}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -142,6 +169,7 @@ async function startDriverTrip() {
   driverElement("stopTripBtn").disabled = false;
   driverElement("driverVehicle").disabled = true;
   driverElement("driverTripType").disabled = true;
+  driverElement("driverPin").disabled = true;
   driverElement("gpsStatus").textContent = "Waiting for GPS";
   setDriverMessage("Allow location permission to start the trip.");
   driverWatchId = navigator.geolocation.watchPosition(showDriverPosition, handleDriverGpsError, {
@@ -168,6 +196,7 @@ async function stopDriverTrip() {
   driverElement("stopTripBtn").disabled = true;
   driverElement("driverVehicle").disabled = false;
   driverElement("driverTripType").disabled = false;
+  driverElement("driverPin").disabled = false;
 }
 
 function escapeDriverHtml(value) {
@@ -183,4 +212,6 @@ driverElement("stopTripBtn").addEventListener("click", stopDriverTrip);
 window.addEventListener("pagehide", () => {
   if (driverWatchId != null) navigator.geolocation.clearWatch(driverWatchId);
 });
-loadDriverVehicles().catch((error) => setDriverMessage(error.message, true));
+if (DRIVER_LINK_QUERY.includes("sig=") || driverSession()) {
+  loadDriverVehicles().catch((error) => setDriverMessage(error.message, true));
+}
