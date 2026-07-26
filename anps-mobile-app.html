@@ -2516,6 +2516,14 @@
       async smartBusConfig() {
         return this.request("/smart-bus/config");
       },
+      async smartBusStudentUrl(user = {}) {
+        const params = new URLSearchParams();
+        const admissionNo = normalizeText(user.admissionNo || user.id || user.admissionNumber);
+        if (admissionNo) params.set("admission_no", admissionNo);
+        if (normalizeText(user.name)) params.set("student", normalizeText(user.name));
+        if (normalizeText(user.className)) params.set("class", normalizeText(user.className));
+        return this.request(`/smart-bus/student-url?${params.toString()}`);
+      },
       async create(collection, record) {
         const latest = await this.request("/state", { method: "GET" });
         const erpState = latest.state || {};
@@ -5353,11 +5361,11 @@
         const status = $("#busLocationStatus");
         if (status) status.textContent = "Bus location link refreshed.";
       });
-      AppApi.smartBusConfig()
-        .then(config => {
-          if (!config?.studentUrl) return;
-          const liveUrl = buildStudentBusLocationUrl(user, config.studentUrl);
-          setBusLocationUrl(liveUrl);
+      Promise.allSettled([AppApi.smartBusConfig(), AppApi.smartBusStudentUrl(user)])
+        .then(results => {
+          const config = results[0]?.value || {};
+          const signedUrl = results[1]?.value?.url || "";
+          if (signedUrl) setBusLocationUrl(signedUrl);
           const status = $("#busLocationStatus");
           if (status) {
             status.textContent = config.configured

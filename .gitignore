@@ -8,3 +8,4 @@ anps-erp-data/
 .api_token
 backups/
 uploads/
+.wrangler/

@@ -1,0 +1,7 @@
+name = "anps-smart-bus-tracking"
+pages_build_output_dir = "smart-bus-tracking"
+compatibility_date = "2026-07-26"
+
+[[kv_namespaces]]
+binding = "SMART_BUS_KV"
+id = "9b97e0793e7340f8b83133c4d791b7e1"

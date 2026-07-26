@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+import base64
+import hashlib
 import json
 import hmac
 import os
@@ -10,7 +12,7 @@ import urllib.request
 from datetime import datetime, timedelta
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, urlencode, urlparse
 
 try:
     from google.auth.transport.requests import Request as GoogleAuthRequest
@@ -55,6 +57,7 @@ ICICI_WEBHOOK_SECRET = os.environ.get("ANPS_ICICI_WEBHOOK_SECRET", "").strip()
 SMART_BUS_TRACKING_BASE_URL = os.environ.get("SMART_BUS_TRACKING_BASE_URL", "").strip().rstrip("/")
 SMART_BUS_TRACKING_DASHBOARD_URL = os.environ.get("SMART_BUS_TRACKING_DASHBOARD_URL", "").strip()
 SMART_BUS_ERP_TOKEN = os.environ.get("SMART_BUS_ERP_TOKEN", "").strip()
+SMART_BUS_STUDENT_LINK_SECRET = os.environ.get("SMART_BUS_STUDENT_LINK_SECRET", "").strip()
 ALLOWED_ORIGINS = [
     origin.strip().rstrip("/")
     for origin in os.environ.get("ANPS_ERP_ALLOWED_ORIGINS", "*").split(",")
@@ -902,6 +905,47 @@ def smart_bus_erp_token(base_url=None):
     if clean_base.startswith("http://127.0.0.1") or clean_base.startswith("http://localhost"):
         return "change-this-erp-sync-token"
     return ""
+
+
+def smart_bus_student_link_secret():
+    return SMART_BUS_STUDENT_LINK_SECRET or SMART_BUS_ERP_TOKEN or API_TOKEN
+
+
+def smart_bus_signed_student_url(admission_no, student_name="", class_name=""):
+    base_url = smart_bus_base_url()
+    student_url = f"{base_url.rstrip('/')}/student-bus-location.html"
+    issued_at = int(datetime.utcnow().timestamp())
+    expires_at = issued_at + 15 * 60
+    params = {
+        "school_id": DEFAULT_SCHOOL_ID,
+        "admission_no": str(admission_no or "").strip(),
+        "student": str(student_name or "").strip(),
+        "class": str(class_name or "").strip(),
+        "source": "student-app",
+        "iat": str(issued_at),
+        "exp": str(expires_at),
+    }
+    canonical = "&".join(f"{key}={params[key]}" for key in sorted(params))
+    digest = hmac.new(
+        smart_bus_student_link_secret().encode("utf-8"),
+        canonical.encode("utf-8"),
+        hashlib.sha256,
+    ).digest()
+    params["sig"] = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+    return f"{student_url}?{urlencode(params)}"
+
+
+def smart_bus_student_url_response(params):
+    admission_no = params.get("admission_no", [""])[-1]
+    student_name = params.get("student", [""])[-1]
+    class_name = params.get("class", [""])[-1]
+    if not admission_no:
+        return {"ok": False, "error": "Admission number is required."}
+    return {
+        "ok": True,
+        "url": smart_bus_signed_student_url(admission_no, student_name, class_name),
+        "expiresInSeconds": 15 * 60,
+    }
 
 
 def normalize_lookup(value=""):
@@ -3935,6 +3979,10 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             if not self.authorized():
                 return
             return self.json_response({"ok": True, **smart_bus_config()})
+        if path == "/api/smart-bus/student-url":
+            if not self.authorized():
+                return
+            return self.json_response(smart_bus_student_url_response(parse_qs(parsed.query)))
         if path == "/api/payments/icici/callback":
             params = {key: values[-1] for key, values in parse_qs(parsed.query).items()}
             return self.json_response({
