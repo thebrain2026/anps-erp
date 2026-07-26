@@ -296,6 +296,21 @@ async function openDriverGpsLink(vehicleId, button) {
 
 function showOfficeError(error, kind = "map") {
   const message = error?.message || "Smart Bus data refresh failed.";
+  const needsLogin = /Unauthorized|login required|expired/i.test(message);
+  if (needsLogin) {
+    if ($("vehicleList")) $("vehicleList").innerHTML = `<div class="empty">Office login required.</div>`;
+    if ($("details")) {
+      $("details").innerHTML = `<div class="empty">${message}. <a class="ghost login-link" href="${officeLoginUrl()}">Office Login</a></div>`;
+    }
+    if ($("selectedBus")) $("selectedBus").textContent = "Login required";
+    if ($("activeCount")) $("activeCount").textContent = "0";
+    if ($("avgSpeed")) $("avgSpeed").textContent = "0 km/h";
+    if ($("lastSeen")) $("lastSeen").textContent = "-";
+    if (kind === "map") setMultiBusMap([], null);
+    else setMap(null);
+    renderEmptyTable(kind);
+    return;
+  }
   const cached = JSON.parse(localStorage.getItem(OFFICE_CACHE_KEY) || "null");
   if (cached?.summary?.vehicles?.length) {
     lastSummary = cached.summary;
@@ -308,8 +323,7 @@ function showOfficeError(error, kind = "map") {
     return;
   }
   if ($("details")) {
-    const needsLogin = /Unauthorized|login required|expired/i.test(message);
-    $("details").innerHTML = `<div class="empty">${message}. ${needsLogin ? `<a class="ghost login-link" href="${officeLoginUrl()}">Office Login</a>` : "Reopen this dashboard from ERP if the secured link has expired."}</div>`;
+    $("details").innerHTML = `<div class="empty">${message}. Reopen this dashboard from ERP if the secured link has expired.</div>`;
   }
   if ($("selectedBus")) $("selectedBus").textContent = "Refresh failed";
   if ($("lastSeen")) $("lastSeen").textContent = "-";
