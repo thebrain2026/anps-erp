@@ -140,13 +140,34 @@ async function loadOffice(kind = "map") {
   renderOffice(kind);
 }
 
+function showOfficeError(error) {
+  const message = error?.message || "Smart Bus data refresh failed.";
+  if ($("details")) {
+    $("details").innerHTML = `<div class="empty">${message}. Reopen this dashboard from ERP if the secured link has expired.</div>`;
+  }
+  if ($("selectedBus")) $("selectedBus").textContent = "Refresh failed";
+  if ($("lastSeen")) $("lastSeen").textContent = "-";
+}
+
 function bootOffice(kind) {
   preserveOfficeLinks();
-  loadOffice(kind).catch((err) => {
-    if ($("details")) $("details").innerHTML = `<div class="empty">${err.message}. Open this dashboard from the secured ERP Smart Bus Tracking page after sync.</div>`;
-  });
+  loadOffice(kind).catch(showOfficeError);
   const refresh = $("refreshBtn");
-  if (refresh) refresh.onclick = () => loadOffice(kind);
+  if (refresh) {
+    refresh.onclick = async () => {
+      const originalText = refresh.textContent;
+      refresh.disabled = true;
+      refresh.textContent = "Refreshing...";
+      try {
+        await loadOffice(kind);
+      } catch (error) {
+        showOfficeError(error);
+      } finally {
+        refresh.disabled = false;
+        refresh.textContent = originalText;
+      }
+    };
+  }
   const demo = $("demoBtn");
   if (demo) demo.remove();
   setInterval(() => loadOffice(kind).catch(() => {}), 10000);
