@@ -117,7 +117,7 @@ function setMultiBusMap(vehicles, selected) {
   const topLeft = { x: center.x - width / 2, y: center.y - height / 2 };
   const markers = gpsVehicles.map((vehicle) => {
     const point = projectPoint(vehicle.lat, vehicle.lng, zoom);
-    const isActive = vehicle.vehicle_id === selected?.vehicle_id;
+    const isActive = mapFocusMode === "selected" && vehicle.vehicle_id === selected?.vehicle_id;
     return `<button class="map-bus-marker ${isActive ? "active" : ""}" data-vehicle="${vehicle.vehicle_id}" style="left:${Math.round(point.x - topLeft.x)}px;top:${Math.round(point.y - topLeft.y)}px" title="${vehicle.vehicle_name}">
       <img src="${busSvg}" alt="">
       <span>${vehicle.vehicle_name}</span>
@@ -149,19 +149,22 @@ function renderOffice(kind = "map") {
     else renderEmptyTable(kind);
     return;
   }
-  if (!selectedVehicle && vehicles[0]) selectedVehicle = vehicles[0].vehicle_id;
+  if (!selectedVehicle && vehicles[0] && mapFocusMode !== "all") selectedVehicle = vehicles[0].vehicle_id;
   const selected = vehicles.find((v) => v.vehicle_id === selectedVehicle) || vehicles[0];
   const active = vehicles.filter((v) => !["offline", "no-gps"].includes(statusClass(v.status, v.location_updated_at)));
+  const latestUpdates = vehicles.map((v) => v.location_updated_at).filter(Boolean).sort();
+  const latest = latestUpdates[latestUpdates.length - 1];
   if ($("activeCount")) $("activeCount").textContent = active.length;
   if ($("avgSpeed")) $("avgSpeed").textContent = `${Math.round(active.reduce((n, v) => n + Number(v.speed_kmph || 0), 0) / (active.length || 1))} km/h`;
-  if ($("selectedBus")) $("selectedBus").textContent = selected?.vehicle_name || "-";
-  if ($("lastSeen")) $("lastSeen").textContent = ago(selected?.location_updated_at);
+  if ($("selectedBus")) $("selectedBus").textContent = kind === "map" && mapFocusMode === "all" ? "All buses" : selected?.vehicle_name || "-";
+  if ($("lastSeen")) $("lastSeen").textContent = kind === "map" && mapFocusMode === "all" ? ago(latest) : ago(selected?.location_updated_at);
   if ($("vehicleList")) {
     $("vehicleList").innerHTML = `
       <div class="vehicle-list-head"><span>Vehicles</span><strong>${vehicles.length}</strong></div>
       ${vehicles.map((v) => {
         const status = statusClass(v.status, v.location_updated_at);
-        return `<button class="item ${v.vehicle_id === selectedVehicle ? "active" : ""}" data-vehicle="${v.vehicle_id}">
+        const isActiveItem = !(kind === "map" && mapFocusMode === "all") && v.vehicle_id === selectedVehicle;
+        return `<button class="item ${isActiveItem ? "active" : ""}" data-vehicle="${v.vehicle_id}">
           <span class="item-title"><strong>${v.vehicle_name}</strong><em class="status ${status}">${status}</em></span>
           <small>${v.route_name || "-"}</small>
           <small>${v.driver_name || "-"}${v.vehicle_no ? ` | ${v.vehicle_no}` : ""}</small>
@@ -175,7 +178,15 @@ function renderOffice(kind = "map") {
       };
     });
   }
-  if ($("details") && selected) {
+  if ($("details") && kind === "map" && mapFocusMode === "all") {
+    $("details").innerHTML = [
+      ["View", "All buses visible on map"],
+      ["Total Vehicles", vehicles.length],
+      ["Live GPS", vehicles.filter(hasGps).length],
+      ["Active Bus", active.length],
+      ["Last Update", ago(latest)],
+    ].map(([a, b]) => `<article><span>${a}</span><strong>${b}</strong></article>`).join("");
+  } else if ($("details") && selected) {
     $("details").innerHTML = [
       ["Vehicle", `${selected.vehicle_name} (${selected.vehicle_no})`],
       ["Route", selected.route_name || "-"],
@@ -274,6 +285,7 @@ function bootOffice(kind) {
   const showAll = $("mapShowAllBtn");
   if (showAll) {
     showAll.onclick = () => {
+      selectedVehicle = "";
       mapFocusMode = "all";
       mapZoomDelta = 0;
       renderOffice(kind);
