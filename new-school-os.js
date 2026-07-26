@@ -10955,7 +10955,6 @@ async function renderSmartBusTracking() {
 
   const statusBox = document.getElementById("smartBusSyncStatus");
   const statusPill = document.getElementById("smartBusConfigStatus");
-  const dashboardLink = document.getElementById("smartBusDashboardLink");
   const setupAlert = document.getElementById("smartBusSetupAlert");
   if (setupAlert) {
     const issues = [];
@@ -10971,14 +10970,13 @@ async function renderSmartBusTracking() {
   if (statusBox) statusBox.textContent = "Checking Smart Bus Tracking connection...";
   try {
     const config = await loadSmartBusConfig();
-    if (dashboardLink && config.dashboardUrl) dashboardLink.href = config.dashboardUrl;
     if (statusPill) {
       statusPill.textContent = config.configured ? "Configured" : "Setup Needed";
       statusPill.className = config.configured ? "ready" : "setup";
     }
     if (statusBox) {
       statusBox.textContent = config.configured
-        ? `Smart Bus Tracking ready. Dashboard: ${config.dashboardUrl || "-"} ERP will only sync master data, live GPS stays separate.`
+        ? "Smart Bus Tracking ready. ERP will only sync master data, live GPS stays separate."
         : "Smart Bus Tracking token setup needed on ERP: SMART_BUS_ERP_TOKEN. URL default is anpsbus.thebrainerp.com.";
     }
   } catch (error) {
