@@ -36,6 +36,10 @@ async function apiPost(path) {
   return data;
 }
 
+function officeLoginUrl() {
+  return `./office-login.html?next=${encodeURIComponent(`${window.location.pathname}${window.location.search}`)}`;
+}
+
 function mapSrc(vehicle) {
   if (vehicle?.lat == null || vehicle?.lng == null) return "";
   const lat = vehicle.lat;
@@ -170,7 +174,8 @@ function showOfficeError(error, kind = "map") {
     return;
   }
   if ($("details")) {
-    $("details").innerHTML = `<div class="empty">${message}. Reopen this dashboard from ERP if the secured link has expired.</div>`;
+    const needsLogin = /Unauthorized|login required|expired/i.test(message);
+    $("details").innerHTML = `<div class="empty">${message}. ${needsLogin ? `<a class="ghost login-link" href="${officeLoginUrl()}">Office Login</a>` : "Reopen this dashboard from ERP if the secured link has expired."}</div>`;
   }
   if ($("selectedBus")) $("selectedBus").textContent = "Refresh failed";
   if ($("lastSeen")) $("lastSeen").textContent = "-";
@@ -244,4 +249,30 @@ function bootStudent() {
     }
   });
   setInterval(() => loadStudent().catch(() => {}), 15000);
+}
+
+function bootOfficeLogin() {
+  const form = $("officeLoginForm");
+  const pin = $("officePin");
+  const status = $("officeLoginStatus");
+  const params = new URLSearchParams(window.location.search);
+  const next = params.get("next") || "./office-live-map.html";
+  if (!form || !pin) return;
+  form.onsubmit = async (event) => {
+    event.preventDefault();
+    if (status) status.textContent = "Checking PIN...";
+    try {
+      const res = await fetch("/api/office/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pin: pin.value.trim() }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.ok === false) throw new Error(data.error || "Office login failed.");
+      if (status) status.textContent = "Login successful. Opening dashboard...";
+      window.location.href = next;
+    } catch (error) {
+      if (status) status.textContent = error.message || "Office login failed.";
+    }
+  };
 }

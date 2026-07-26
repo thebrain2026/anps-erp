@@ -31,6 +31,10 @@ function tokenFor(env) {
   return String(env.SMART_BUS_ERP_TOKEN || "");
 }
 
+function officePinFor(env) {
+  return String(env.SMART_BUS_OFFICE_PIN || "");
+}
+
 function studentLinkSecret(env) {
   return String(env.SMART_BUS_STUDENT_LINK_SECRET || env.SMART_BUS_ERP_TOKEN || "");
 }
@@ -116,6 +120,101 @@ async function signOfficeParams(params, env) {
     ["sign"],
   );
   return base64Url(await crypto.subtle.sign("HMAC", key, data));
+}
+
+async function signOfficeSession(expiresAt, env) {
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(tokenFor(env)),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const data = new TextEncoder().encode(`office-session:${expiresAt}`);
+  return base64Url(await crypto.subtle.sign("HMAC", key, data));
+}
+
+function readCookie(request, name) {
+  const cookieHeader = request.headers.get("cookie") || "";
+  const found = cookieHeader.split(";").map((part) => part.trim()).find((part) => part.startsWith(`${name}=`));
+  return found ? decodeURIComponent(found.slice(name.length + 1)) : "";
+}
+
+async function verifyOfficeSession(request, env) {
+  const token = tokenFor(env);
+  if (!token) {
+    return { ok: false, status: 503, error: "Smart Bus office API token is not configured." };
+  }
+  const cookie = readCookie(request, "anps_bus_office");
+  const [expiresAtRaw, suppliedSig] = cookie.split(".");
+  const expiresAt = Number(expiresAtRaw || 0);
+  if (!expiresAt || !suppliedSig) {
+    return { ok: false, status: 401, error: "Office login required." };
+  }
+  if (Date.now() / 1000 > expiresAt) {
+    return { ok: false, status: 403, error: "Office login expired. Please login again." };
+  }
+  const expectedSig = await signOfficeSession(expiresAt, env);
+  if (expectedSig !== suppliedSig) {
+    return { ok: false, status: 403, error: "Invalid office login session." };
+  }
+  return { ok: true };
+}
+
+function loginRateKey(request) {
+  const ip = request.headers.get("cf-connecting-ip") || "unknown";
+  return `office-login-attempt:${ip}`;
+}
+
+async function readLoginAttempts(request, env) {
+  if (!env.SMART_BUS_KV) return { blocked: true, count: 0 };
+  const raw = await env.SMART_BUS_KV.get(loginRateKey(request));
+  if (!raw) return { blocked: false, count: 0 };
+  try {
+    const data = JSON.parse(raw);
+    if (Date.now() > Number(data.reset_at || 0)) return { blocked: false, count: 0 };
+    return { blocked: Number(data.count || 0) >= 5, count: Number(data.count || 0), reset_at: data.reset_at };
+  } catch {
+    return { blocked: false, count: 0 };
+  }
+}
+
+async function recordFailedLogin(request, env) {
+  if (!env.SMART_BUS_KV) return;
+  const attempts = await readLoginAttempts(request, env);
+  const next = {
+    count: Number(attempts.count || 0) + 1,
+    reset_at: attempts.reset_at || Date.now() + (15 * 60 * 1000),
+  };
+  await env.SMART_BUS_KV.put(loginRateKey(request), JSON.stringify(next), { expirationTtl: 15 * 60 });
+}
+
+async function clearFailedLogin(request, env) {
+  if (env.SMART_BUS_KV) await env.SMART_BUS_KV.delete(loginRateKey(request));
+}
+
+async function handleOfficeLogin(request, env) {
+  if (!tokenFor(env) || !officePinFor(env)) {
+    return json({ ok: false, error: "Office login password is not configured." }, { status: 503 });
+  }
+  const attempts = await readLoginAttempts(request, env);
+  if (attempts.blocked) {
+    return json({ ok: false, error: "Too many wrong attempts. Please try again after 15 minutes." }, { status: 429 });
+  }
+  const payload = await request.json().catch(() => ({}));
+  const suppliedPin = String(payload.pin || "").trim();
+  if (!suppliedPin || suppliedPin !== officePinFor(env)) {
+    await recordFailedLogin(request, env);
+    return json({ ok: false, error: "Wrong office password." }, { status: 401 });
+  }
+  await clearFailedLogin(request, env);
+  const expiresAt = Math.floor(Date.now() / 1000) + (2 * 60 * 60);
+  const sig = await signOfficeSession(expiresAt, env);
+  return json({ ok: true, expires_at: expiresAt }, {
+    headers: {
+      "set-cookie": `anps_bus_office=${expiresAt}.${sig}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=7200`,
+    },
+  });
 }
 
 async function readState(env) {
@@ -303,9 +402,17 @@ export default {
     const url = new URL(request.url);
     if (request.method === "OPTIONS") return json({ ok: true });
     if (url.pathname === "/api/student/bus-location") return handleStudentLocation(request, env);
+    if (url.pathname === "/api/office/login" && request.method === "POST") return handleOfficeLogin(request, env);
+    if (url.pathname === "/api/office/session") {
+      const session = await verifyOfficeSession(request, env);
+      return json({ ok: session.ok, error: session.ok ? "" : session.error }, { status: session.ok ? 200 : session.status });
+    }
     if (url.pathname === "/api/office/summary") {
       let officeAuth = verifyOfficeRequest(request, env);
-      if (officeAuth === null) officeAuth = await verifySignedOfficeLink(url, env);
+      if (officeAuth === null) {
+        const hasSignedLink = url.searchParams.get("source") === "erp-office" && url.searchParams.get("sig");
+        officeAuth = hasSignedLink ? await verifySignedOfficeLink(url, env) : await verifyOfficeSession(request, env);
+      }
       if (!officeAuth.ok) return json({ ok: false, error: officeAuth.error }, { status: officeAuth.status });
       return handleOfficeSummary(env);
     }

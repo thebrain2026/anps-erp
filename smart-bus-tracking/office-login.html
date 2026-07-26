@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ANPS Smart Bus Tracking - Office Login</title>
+  <link rel="stylesheet" href="./smart-bus.css">
+</head>
+<body>
+  <div class="mobile-wrap">
+    <main class="phone office-login-phone">
+      <section class="phone-head">
+        <h1>Office Login</h1>
+        <p>Enter office password to view live bus dashboard.</p>
+      </section>
+      <section class="phone-body">
+        <form id="officeLoginForm" class="office-login-form">
+          <label class="driver-field">
+            <span>Office Password</span>
+            <input id="officePin" type="password" autocomplete="current-password" required>
+          </label>
+          <button class="primary refresh-wide" type="submit">Open Dashboard</button>
+        </form>
+        <div id="officeLoginStatus" class="student-message">Office password required for dashboard.</div>
+        <div class="student-card"><strong>Developed by THE BRAIN</strong><span>Designed in USA</span></div>
+      </section>
+    </main>
+  </div>
+  <script src="./smart-bus.js"></script>
+  <script>bootOfficeLogin()</script>
+</body>
+</html>
