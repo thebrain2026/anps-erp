@@ -243,6 +243,14 @@ function showOfficeError(error, kind = "map") {
 function bootOffice(kind) {
   preserveOfficeLinks();
   loadOffice(kind).catch((error) => showOfficeError(error, kind));
+  const fullscreen = $("mapFullscreenBtn");
+  if (fullscreen) {
+    fullscreen.onclick = () => {
+      document.body.classList.toggle("map-fullscreen-mode");
+      fullscreen.textContent = document.body.classList.contains("map-fullscreen-mode") ? "Back to Dashboard" : "Full Page View";
+      renderOffice(kind);
+    };
+  }
   const refresh = $("refreshBtn");
   if (refresh) {
     refresh.onclick = async () => {
