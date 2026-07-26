@@ -125,7 +125,8 @@ function setMultiBusMap(vehicles, selected) {
     </button>`;
   }).join("");
   const viewLabel = mapFocusMode === "selected" ? `${selectedGps.vehicle_name} selected` : `${gpsVehicles.length} live bus${gpsVehicles.length === 1 ? "" : "es"}`;
-  map.innerHTML = `<div class="map-grid-bg"></div>${markers}<div class="map-attribution">Private live view | ${viewLabel}</div>`;
+  const modeBadge = mapFocusMode === "selected" ? `Single Bus View: ${selectedGps.vehicle_name}` : `Showing All Buses: ${gpsVehicles.length}`;
+  map.innerHTML = `<div class="map-grid-bg"></div><div class="map-mode-badge">${modeBadge}</div>${markers}<div class="map-attribution">Private live view | ${viewLabel}</div>`;
   map.querySelectorAll("[data-vehicle]").forEach((marker) => {
     marker.onclick = () => {
       selectedVehicle = marker.dataset.vehicle;
@@ -137,6 +138,12 @@ function setMultiBusMap(vehicles, selected) {
 
 function renderOffice(kind = "map") {
   const vehicles = lastSummary.vehicles || [];
+  const showAll = $("mapShowAllBtn");
+  if (showAll) {
+    const showingAll = kind === "map" && mapFocusMode === "all";
+    showAll.classList.toggle("is-active", showingAll);
+    showAll.textContent = showingAll ? "Showing All" : "Show All Buses";
+  }
   if (!vehicles.length) {
     selectedVehicle = "";
     if ($("activeCount")) $("activeCount").textContent = "0";
