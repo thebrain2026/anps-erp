@@ -1,5 +1,6 @@
 const API = "";
 const SCHOOL_ID = "anps";
+const OFFICE_CACHE_KEY = "anpsSmartBusOfficeSummary";
 const busSvg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 84 150'%3E%3Cdefs%3E%3ClinearGradient id='roof' x1='0' x2='1' y1='0' y2='1'%3E%3Cstop offset='0' stop-color='%23ffe58a'/%3E%3Cstop offset='.55' stop-color='%23f6c23e'/%3E%3Cstop offset='1' stop-color='%23cc8b0b'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect x='15' y='8' width='54' height='132' rx='14' fill='url(%23roof)' stroke='%231f2937' stroke-width='3.5'/%3E%3Cpath d='M23 23h38v25H23zM22 101h40v22H22z' fill='%239ad7ef' stroke='%231f2937' stroke-width='2.5'/%3E%3Cpath d='M21 55h42M21 70h42M21 85h42' stroke='%23b67808' stroke-width='4'/%3E%3Crect x='10' y='38' width='7' height='24' rx='3' fill='%231f2937'/%3E%3Crect x='67' y='38' width='7' height='24' rx='3' fill='%231f2937'/%3E%3Crect x='10' y='91' width='7' height='24' rx='3' fill='%231f2937'/%3E%3Crect x='67' y='91' width='7' height='24' rx='3' fill='%231f2937'/%3E%3C/svg%3E";
 
 const $ = (id) => document.getElementById(id);
@@ -148,11 +149,26 @@ async function loadOffice(kind = "map") {
   const params = new URLSearchParams(window.location.search);
   params.set("school_id", params.get("school_id") || SCHOOL_ID);
   lastSummary = await apiGet(`/api/office/summary?${params.toString()}`);
+  localStorage.setItem(OFFICE_CACHE_KEY, JSON.stringify({
+    saved_at: new Date().toISOString(),
+    summary: lastSummary,
+  }));
   renderOffice(kind);
 }
 
-function showOfficeError(error) {
+function showOfficeError(error, kind = "map") {
   const message = error?.message || "Smart Bus data refresh failed.";
+  const cached = JSON.parse(localStorage.getItem(OFFICE_CACHE_KEY) || "null");
+  if (cached?.summary?.vehicles?.length) {
+    lastSummary = cached.summary;
+    renderOffice(kind);
+    if ($("details")) {
+      $("details").insertAdjacentHTML("afterbegin", `<div class="empty cache-note">${message}. Showing last loaded vehicle cards from this browser.</div>`);
+    }
+    if ($("selectedBus")) $("selectedBus").textContent = "Cached vehicle data";
+    if ($("lastSeen")) $("lastSeen").textContent = cached.saved_at ? ago(cached.saved_at) : "-";
+    return;
+  }
   if ($("details")) {
     $("details").innerHTML = `<div class="empty">${message}. Reopen this dashboard from ERP if the secured link has expired.</div>`;
   }
@@ -162,7 +178,7 @@ function showOfficeError(error) {
 
 function bootOffice(kind) {
   preserveOfficeLinks();
-  loadOffice(kind).catch(showOfficeError);
+  loadOffice(kind).catch((error) => showOfficeError(error, kind));
   const refresh = $("refreshBtn");
   if (refresh) {
     refresh.onclick = async () => {
@@ -172,7 +188,7 @@ function bootOffice(kind) {
       try {
         await loadOffice(kind);
       } catch (error) {
-        showOfficeError(error);
+        showOfficeError(error, kind);
       } finally {
         refresh.disabled = false;
         refresh.textContent = originalText;
