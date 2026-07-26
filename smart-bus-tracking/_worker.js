@@ -1,40 +1,14 @@
 const SCHOOL_ID = "anps";
 
-const demoState = {
-  students: [
-    {
-      school_id: SCHOOL_ID,
-      admission_no: "ANPS-ADM/26-27/274",
-      student_name: "Sk Zahid Afroj",
-      class: "Class VII Amber",
-      route: "Route D",
-      pickup_point: "City Centre",
-      vehicle: "ANPS Bus 21",
-      vehicle_no: "WB-00-ANPS-21",
-      driver: "Bimal Das",
-      driver_mobile: "",
-    },
-  ],
-  vehicles: [
-    {
-      vehicle_id: "bus-21",
-      vehicle_name: "ANPS Bus 21",
-      vehicle_no: "WB-00-ANPS-21",
-      route_name: "Route D",
-      driver_name: "Bimal Das",
-      mobile: "",
-      lat: 22.7241,
-      lng: 88.4867,
-      heading: 38,
-      speed_kmph: 22,
-      status: "running",
-      estimated_arrival_min: 12,
-      location_updated_at: new Date().toISOString(),
-    },
-  ],
+const emptyState = {
+  school_id: SCHOOL_ID,
+  students: [],
+  vehicles: [],
+  pickup_points: [],
+  stoppages: [],
 };
 
-let memoryState = structuredClone(demoState);
+let memoryState = structuredClone(emptyState);
 
 function json(data, init = {}) {
   return new Response(JSON.stringify(data), {
@@ -166,19 +140,25 @@ async function writeState(env, state) {
 }
 
 function vehicleForStudent(state, student) {
-  const vehicleName = student?.vehicle || student?.vehicle_name || "ANPS Bus 21";
+  const vehicleName = student?.vehicle || student?.vehicle_name || "";
   const found = (state.vehicles || []).find((vehicle) =>
     normalize(vehicle.vehicle_name) === normalize(vehicleName)
     || normalize(vehicle.vehicle_no) === normalize(student?.vehicle_no)
   );
   return found || {
-    ...demoState.vehicles[0],
-    vehicle_name: vehicleName,
+    vehicle_id: "",
+    vehicle_name: vehicleName || "Not assigned",
     vehicle_no: student?.vehicle_no || "",
-    route_name: student?.route || "-",
-    driver_name: student?.driver || "-",
+    route_name: student?.route || "",
+    driver_name: student?.driver || "",
     mobile: student?.driver_mobile || "",
-    location_updated_at: new Date().toISOString(),
+    lat: null,
+    lng: null,
+    heading: 0,
+    speed_kmph: 0,
+    status: "not-assigned",
+    estimated_arrival_min: 0,
+    location_updated_at: "",
   };
 }
 
@@ -190,7 +170,13 @@ async function handleStudentLocation(request, env) {
   const state = await readState(env);
   const student = (state.students || []).find((item) =>
     normalize(item.admission_no || item.admissionNo) === normalize(admissionNo)
-  ) || state.students?.[0] || demoState.students[0];
+  );
+  if (!student) {
+    return json({
+      ok: false,
+      error: "No synced bus assignment found for this student. Please sync Smart Bus master data from ERP.",
+    }, { status: 404 });
+  }
   const vehicle = vehicleForStudent(state, student);
   return json({
     ok: true,
@@ -206,7 +192,7 @@ async function handleStudentLocation(request, env) {
       ...vehicle,
       route_name: student.route || vehicle.route_name || "",
       pickup_name: student.pickup_point || student.pickupPoint || "-",
-      estimated_arrival_text: `${vehicle.estimated_arrival_min || 12} min`,
+      estimated_arrival_text: vehicle.estimated_arrival_min ? `${vehicle.estimated_arrival_min} min` : "-",
     },
   });
 }
@@ -216,7 +202,7 @@ async function handleOfficeSummary(env) {
   return json({
     ok: true,
     school_id: state.school_id || SCHOOL_ID,
-    vehicles: state.vehicles || demoState.vehicles,
+    vehicles: state.vehicles || [],
     pickup_points: state.pickup_points || [],
     stoppages: state.stoppages || [],
   });
@@ -246,32 +232,65 @@ async function handleSyncMasterData(request, env) {
   }
   const payload = await request.json().catch(() => ({}));
   const students = Array.isArray(payload.students) ? payload.students : [];
+  const incomingVehicles = Array.isArray(payload.vehicles) ? payload.vehicles : [];
   const vehiclesByName = new Map();
-  students.forEach((student, index) => {
-    const vehicleName = student.vehicle || student.vehicle_name || `ANPS Bus ${index + 1}`;
-    if (!vehiclesByName.has(normalize(vehicleName))) {
-      vehiclesByName.set(normalize(vehicleName), {
+
+  function putVehicle(vehicle) {
+    if (!vehicle || typeof vehicle !== "object") return;
+    const vehicleName = String(vehicle.vehicle_name || vehicle.vehicleName || vehicle.vehicle || "").trim();
+    const vehicleNo = String(vehicle.vehicle_no || vehicle.vehicleNo || "").trim();
+    const key = normalize(vehicleNo || vehicleName);
+    if (!key || vehiclesByName.has(key)) return;
+    vehiclesByName.set(key, {
+      vehicle_id: String(vehicle.vehicle_id || vehicle.id || vehicleNo || vehicleName).trim(),
+      vehicle_name: vehicleName || vehicleNo,
+      vehicle_no: vehicleNo,
+      route_name: String(vehicle.route_name || vehicle.routeName || "").trim(),
+      trip_type: String(vehicle.trip_type || vehicle.tripType || vehicle.trip || "").trim(),
+      driver_name: String(vehicle.driver_name || vehicle.driverName || vehicle.driver || "").trim(),
+      mobile: String(vehicle.mobile || vehicle.driver_mobile || vehicle.driverMobile || "").trim(),
+      lat: vehicle.lat ?? null,
+      lng: vehicle.lng ?? null,
+      heading: Number(vehicle.heading || 0),
+      speed_kmph: Number(vehicle.speed_kmph || vehicle.speedKmph || 0),
+      status: String(vehicle.status || "no-gps"),
+      estimated_arrival_min: Number(vehicle.estimated_arrival_min || vehicle.estimatedArrivalMin || 0),
+      location_updated_at: String(vehicle.location_updated_at || vehicle.locationUpdatedAt || ""),
+    });
+  }
+
+  incomingVehicles.forEach(putVehicle);
+
+  students.forEach((student) => {
+    const vehicleName = String(student.vehicle || student.vehicle_name || "").trim();
+    const vehicleNo = String(student.vehicle_no || student.vehicleNo || "").trim();
+    if (!vehicleName && !vehicleNo) return;
+    const key = normalize(vehicleNo || vehicleName);
+    if (!vehiclesByName.has(key)) {
+      vehiclesByName.set(key, {
         vehicle_id: `vehicle-${vehiclesByName.size + 1}`,
         vehicle_name: vehicleName,
-        vehicle_no: student.vehicle_no || "",
+        vehicle_no: vehicleNo,
         route_name: student.route || "",
+        trip_type: student.trip || "",
         driver_name: student.driver || "",
         mobile: student.driver_mobile || "",
-        lat: 22.7241 + vehiclesByName.size * 0.003,
-        lng: 88.4867 + vehiclesByName.size * 0.003,
-        heading: 30,
-        speed_kmph: 18,
-        status: "running",
-        estimated_arrival_min: 12,
-        location_updated_at: new Date().toISOString(),
+        lat: null,
+        lng: null,
+        heading: 0,
+        speed_kmph: 0,
+        status: "no-gps",
+        estimated_arrival_min: 0,
+        location_updated_at: "",
       });
     }
   });
   const state = {
     school_id: payload.school_id || SCHOOL_ID,
     students,
-    vehicles: vehiclesByName.size ? [...vehiclesByName.values()] : demoState.vehicles,
-    pickup_points: [],
+    vehicles: vehiclesByName.size ? [...vehiclesByName.values()] : [],
+    routes: Array.isArray(payload.routes) ? payload.routes : [],
+    pickup_points: Array.isArray(payload.pickup_points) ? payload.pickup_points : [],
     stoppages: [],
     updated_at: new Date().toISOString(),
   };
@@ -292,17 +311,7 @@ export default {
     }
     if (url.pathname === "/api/erp/sync-master-data" && request.method === "POST") return handleSyncMasterData(request, env);
     if (url.pathname === "/api/office/demo-tick" && request.method === "POST") {
-      const officeAuth = verifyOfficeRequest(request, env);
-      if (!officeAuth.ok) return json({ ok: false, error: officeAuth.error }, { status: officeAuth.status });
-      const state = await readState(env);
-      state.vehicles = (state.vehicles || demoState.vehicles).map((vehicle, index) => ({
-        ...vehicle,
-        lat: Number(vehicle.lat || 22.7241) + 0.001 + index * 0.0002,
-        lng: Number(vehicle.lng || 88.4867) + 0.001 + index * 0.0002,
-        location_updated_at: new Date().toISOString(),
-      }));
-      await writeState(env, state);
-      return json({ ok: true });
+      return json({ ok: false, error: "Demo movement is disabled. Real driver GPS data is required." }, { status: 400 });
     }
     return env.ASSETS.fetch(request);
   },

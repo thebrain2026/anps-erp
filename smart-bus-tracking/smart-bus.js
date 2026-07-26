@@ -34,17 +34,22 @@ async function apiPost(path) {
 }
 
 function mapSrc(vehicle) {
-  const lat = vehicle?.lat || 22.7241;
-  const lng = vehicle?.lng || 88.4867;
+  if (vehicle?.lat == null || vehicle?.lng == null) return "";
+  const lat = vehicle.lat;
+  const lng = vehicle.lng;
   return `https://maps.google.com/maps?q=${lat},${lng}&z=16&output=embed`;
 }
 
 function setMap(vehicle) {
   const frame = $("googleMap");
-  if (!frame || !vehicle) return;
+  const marker = $("busMarker");
+  if (!frame || !vehicle || vehicle.lat == null || vehicle.lng == null) {
+    if (frame) frame.removeAttribute("src");
+    if (marker) marker.innerHTML = "";
+    return;
+  }
   const src = mapSrc(vehicle);
   if (frame.src !== src) frame.src = src;
-  const marker = $("busMarker");
   if (marker) {
     marker.innerHTML = `<img src="${busSvg}" alt="${vehicle.vehicle_name}"><b>${vehicle.vehicle_name.replace("ANPS ", "")}</b>`;
     marker.style.transform = `translate(-50%,-50%) rotate(${(vehicle.heading || 0) - 90}deg)`;
@@ -53,6 +58,19 @@ function setMap(vehicle) {
 
 function renderOffice(kind = "map") {
   const vehicles = lastSummary.vehicles || [];
+  if (!vehicles.length) {
+    selectedVehicle = "";
+    if ($("activeCount")) $("activeCount").textContent = "0";
+    if ($("avgSpeed")) $("avgSpeed").textContent = "0 km/h";
+    if ($("selectedBus")) $("selectedBus").textContent = "No real bus data";
+    if ($("lastSeen")) $("lastSeen").textContent = "-";
+    if ($("vehicleList")) $("vehicleList").innerHTML = `<div class="empty">No real bus data synced yet.</div>`;
+    if ($("details")) $("details").innerHTML = `<div class="empty">Sync bus master data from ERP and start driver GPS to show live vehicles here.</div>`;
+    setMap(null);
+    if (kind === "stoppage") renderStoppageTable();
+    else renderEmptyTable(kind);
+    return;
+  }
   if (!selectedVehicle && vehicles[0]) selectedVehicle = vehicles[0].vehicle_id;
   const selected = vehicles.find((v) => v.vehicle_id === selectedVehicle) || vehicles[0];
   const active = vehicles.filter((v) => statusClass(v.status, v.location_updated_at) !== "offline");
@@ -90,20 +108,29 @@ function renderOffice(kind = "map") {
 
 function renderBusTable(vehicles) {
   if (!$("dataTable")) return;
+  if (!vehicles.length) return renderEmptyTable("map");
   $("dataTable").innerHTML = vehicles.map((v) => `<tr><td>${v.vehicle_name}</td><td>${v.route_name || "-"}</td><td>${v.speed_kmph || 0} km/h</td><td>${v.lat ? `${Number(v.lat).toFixed(5)}, ${Number(v.lng).toFixed(5)}` : "-"}</td><td>${ago(v.location_updated_at)}</td><td><span class="status ${statusClass(v.status, v.location_updated_at)}">${statusClass(v.status, v.location_updated_at)}</span></td></tr>`).join("");
 }
 
 function renderRouteTable(vehicles) {
+  if (!vehicles.length) return renderEmptyTable("route");
   $("dataTable").innerHTML = vehicles.map((v) => `<tr><td>${v.route_name || "-"}</td><td>${v.vehicle_name}</td><td>${v.trip_type || "-"}</td><td>${v.estimated_arrival_min || 0} min</td><td><span class="status ${statusClass(v.status, v.location_updated_at)}">${v.status || "running"}</span></td></tr>`).join("");
 }
 
 function renderDriverTable(vehicles) {
+  if (!vehicles.length) return renderEmptyTable("driver");
   $("dataTable").innerHTML = vehicles.map((v) => `<tr><td>${v.driver_name || "-"}</td><td>${v.mobile || "-"}</td><td>${v.vehicle_name}</td><td>${v.vehicle_no}</td><td>${ago(v.location_updated_at)}</td><td><span class="status ${statusClass(v.status, v.location_updated_at)}">${statusClass(v.status, v.location_updated_at)}</span></td></tr>`).join("");
 }
 
 function renderStoppageTable() {
   const rows = lastSummary.stoppages || [];
   $("dataTable").innerHTML = rows.length ? rows.map((s) => `<tr><td>${s.vehicle_id}</td><td>${s.route_id}</td><td>${s.stop_name}</td><td>${Math.round((s.duration_seconds || 0) / 60)} min</td><td>${s.started_at}</td><td>${s.ended_at || "Standing"}</td></tr>`).join("") : `<tr><td colspan="6">No stoppage alert now</td></tr>`;
+}
+
+function renderEmptyTable(kind) {
+  if (!$("dataTable")) return;
+  const spans = { map: 6, route: 5, driver: 6, stoppage: 6 };
+  $("dataTable").innerHTML = `<tr><td colspan="${spans[kind] || 6}">No real bus data synced yet.</td></tr>`;
 }
 
 async function loadOffice(kind = "map") {
@@ -121,10 +148,7 @@ function bootOffice(kind) {
   const refresh = $("refreshBtn");
   if (refresh) refresh.onclick = () => loadOffice(kind);
   const demo = $("demoBtn");
-  if (demo) demo.onclick = async () => {
-    await apiPost("/api/office/demo-tick");
-    await loadOffice(kind);
-  };
+  if (demo) demo.remove();
   setInterval(() => loadOffice(kind).catch(() => {}), 10000);
 }
 
@@ -146,7 +170,11 @@ async function loadStudent() {
   const data = await apiGet(`/api/student/bus-location?${signedParams.toString()}`);
   const bus = data.student_bus;
   const frame = $("studentMap");
-  if (frame) frame.src = mapSrc(bus);
+  const src = mapSrc(bus);
+  if (frame) {
+    if (src) frame.src = src;
+    else frame.removeAttribute("src");
+  }
   $("studentBus").innerHTML = `
     <div class="student-card">
       <div class="student-row"><span>Status</span><strong class="status ${statusClass(bus.status, bus.location_updated_at)}">${bus.status || "running"}</strong></div>

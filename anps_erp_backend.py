@@ -1022,6 +1022,52 @@ def build_smart_bus_master_payload(state):
                 return item
         return {}
 
+    assignment_by_vehicle_no = {
+        normalize_lookup(item.get("vehicleNo")): item
+        for item in assignments
+        if isinstance(item, dict) and normalize_lookup(item.get("vehicleNo"))
+    }
+
+    synced_vehicles = []
+    seen_vehicle_keys = set()
+
+    def add_vehicle(vehicle=None, assignment=None):
+        vehicle = vehicle if isinstance(vehicle, dict) else {}
+        assignment = assignment if isinstance(assignment, dict) else {}
+        vehicle_no = str(vehicle.get("vehicleNo") or assignment.get("vehicleNo") or "").strip()
+        vehicle_name = str(vehicle.get("vehicleName") or assignment.get("vehicleName") or vehicle_no or "").strip()
+        key = normalize_lookup(vehicle_no or vehicle_name)
+        if not key or key in seen_vehicle_keys:
+            return
+        seen_vehicle_keys.add(key)
+        synced_vehicles.append({
+            "vehicle_id": str(vehicle.get("id") or vehicle_no or vehicle_name).strip(),
+            "vehicle_name": vehicle_name,
+            "vehicle_no": vehicle_no,
+            "route_name": str(assignment.get("routeName") or "").strip(),
+            "trip_type": str(assignment.get("shift") or "").strip(),
+            "driver_name": str(vehicle.get("driverName") or assignment.get("driverName") or "").strip(),
+            "mobile": str(vehicle.get("driverMobile") or assignment.get("driverMobile") or "").strip(),
+            "lat": None,
+            "lng": None,
+            "heading": 0,
+            "speed_kmph": 0,
+            "status": "no-gps",
+            "estimated_arrival_min": 0,
+            "location_updated_at": "",
+        })
+
+    for vehicle in vehicles:
+        if not isinstance(vehicle, dict):
+            continue
+        add_vehicle(vehicle, assignment_by_vehicle_no.get(normalize_lookup(vehicle.get("vehicleNo"))))
+
+    for assignment in assignments:
+        if not isinstance(assignment, dict):
+            continue
+        vehicle = vehicle_by_no.get(normalize_lookup(assignment.get("vehicleNo"))) or {}
+        add_vehicle(vehicle, assignment)
+
     synced_students = []
     seen_admissions = set()
     for student in students:
@@ -1051,7 +1097,31 @@ def build_smart_bus_master_payload(state):
             "driver_mobile": str(vehicle.get("driverMobile") or assignment.get("driverMobile") or "").strip(),
         })
 
-    return {"school_id": school_id, "students": synced_students}
+    synced_routes = [
+        {
+            "route_name": str(route.get("routeName") or "").strip(),
+            "route_note": str(route.get("routeNote") or "").strip(),
+        }
+        for route in routes
+        if isinstance(route, dict) and str(route.get("routeName") or "").strip()
+    ]
+    synced_pickup_points = [
+        {
+            "route_name": str(point.get("routeName") or "").strip(),
+            "pickup_point": str(point.get("villageName") or "").strip(),
+            "trip_type": str(point.get("shift") or "").strip(),
+        }
+        for point in pickup_points
+        if isinstance(point, dict) and str(point.get("villageName") or "").strip()
+    ]
+
+    return {
+        "school_id": school_id,
+        "students": synced_students,
+        "vehicles": synced_vehicles,
+        "routes": synced_routes,
+        "pickup_points": synced_pickup_points,
+    }
 
 
 def sync_smart_bus_master_data():
