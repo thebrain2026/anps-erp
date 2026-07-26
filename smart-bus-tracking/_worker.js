@@ -277,6 +277,7 @@ async function handleStudentLocation(request, env) {
     }, { status: 404 });
   }
   const vehicle = vehicleForStudent(state, student);
+  const { speed_kmph, ...studentSafeVehicle } = vehicle;
   return json({
     ok: true,
     school_id: student.school_id || SCHOOL_ID,
@@ -288,7 +289,7 @@ async function handleStudentLocation(request, env) {
       pickup_point: student.pickup_point || student.pickupPoint || "",
     },
     student_bus: {
-      ...vehicle,
+      ...studentSafeVehicle,
       route_name: student.route || vehicle.route_name || "",
       pickup_name: student.pickup_point || student.pickupPoint || "-",
       estimated_arrival_text: vehicle.estimated_arrival_min ? `${vehicle.estimated_arrival_min} min` : "-",
