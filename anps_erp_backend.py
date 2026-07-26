@@ -1150,6 +1150,8 @@ def sync_smart_bus_master_data():
         headers={
             "Authorization": f"Bearer {token}",
             "Content-Type": "application/json",
+            "Accept": "application/json",
+            "User-Agent": "ANPS-ERP-Smart-Bus-Sync/1.0 (+https://anps.thebrainerp.com)",
         },
     )
     try:
