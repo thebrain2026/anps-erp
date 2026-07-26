@@ -15,8 +15,10 @@ function ago(iso) {
 }
 
 function statusClass(status, updatedAt) {
+  const clean = String(status || "running").toLowerCase();
+  if (clean === "no-gps") return "no-gps";
   if (!updatedAt || Date.now() - new Date(updatedAt).getTime() > 120000) return "offline";
-  return String(status || "running").toLowerCase();
+  return clean;
 }
 
 async function apiGet(path, headers = {}) {
@@ -73,13 +75,22 @@ function renderOffice(kind = "map") {
   }
   if (!selectedVehicle && vehicles[0]) selectedVehicle = vehicles[0].vehicle_id;
   const selected = vehicles.find((v) => v.vehicle_id === selectedVehicle) || vehicles[0];
-  const active = vehicles.filter((v) => statusClass(v.status, v.location_updated_at) !== "offline");
+  const active = vehicles.filter((v) => !["offline", "no-gps"].includes(statusClass(v.status, v.location_updated_at)));
   if ($("activeCount")) $("activeCount").textContent = active.length;
   if ($("avgSpeed")) $("avgSpeed").textContent = `${Math.round(active.reduce((n, v) => n + Number(v.speed_kmph || 0), 0) / (active.length || 1))} km/h`;
   if ($("selectedBus")) $("selectedBus").textContent = selected?.vehicle_name || "-";
   if ($("lastSeen")) $("lastSeen").textContent = ago(selected?.location_updated_at);
   if ($("vehicleList")) {
-    $("vehicleList").innerHTML = vehicles.map((v) => `<button class="item ${v.vehicle_id === selectedVehicle ? "active" : ""}" data-vehicle="${v.vehicle_id}"><strong>${v.vehicle_name}</strong><small>${v.route_name || "-"} | ${v.driver_name || "-"}</small></button>`).join("");
+    $("vehicleList").innerHTML = `
+      <div class="vehicle-list-head"><span>Vehicles</span><strong>${vehicles.length}</strong></div>
+      ${vehicles.map((v) => {
+        const status = statusClass(v.status, v.location_updated_at);
+        return `<button class="item ${v.vehicle_id === selectedVehicle ? "active" : ""}" data-vehicle="${v.vehicle_id}">
+          <span class="item-title"><strong>${v.vehicle_name}</strong><em class="status ${status}">${status}</em></span>
+          <small>${v.route_name || "-"}</small>
+          <small>${v.driver_name || "-"}${v.vehicle_no ? ` | ${v.vehicle_no}` : ""}</small>
+        </button>`;
+      }).join("")}`;
     document.querySelectorAll("[data-vehicle]").forEach((btn) => {
       btn.onclick = () => {
         selectedVehicle = btn.dataset.vehicle;
