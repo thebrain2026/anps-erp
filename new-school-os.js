@@ -10935,6 +10935,9 @@ async function renderSmartBusTracking() {
   const previewRows = getSmartBusSyncPreviewRows();
   const routeCount = new Set(previewRows.map(row => row.routeName).filter(Boolean)).size;
   const vehicleCount = new Set(previewRows.map(row => row.vehicleName).filter(Boolean)).size;
+  const missingRouteCount = previewRows.filter(row => !row.routeName).length;
+  const missingVehicleCount = previewRows.filter(row => !row.vehicleName).length;
+  const missingDriverCount = previewRows.filter(row => row.vehicleName && !row.driverName).length;
   document.getElementById("smartBusSyncStudents").textContent = String(previewRows.length);
   document.getElementById("smartBusSyncRoutes").textContent = String(routeCount);
   document.getElementById("smartBusSyncVehicles").textContent = String(vehicleCount);
@@ -10953,6 +10956,18 @@ async function renderSmartBusTracking() {
   const statusBox = document.getElementById("smartBusSyncStatus");
   const statusPill = document.getElementById("smartBusConfigStatus");
   const dashboardLink = document.getElementById("smartBusDashboardLink");
+  const setupAlert = document.getElementById("smartBusSetupAlert");
+  if (setupAlert) {
+    const issues = [];
+    if (!previewRows.length) issues.push("No transport student found.");
+    if (missingRouteCount) issues.push(`${missingRouteCount} student pickup point route-e mapped noy.`);
+    if (missingVehicleCount) issues.push(`${missingVehicleCount} student-er route vehicle assigned noy.`);
+    if (missingDriverCount) issues.push(`${missingDriverCount} assigned vehicle-e driver missing.`);
+    setupAlert.classList.toggle("ready", issues.length === 0);
+    setupAlert.textContent = issues.length
+      ? `Before sync: ${issues.join(" ")}`
+      : "Ready: route, pickup, vehicle and driver mapping complete. Sync Bus Master Data now.";
+  }
   if (statusBox) statusBox.textContent = "Checking Smart Bus Tracking connection...";
   try {
     const config = await loadSmartBusConfig();
@@ -10963,8 +10978,8 @@ async function renderSmartBusTracking() {
     }
     if (statusBox) {
       statusBox.textContent = config.configured
-        ? `Smart Bus Tracking ready. Dashboard: ${config.dashboardUrl || "-"}`
-        : "Smart Bus Tracking env setup needed on ERP: SMART_BUS_TRACKING_BASE_URL, SMART_BUS_TRACKING_DASHBOARD_URL, SMART_BUS_ERP_TOKEN.";
+        ? `Smart Bus Tracking ready. Dashboard: ${config.dashboardUrl || "-"} ERP will only sync master data, live GPS stays separate.`
+        : "Smart Bus Tracking token setup needed on ERP: SMART_BUS_ERP_TOKEN. URL default is anpsbus.thebrainerp.com.";
     }
   } catch (error) {
     if (statusPill) {

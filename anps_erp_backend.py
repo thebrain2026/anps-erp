@@ -881,8 +881,8 @@ def create_icici_payment_order(payload, user):
 
 def smart_bus_config():
     base_url = smart_bus_base_url()
-    dashboard_url = SMART_BUS_TRACKING_DASHBOARD_URL or f"{base_url.rstrip('/')}/office-live-map.html"
-    student_url = f"{base_url.rstrip('/')}/student-bus-location.html"
+    dashboard_url = smart_bus_signed_office_dashboard_url()
+    student_url = f"{base_url.rstrip('/')}/student-bus-location"
     token = smart_bus_erp_token(base_url)
     return {
         "baseUrl": base_url,
@@ -890,12 +890,13 @@ def smart_bus_config():
         "studentUrl": student_url,
         "configured": bool(base_url and token),
         "tokenConfigured": bool(token),
-        "usingLocalDefault": bool(not SMART_BUS_TRACKING_BASE_URL and token),
+        "usingLocalDefault": False,
+        "usingBuiltInDomain": bool(not SMART_BUS_TRACKING_BASE_URL),
     }
 
 
 def smart_bus_base_url():
-    return (SMART_BUS_TRACKING_BASE_URL or "http://127.0.0.1:4190").strip().rstrip("/")
+    return (SMART_BUS_TRACKING_BASE_URL or "https://anpsbus.thebrainerp.com").strip().rstrip("/")
 
 
 def smart_bus_erp_token(base_url=None):
@@ -913,7 +914,7 @@ def smart_bus_student_link_secret():
 
 def smart_bus_signed_student_url(admission_no, student_name="", class_name=""):
     base_url = smart_bus_base_url()
-    student_url = f"{base_url.rstrip('/')}/student-bus-location.html"
+    student_url = f"{base_url.rstrip('/')}/student-bus-location"
     issued_at = int(datetime.utcnow().timestamp())
     expires_at = issued_at + 15 * 60
     params = {
@@ -933,6 +934,27 @@ def smart_bus_signed_student_url(admission_no, student_name="", class_name=""):
     ).digest()
     params["sig"] = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
     return f"{student_url}?{urlencode(params)}"
+
+
+def smart_bus_signed_office_dashboard_url():
+    base_url = smart_bus_base_url()
+    dashboard_url = SMART_BUS_TRACKING_DASHBOARD_URL or f"{base_url.rstrip('/')}/office-live-map"
+    issued_at = int(datetime.utcnow().timestamp())
+    expires_at = issued_at + 30 * 60
+    params = {
+        "school_id": DEFAULT_SCHOOL_ID,
+        "source": "erp-office",
+        "iat": str(issued_at),
+        "exp": str(expires_at),
+    }
+    canonical = "&".join(f"{key}={params[key]}" for key in sorted(params))
+    digest = hmac.new(
+        smart_bus_erp_token(base_url).encode("utf-8"),
+        canonical.encode("utf-8"),
+        hashlib.sha256,
+    ).digest()
+    params["sig"] = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+    return f"{dashboard_url}?{urlencode(params)}"
 
 
 def smart_bus_student_url_response(params):

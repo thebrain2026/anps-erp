@@ -3309,7 +3309,7 @@
               <small>ERP only syncs route, pickup, vehicle, driver and student master data. Live GPS runs in the separate tracking service.</small>
             </div>
             <div class="inline-actions">
-              <a class="ghost-action" id="smartBusDashboardLink" href="http://127.0.0.1:4190/office-live-map.html" target="_blank" rel="noopener">Open Tracking Dashboard</a>
+              <a class="ghost-action" id="smartBusDashboardLink" href="https://anpsbus.thebrainerp.com/office-live-map" target="_blank" rel="noopener">Open Tracking Dashboard</a>
               <button class="primary-action" id="smartBusSyncButton" type="button">Sync Bus Master Data</button>
             </div>
           </div>
@@ -3327,6 +3327,29 @@
           </div>
           <div class="smart-bus-status" id="smartBusSyncStatus">
             Smart Bus Tracking service configuration check pending.
+          </div>
+          <div class="smart-bus-setup">
+            <article>
+              <b>1</b>
+              <strong>Route & pickup mapping</strong>
+              <span>Pickup Point + Route Pickup Point complete করুন।</span>
+              <button type="button" data-view-jump="transportRoutePickupPoint">Open Mapping</button>
+            </article>
+            <article>
+              <b>2</b>
+              <strong>Bus & driver setup</strong>
+              <span>Vehicle page-এ bus no, driver name/mobile দিন।</span>
+              <button type="button" data-view-jump="transportVehicle">Open Vehicle</button>
+            </article>
+            <article>
+              <b>3</b>
+              <strong>Assign and sync</strong>
+              <span>Route-এর সঙ্গে vehicle assign করে master data sync করুন।</span>
+              <button type="button" data-view-jump="transportAssignVehicle">Open Assign</button>
+            </article>
+          </div>
+          <div class="smart-bus-alert" id="smartBusSetupAlert">
+            Setup status will appear here after checking route, vehicle and driver assignments.
           </div>
           <div class="table-wrap smart-bus-table-wrap">
             <table>

@@ -96,8 +96,8 @@ ANPS_ICICI_ENCRYPTION_KEY=
 ANPS_ICICI_PAYMENT_URL=
 ANPS_ICICI_RETURN_URL=https://YOUR-RENDER-SERVICE.onrender.com/api/payments/icici/callback
 ANPS_ICICI_WEBHOOK_SECRET=
-SMART_BUS_TRACKING_BASE_URL=https://YOUR-SMART-BUS-SERVICE.onrender.com
-SMART_BUS_TRACKING_DASHBOARD_URL=https://YOUR-SMART-BUS-SERVICE.onrender.com/office-live-map.html
+SMART_BUS_TRACKING_BASE_URL=https://anpsbus.thebrainerp.com
+SMART_BUS_TRACKING_DASHBOARD_URL=https://anpsbus.thebrainerp.com/office-live-map
 SMART_BUS_ERP_TOKEN=
 ```
 

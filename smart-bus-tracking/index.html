@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ANPS Smart Bus Tracking</title>
+  <link rel="stylesheet" href="./smart-bus.css">
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="side">
+      <div class="brand">
+        <div class="logo"><strong>ANPS</strong></div>
+        <div><strong>ANPS Smart Bus Tracking</strong><span>Separate live GPS service</span></div>
+      </div>
+      <nav>
+        <a href="./office-live-map.html">Live Bus Map</a>
+        <a href="./office-stoppage-monitor.html">Bus Stoppage Monitor</a>
+        <a href="./office-route-status.html">Route-wise Bus Status</a>
+        <a href="./office-driver-vehicle-status.html">Driver/Vehicle Status</a>
+        <a href="./student-bus-location.html">Student App View</a>
+        <a href="./driver-gps.html">Driver GPS App</a>
+      </nav>
+      <div class="credit">Developed by <b>THE BRAIN</b><br>Designed in USA</div>
+    </aside>
+    <main class="main">
+      <section class="hero">
+        <h1>Independent Bus Tracking System</h1>
+        <p>Live GPS tracking, student bus location API, office monitoring, and ERP master-data sync run from a separate backend and database.</p>
+        <div class="hero-actions">
+          <a class="primary" href="./office-live-map.html">Open Office Dashboard</a>
+          <a class="ghost" href="./student-bus-location.html">Open Student View</a>
+          <a class="ghost" href="./driver-gps.html">Open Driver GPS</a>
+        </div>
+      </section>
+      <section class="cards">
+        <article><span>Separate API</span><strong>ERP stays fast</strong><p>Live location writes do not touch the main ERP database.</p></article>
+        <article><span>Secure Sync</span><strong>Token protected</strong><p>ERP sends only master data through a secure API token.</p></article>
+        <article><span>Tenant Ready</span><strong>school_id in every table</strong><p>Ready for multiple school deployment later.</p></article>
+      </section>
+    </main>
+  </div>
+</body>
+</html>

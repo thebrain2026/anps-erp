@@ -107,13 +107,16 @@ function renderStoppageTable() {
 }
 
 async function loadOffice(kind = "map") {
-  lastSummary = await apiGet(`/api/office/summary?school_id=${SCHOOL_ID}`);
+  const params = new URLSearchParams(window.location.search);
+  params.set("school_id", params.get("school_id") || SCHOOL_ID);
+  lastSummary = await apiGet(`/api/office/summary?${params.toString()}`);
   renderOffice(kind);
 }
 
 function bootOffice(kind) {
+  preserveOfficeLinks();
   loadOffice(kind).catch((err) => {
-    if ($("details")) $("details").innerHTML = `<div class="empty">${err.message}</div>`;
+    if ($("details")) $("details").innerHTML = `<div class="empty">${err.message}. Open this dashboard from the secured ERP Smart Bus Tracking page after sync.</div>`;
   });
   const refresh = $("refreshBtn");
   if (refresh) refresh.onclick = () => loadOffice(kind);
@@ -123,6 +126,16 @@ function bootOffice(kind) {
     await loadOffice(kind);
   };
   setInterval(() => loadOffice(kind).catch(() => {}), 10000);
+}
+
+function preserveOfficeLinks() {
+  const query = window.location.search;
+  if (!query) return;
+  document.querySelectorAll('a[href^="./office-"]').forEach((link) => {
+    const url = new URL(link.getAttribute("href"), window.location.href);
+    if (!url.search) url.search = query;
+    link.href = url.pathname.split("/").pop() + url.search;
+  });
 }
 
 async function loadStudent() {
@@ -149,6 +162,10 @@ function bootStudent() {
   const params = new URLSearchParams(window.location.search);
   if (params.get("admission_no") && $("admissionNo")) $("admissionNo").value = params.get("admission_no");
   $("loadStudentBtn").onclick = () => loadStudent().catch((err) => $("studentBus").innerHTML = `<div class="empty">${err.message}</div>`);
-  loadStudent().catch(() => {});
+  loadStudent().catch((err) => {
+    if ($("studentBus")) {
+      $("studentBus").innerHTML = `<div class="empty">${err.message || "Open Bus Location from the ANPS mobile app."}</div>`;
+    }
+  });
   setInterval(() => loadStudent().catch(() => {}), 15000);
 }

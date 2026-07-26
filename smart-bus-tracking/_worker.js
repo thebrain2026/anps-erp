@@ -106,6 +106,44 @@ async function verifyStudentLink(url, env) {
   return { ok: true, admissionNo };
 }
 
+async function verifySignedOfficeLink(url, env) {
+  const params = url.searchParams;
+  const expiresAt = Number(params.get("exp") || 0);
+  const suppliedSig = params.get("sig") || "";
+  const source = params.get("source") || "";
+  if (source !== "erp-office" || !expiresAt || !suppliedSig) {
+    return { ok: false, status: 401, error: "Unauthorized Smart Bus office request." };
+  }
+  const token = tokenFor(env);
+  if (!token) {
+    return { ok: false, status: 503, error: "Smart Bus office API token is not configured." };
+  }
+  if (Date.now() / 1000 > expiresAt) {
+    return { ok: false, status: 403, error: "Smart Bus office link expired. Reopen the dashboard from ERP." };
+  }
+  const expectedSig = await signOfficeParams(params, env);
+  if (expectedSig !== suppliedSig) {
+    return { ok: false, status: 403, error: "Invalid Smart Bus office link." };
+  }
+  return { ok: true };
+}
+
+async function signOfficeParams(params, env) {
+  const data = new TextEncoder().encode([...params.entries()]
+    .filter(([key]) => key !== "sig")
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, value]) => `${key}=${value}`)
+    .join("&"));
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(tokenFor(env)),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  return base64Url(await crypto.subtle.sign("HMAC", key, data));
+}
+
 async function readState(env) {
   if (env.SMART_BUS_KV) {
     const raw = await env.SMART_BUS_KV.get("master-data");
@@ -185,11 +223,13 @@ async function handleOfficeSummary(env) {
 }
 
 function verifyOfficeRequest(request, env) {
+  const url = new URL(request.url);
   const token = tokenFor(env);
   if (!token) {
     return { ok: false, status: 503, error: "Smart Bus office API token is not configured." };
   }
   if ((request.headers.get("authorization") || "") !== `Bearer ${token}`) {
+    if (request.method === "GET") return null;
     return { ok: false, status: 401, error: "Unauthorized Smart Bus office request." };
   }
   return { ok: true };
@@ -245,7 +285,8 @@ export default {
     if (request.method === "OPTIONS") return json({ ok: true });
     if (url.pathname === "/api/student/bus-location") return handleStudentLocation(request, env);
     if (url.pathname === "/api/office/summary") {
-      const officeAuth = verifyOfficeRequest(request, env);
+      let officeAuth = verifyOfficeRequest(request, env);
+      if (officeAuth === null) officeAuth = await verifySignedOfficeLink(url, env);
       if (!officeAuth.ok) return json({ ok: false, error: officeAuth.error }, { status: officeAuth.status });
       return handleOfficeSummary(env);
     }
