@@ -5,6 +5,8 @@ const busSvg = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' vie
 
 const $ = (id) => document.getElementById(id);
 let selectedVehicle = "";
+let mapFocusMode = "all";
+let mapZoomDelta = 0;
 let lastSummary = { vehicles: [], pickup_points: [], stoppages: [] };
 
 function ago(iso) {
@@ -89,6 +91,10 @@ function chooseMapZoom(vehicles, width, height) {
   return 9;
 }
 
+function clampMapZoom(zoom) {
+  return Math.max(9, Math.min(17, zoom));
+}
+
 function setMultiBusMap(vehicles, selected) {
   const map = $("googleMap");
   if (!map) return;
@@ -100,8 +106,14 @@ function setMultiBusMap(vehicles, selected) {
   const width = Math.max(map.clientWidth || 900, 320);
   const height = Math.max(map.clientHeight || 540, 320);
   const selectedGps = selected && hasGps(selected) ? selected : gpsVehicles[0];
-  const zoom = chooseMapZoom(gpsVehicles, width, height);
-  const center = projectPoint(selectedGps.lat, selectedGps.lng, zoom);
+  const baseZoom = mapFocusMode === "selected" ? 15 : chooseMapZoom(gpsVehicles, width, height);
+  const zoom = clampMapZoom(baseZoom + mapZoomDelta);
+  const centerVehicles = mapFocusMode === "selected" ? [selectedGps] : gpsVehicles;
+  const centerPoints = centerVehicles.map((vehicle) => projectPoint(vehicle.lat, vehicle.lng, zoom));
+  const center = {
+    x: (Math.min(...centerPoints.map((point) => point.x)) + Math.max(...centerPoints.map((point) => point.x))) / 2,
+    y: (Math.min(...centerPoints.map((point) => point.y)) + Math.max(...centerPoints.map((point) => point.y))) / 2,
+  };
   const topLeft = { x: center.x - width / 2, y: center.y - height / 2 };
   const markers = gpsVehicles.map((vehicle) => {
     const point = projectPoint(vehicle.lat, vehicle.lng, zoom);
@@ -115,6 +127,7 @@ function setMultiBusMap(vehicles, selected) {
   map.querySelectorAll("[data-vehicle]").forEach((marker) => {
     marker.onclick = () => {
       selectedVehicle = marker.dataset.vehicle;
+      mapFocusMode = "selected";
       renderOffice("map");
     };
   });
@@ -157,6 +170,7 @@ function renderOffice(kind = "map") {
     document.querySelectorAll("[data-vehicle]").forEach((btn) => {
       btn.onclick = () => {
         selectedVehicle = btn.dataset.vehicle;
+        if (kind === "map") mapFocusMode = "selected";
         renderOffice(kind);
       };
     });
@@ -243,6 +257,28 @@ function showOfficeError(error, kind = "map") {
 function bootOffice(kind) {
   preserveOfficeLinks();
   loadOffice(kind).catch((error) => showOfficeError(error, kind));
+  const zoomIn = $("mapZoomInBtn");
+  if (zoomIn) {
+    zoomIn.onclick = () => {
+      mapZoomDelta = Math.min(3, mapZoomDelta + 1);
+      renderOffice(kind);
+    };
+  }
+  const zoomOut = $("mapZoomOutBtn");
+  if (zoomOut) {
+    zoomOut.onclick = () => {
+      mapZoomDelta = Math.max(-3, mapZoomDelta - 1);
+      renderOffice(kind);
+    };
+  }
+  const showAll = $("mapShowAllBtn");
+  if (showAll) {
+    showAll.onclick = () => {
+      mapFocusMode = "all";
+      mapZoomDelta = 0;
+      renderOffice(kind);
+    };
+  }
   const fullscreen = $("mapFullscreenBtn");
   if (fullscreen) {
     fullscreen.onclick = () => {
