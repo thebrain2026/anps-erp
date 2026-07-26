@@ -165,6 +165,22 @@ async function signDriverParams(params, env) {
   return base64Url(await crypto.subtle.sign("HMAC", key, data));
 }
 
+async function signedDriverUrlForVehicle(vehicle, request, env) {
+  const url = new URL(request.url);
+  const issuedAt = Math.floor(Date.now() / 1000);
+  const params = new URLSearchParams({
+    school_id: SCHOOL_ID,
+    source: "erp-driver",
+    vehicle_id: String(vehicle.vehicle_id || "").trim(),
+    vehicle: String(vehicle.vehicle_name || "").trim(),
+    vehicle_no: String(vehicle.vehicle_no || "").trim(),
+    iat: String(issuedAt),
+    exp: String(issuedAt + (12 * 60 * 60)),
+  });
+  params.set("sig", await signDriverParams(params, env));
+  return `${url.origin}/driver-gps?${params.toString()}`;
+}
+
 async function signOfficeSession(expiresAt, env) {
   const key = await crypto.subtle.importKey(
     "raw",
@@ -372,6 +388,23 @@ async function handleDriverVehicles(env, vehicleId) {
   });
 }
 
+async function handleOfficeDriverLink(request, env) {
+  const state = await readState(env);
+  const url = new URL(request.url);
+  const vehicleId = String(url.searchParams.get("vehicle_id") || "").trim();
+  const vehicle = (state.vehicles || []).find((item) => String(item.vehicle_id || "") === vehicleId);
+  if (!vehicle) {
+    return json({ ok: false, error: "Vehicle not found. Sync bus master data first." }, { status: 404 });
+  }
+  return json({
+    ok: true,
+    vehicle_id: vehicle.vehicle_id,
+    vehicle_name: vehicle.vehicle_name || "",
+    url: await signedDriverUrlForVehicle(vehicle, request, env),
+    expires_in_seconds: 12 * 60 * 60,
+  });
+}
+
 async function handleDriverLocation(request, env) {
   const auth = await verifySignedDriverLink(new URL(request.url), env);
   if (!auth.ok) return json({ ok: false, error: auth.error }, { status: auth.status });
@@ -519,6 +552,15 @@ export default {
       }
       if (!officeAuth.ok) return json({ ok: false, error: officeAuth.error }, { status: officeAuth.status });
       return handleOfficeSummary(env);
+    }
+    if (url.pathname === "/api/office/driver-link" && request.method === "GET") {
+      let officeAuth = verifyOfficeRequest(request, env);
+      if (officeAuth === null) {
+        const hasSignedLink = url.searchParams.get("source") === "erp-office" && url.searchParams.get("sig");
+        officeAuth = hasSignedLink ? await verifySignedOfficeLink(url, env) : await verifyOfficeSession(request, env);
+      }
+      if (!officeAuth.ok) return json({ ok: false, error: officeAuth.error }, { status: officeAuth.status });
+      return handleOfficeDriverLink(request, env);
     }
     if (url.pathname === "/api/driver/vehicles" && request.method === "GET") {
       const auth = await verifySignedDriverLink(url, env);

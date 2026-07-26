@@ -228,7 +228,10 @@ function renderRouteTable(vehicles) {
 
 function renderDriverTable(vehicles) {
   if (!vehicles.length) return renderEmptyTable("driver");
-  $("dataTable").innerHTML = vehicles.map((v) => `<tr><td>${v.driver_name || "-"}</td><td>${v.mobile || "-"}</td><td>${v.vehicle_name}</td><td>${v.vehicle_no}</td><td>${ago(v.location_updated_at)}</td><td><span class="status ${statusClass(v.status, v.location_updated_at)}">${statusClass(v.status, v.location_updated_at)}</span></td></tr>`).join("");
+  $("dataTable").innerHTML = vehicles.map((v) => `<tr><td>${v.driver_name || "-"}</td><td>${v.mobile || "-"}</td><td>${v.vehicle_name}</td><td>${v.vehicle_no}</td><td>${v.route_name || "-"}</td><td>${ago(v.location_updated_at)}</td><td><span class="status ${statusClass(v.status, v.location_updated_at)}">${statusClass(v.status, v.location_updated_at)}</span></td><td><button class="link-button" type="button" data-driver-link="${v.vehicle_id}">Open Link</button></td></tr>`).join("");
+  document.querySelectorAll("[data-driver-link]").forEach((button) => {
+    button.onclick = () => openDriverGpsLink(button.dataset.driverLink, button);
+  });
 }
 
 function renderStoppageTable() {
@@ -251,6 +254,36 @@ async function loadOffice(kind = "map") {
     summary: lastSummary,
   }));
   renderOffice(kind);
+}
+
+async function openDriverGpsLink(vehicleId, button) {
+  if (!vehicleId) return;
+  const originalText = button?.textContent || "Open Link";
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Opening...";
+  }
+  try {
+    const params = new URLSearchParams(window.location.search);
+    params.set("vehicle_id", vehicleId);
+    const data = await apiGet(`/api/office/driver-link?${params.toString()}`);
+    window.open(data.url, "_blank", "noopener");
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(data.url).catch(() => {});
+    }
+    if ($("details")) {
+      $("details").insertAdjacentHTML("afterbegin", `<div class="empty cache-note">Driver GPS link opened for ${data.vehicle_name || "selected bus"}. Link copied if browser allowed clipboard.</div>`);
+    }
+  } catch (error) {
+    if ($("details")) {
+      $("details").insertAdjacentHTML("afterbegin", `<div class="empty cache-note">${error.message || "Driver GPS link create failed."}</div>`);
+    }
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = originalText;
+    }
+  }
 }
 
 function showOfficeError(error, kind = "map") {
