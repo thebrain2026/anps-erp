@@ -1623,6 +1623,7 @@ def merge_state_without_losing_receipts(server_state, incoming_state):
         "roles": ["name"],
         "designations": ["name"],
         "userAccessAccounts": ["loginId", "id", "username"],
+        "studentUserAccounts": ["loginId", "admissionNo"],
     }.items():
         merged[key] = merge_object_lists(server_state.get(key) or [], incoming_state.get(key) or [], fields)
     push_tokens = {}
@@ -2563,7 +2564,38 @@ def hydrate_state_from_normalized_tables(conn, state):
         state.setdefault("roles", [{"name": "teacher", "status": "Active"}, {"name": "front office", "status": "Active"}])
         state.setdefault("designations", [{"name": "Teacher", "status": "Active"}, {"name": "Receptionist", "status": "Active"}])
         persist_restored_staff_members(conn, state["staffMembers"])
+    if not state.get("studentUserAccounts"):
+        state["studentUserAccounts"] = hydrate_student_user_accounts_from_user_table(conn)
     return ensure_state_school(state)
+
+
+def hydrate_student_user_accounts_from_user_table(conn):
+    try:
+        rows = conn.execute(
+            """
+            SELECT * FROM user_accounts
+            WHERE account_type = 'student'
+            ORDER BY full_name COLLATE NOCASE, login_id COLLATE NOCASE
+            """
+        ).fetchall()
+    except sqlite3.Error:
+        return []
+    accounts = []
+    for row in rows:
+        try:
+            item = json.loads(row["raw_json"] or "{}")
+        except (TypeError, json.JSONDecodeError):
+            item = {}
+        if not isinstance(item, dict):
+            item = {}
+        accounts.append({
+            **item,
+            "loginId": item.get("loginId") or row["login_id"],
+            "studentName": item.get("studentName") or item.get("name") or row["full_name"] or "",
+            "admissionNo": item.get("admissionNo") or row["linked_id"] or "",
+            "status": item.get("status") or row["status"] or "Active",
+        })
+    return accounts
 
 
 def persist_restored_staff_members(conn, staff_list):
