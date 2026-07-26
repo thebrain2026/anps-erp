@@ -25,7 +25,15 @@ function statusClass(status, updatedAt) {
 }
 
 async function apiGet(path, headers = {}) {
-  const res = await fetch(`${API}${path}`, { headers });
+  const url = new URL(`${API}${path}`, window.location.origin);
+  url.searchParams.set("_t", String(Date.now()));
+  const res = await fetch(url.pathname + url.search, {
+    headers: {
+      ...headers,
+      "Cache-Control": "no-store",
+    },
+    cache: "no-store",
+  });
   const data = await res.json();
   if (!data.ok) throw new Error(data.error || "API error");
   return data;
