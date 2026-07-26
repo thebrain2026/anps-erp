@@ -24,7 +24,7 @@ function selectedDriverVehicle() {
 function renderDriverSelection() {
   const select = driverElement("driverVehicle");
   select.innerHTML = driverVehicles.map((vehicle) => (
-    `<option value="${escapeDriverHtml(vehicle.vehicle_id)}">${escapeDriverHtml(vehicle.route_name || "No route")} · ${escapeDriverHtml(vehicle.vehicle_name)}${vehicle.driver_name ? ` · ${escapeDriverHtml(vehicle.driver_name)}` : ""}</option>`
+    `<option value="${escapeDriverHtml(vehicle.vehicle_id)}">Route: ${escapeDriverHtml(vehicle.route_name || "No route assigned")} | Bus: ${escapeDriverHtml(vehicle.vehicle_name)}${vehicle.driver_name ? ` | Driver: ${escapeDriverHtml(vehicle.driver_name)}` : ""}</option>`
   )).join("");
   updateSelectedDriverReadout();
 }
@@ -32,6 +32,11 @@ function renderDriverSelection() {
 function updateSelectedDriverReadout() {
   const vehicle = selectedDriverVehicle();
   driverElement("gpsBus").textContent = vehicle ? vehicle.vehicle_name : "-";
+  const preview = driverElement("driverRoutePreview");
+  if (!preview) return;
+  preview.innerHTML = vehicle
+    ? `<strong>${escapeDriverHtml(vehicle.route_name || "No route assigned")}</strong><span>${escapeDriverHtml(vehicle.vehicle_name)}${vehicle.driver_name ? ` · ${escapeDriverHtml(vehicle.driver_name)}` : ""}</span>`
+    : "Route will show after login.";
 }
 
 function driverSession() {

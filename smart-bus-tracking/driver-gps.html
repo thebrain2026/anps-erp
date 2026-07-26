@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#0f766e">
   <title>ANPS Driver GPS</title>
-  <link rel="stylesheet" href="./smart-bus.css?v=3">
+  <link rel="stylesheet" href="./smart-bus.css?v=4">
 </head>
 <body>
   <div class="mobile-wrap">
@@ -26,6 +26,7 @@
           <span>Select route / bus</span>
           <select id="driverVehicle" aria-label="Bus and route"></select>
         </label>
+        <div id="driverRoutePreview" class="driver-route-preview">Route will show after login.</div>
         <label class="driver-field">
           <span>Trip type</span>
           <select id="driverTripType" aria-label="Trip type">
@@ -54,6 +55,6 @@
       </section>
     </main>
   </div>
-  <script src="./driver-gps.js?v=pin-route-select"></script>
+  <script src="./driver-gps.js?v=route-preview"></script>
 </body>
 </html>
