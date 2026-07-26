@@ -957,6 +957,33 @@ def smart_bus_signed_office_dashboard_url():
     return f"{dashboard_url}?{urlencode(params)}"
 
 
+def smart_bus_signed_driver_url(vehicle_id, vehicle_name="", vehicle_no=""):
+    base_url = smart_bus_base_url()
+    driver_url = f"{base_url.rstrip('/')}/driver-gps"
+    token = smart_bus_erp_token(base_url)
+    if not token:
+        return ""
+    issued_at = int(datetime.utcnow().timestamp())
+    expires_at = issued_at + 12 * 60 * 60
+    params = {
+        "school_id": DEFAULT_SCHOOL_ID,
+        "source": "erp-driver",
+        "vehicle_id": str(vehicle_id or "").strip(),
+        "vehicle": str(vehicle_name or "").strip(),
+        "vehicle_no": str(vehicle_no or "").strip(),
+        "iat": str(issued_at),
+        "exp": str(expires_at),
+    }
+    canonical = "&".join(f"{key}={params[key]}" for key in sorted(params))
+    digest = hmac.new(
+        token.encode("utf-8"),
+        canonical.encode("utf-8"),
+        hashlib.sha256,
+    ).digest()
+    params["sig"] = base64.urlsafe_b64encode(digest).decode("ascii").rstrip("=")
+    return f"{driver_url}?{urlencode(params)}"
+
+
 def smart_bus_student_url_response(params):
     admission_no = params.get("admission_no", [""])[-1]
     student_name = params.get("student", [""])[-1]
@@ -967,6 +994,22 @@ def smart_bus_student_url_response(params):
         "ok": True,
         "url": smart_bus_signed_student_url(admission_no, student_name, class_name),
         "expiresInSeconds": 15 * 60,
+    }
+
+
+def smart_bus_driver_url_response(params):
+    vehicle_id = params.get("vehicle_id", [""])[-1]
+    vehicle_name = params.get("vehicle", [""])[-1]
+    vehicle_no = params.get("vehicle_no", [""])[-1]
+    if not vehicle_id:
+        return {"ok": False, "error": "Vehicle ID is required."}
+    url = smart_bus_signed_driver_url(vehicle_id, vehicle_name, vehicle_no)
+    if not url:
+        return {"ok": False, "error": "Smart Bus ERP token is not configured."}
+    return {
+        "ok": True,
+        "url": url,
+        "expiresInSeconds": 12 * 60 * 60,
     }
 
 
@@ -1040,12 +1083,15 @@ def build_smart_bus_master_payload(state):
         if not key or key in seen_vehicle_keys:
             return
         seen_vehicle_keys.add(key)
+        driver_identity = str(vehicle.get("driverMobile") or assignment.get("driverMobile") or vehicle.get("driverName") or assignment.get("driverName") or vehicle_no or vehicle_name).strip()
         synced_vehicles.append({
             "vehicle_id": str(vehicle.get("id") or vehicle_no or vehicle_name).strip(),
             "vehicle_name": vehicle_name,
             "vehicle_no": vehicle_no,
+            "route_id": str(assignment.get("routeName") or "").strip(),
             "route_name": str(assignment.get("routeName") or "").strip(),
             "trip_type": str(assignment.get("shift") or "").strip(),
+            "driver_id": driver_identity,
             "driver_name": str(vehicle.get("driverName") or assignment.get("driverName") or "").strip(),
             "mobile": str(vehicle.get("driverMobile") or assignment.get("driverMobile") or "").strip(),
             "lat": None,
@@ -4077,6 +4123,10 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             if not self.authorized():
                 return
             return self.json_response(smart_bus_student_url_response(parse_qs(parsed.query)))
+        if path == "/api/smart-bus/driver-url":
+            if not self.authorized():
+                return
+            return self.json_response(smart_bus_driver_url_response(parse_qs(parsed.query)))
         if path == "/api/payments/icici/callback":
             params = {key: values[-1] for key, values in parse_qs(parsed.query).items()}
             return self.json_response({

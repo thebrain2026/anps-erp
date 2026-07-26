@@ -29,10 +29,7 @@
             <option value="drop">Drop trip</option>
           </select>
         </label>
-        <label class="driver-field">
-          <span>Driver GPS token</span>
-          <input id="driverToken" type="password" autocomplete="off" placeholder="Enter trip token" aria-label="Driver GPS token">
-        </label>
+        <button id="loadDriverVehiclesBtn" class="ghost" type="button">Refresh Bus</button>
 
         <div class="driver-actions">
           <button id="startTripBtn" class="primary" type="button">Start Trip</button>
@@ -49,10 +46,10 @@
           <div class="student-row"><span>Sent</span><strong id="gpsSent">-</strong></div>
         </div>
 
-        <p class="driver-note">Location is sent only during an active trip. The token stays in this page session and is not saved permanently.</p>
+        <p class="driver-note">Location is sent only during an active trip. Open this page from the signed Driver GPS link in ERP.</p>
       </section>
     </main>
   </div>
-  <script src="./driver-gps.js?v=1"></script>
+  <script src="./driver-gps.js?v=signed-driver-link"></script>
 </body>
 </html>

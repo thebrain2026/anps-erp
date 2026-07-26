@@ -1,6 +1,7 @@
 const DRIVER_API = "";
 const DRIVER_SCHOOL_ID = "anps";
 const DRIVER_SEND_INTERVAL_MS = 5000;
+const DRIVER_LINK_QUERY = window.location.search || "";
 
 const driverElement = (id) => document.getElementById(id);
 let driverVehicles = [];
@@ -33,13 +34,23 @@ function updateSelectedDriverReadout() {
 }
 
 async function loadDriverVehicles() {
-  const response = await fetch(`${DRIVER_API}/api/office/summary?school_id=${encodeURIComponent(DRIVER_SCHOOL_ID)}`);
+  if (!DRIVER_LINK_QUERY.includes("sig=")) {
+    throw new Error("Open Driver GPS from ERP Smart Bus Tracking signed link.");
+  }
+  const separator = DRIVER_LINK_QUERY.includes("?") ? "&" : "?";
+  const response = await fetch(`${DRIVER_API}/api/driver/vehicles${DRIVER_LINK_QUERY}${separator}school_id=${encodeURIComponent(DRIVER_SCHOOL_ID)}`);
   const data = await response.json();
   if (!response.ok || !data.ok) throw new Error(data.error || "Unable to load vehicles");
-  driverVehicles = (data.vehicles || []).filter((vehicle) => vehicle.route_id && vehicle.driver_id);
-  if (!driverVehicles.length) throw new Error("No assigned bus, route and driver found");
+  driverVehicles = (data.vehicles || [])
+    .filter((vehicle) => vehicle.vehicle_id && vehicle.vehicle_name)
+    .map((vehicle) => ({
+      ...vehicle,
+      route_id: vehicle.route_id || `route-${String(vehicle.route_name || vehicle.vehicle_name).toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+      driver_id: vehicle.driver_id || `driver-${String(vehicle.mobile || vehicle.driver_name || vehicle.vehicle_name).toLowerCase().replace(/[^a-z0-9]+/g, "-")}`,
+    }));
+  if (!driverVehicles.length) throw new Error("No assigned bus, route and driver found. Sync route, vehicle and driver from ERP first.");
   renderDriverSelection();
-  setDriverMessage("Select the bus, enter the trip token, then start tracking.");
+  setDriverMessage("Confirm the bus, then start tracking.");
 }
 
 function driverPayload(position, status = "running") {
@@ -64,14 +75,12 @@ function driverPayload(position, status = "running") {
 async function sendDriverPosition(position, status = "running", force = false) {
   const now = Date.now();
   if (!force && (driverSending || now - driverLastSentAt < DRIVER_SEND_INTERVAL_MS)) return;
-  const token = driverElement("driverToken").value.trim();
-  if (!token) throw new Error("Driver GPS token is required");
   driverSending = true;
   try {
-    const response = await fetch(`${DRIVER_API}/api/driver/location`, {
+    const separator = DRIVER_LINK_QUERY.includes("?") ? "&" : "?";
+    const response = await fetch(`${DRIVER_API}/api/driver/location${DRIVER_LINK_QUERY}${separator}school_id=${encodeURIComponent(DRIVER_SCHOOL_ID)}`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify(driverPayload(position, status)),
@@ -107,7 +116,7 @@ function handleDriverGpsError(error) {
   driverElement("gpsStatus").textContent = "GPS error";
 }
 
-function startDriverTrip() {
+async function startDriverTrip() {
   if (driverWatchId != null) return;
   if (!window.isSecureContext) {
     setDriverMessage("GPS requires HTTPS. Localhost is allowed for testing.", true);
@@ -117,9 +126,13 @@ function startDriverTrip() {
     setDriverMessage("This phone does not support GPS tracking.", true);
     return;
   }
-  if (!driverElement("driverToken").value.trim()) {
-    setDriverMessage("Enter the Driver GPS token first.", true);
-    return;
+  if (!driverVehicles.length) {
+    try {
+      await loadDriverVehicles();
+    } catch (error) {
+      setDriverMessage(error.message, true);
+      return;
+    }
   }
   if (!selectedDriverVehicle()) {
     setDriverMessage("Select an assigned bus first.", true);
@@ -129,7 +142,6 @@ function startDriverTrip() {
   driverElement("stopTripBtn").disabled = false;
   driverElement("driverVehicle").disabled = true;
   driverElement("driverTripType").disabled = true;
-  driverElement("driverToken").disabled = true;
   driverElement("gpsStatus").textContent = "Waiting for GPS";
   setDriverMessage("Allow location permission to start the trip.");
   driverWatchId = navigator.geolocation.watchPosition(showDriverPosition, handleDriverGpsError, {
@@ -156,7 +168,6 @@ async function stopDriverTrip() {
   driverElement("stopTripBtn").disabled = true;
   driverElement("driverVehicle").disabled = false;
   driverElement("driverTripType").disabled = false;
-  driverElement("driverToken").disabled = false;
 }
 
 function escapeDriverHtml(value) {
@@ -166,7 +177,8 @@ function escapeDriverHtml(value) {
 }
 
 driverElement("driverVehicle").addEventListener("change", updateSelectedDriverReadout);
-driverElement("startTripBtn").addEventListener("click", startDriverTrip);
+driverElement("loadDriverVehiclesBtn").addEventListener("click", () => loadDriverVehicles().catch((error) => setDriverMessage(error.message, true)));
+driverElement("startTripBtn").addEventListener("click", () => startDriverTrip().catch((error) => setDriverMessage(error.message, true)));
 driverElement("stopTripBtn").addEventListener("click", stopDriverTrip);
 window.addEventListener("pagehide", () => {
   if (driverWatchId != null) navigator.geolocation.clearWatch(driverWatchId);

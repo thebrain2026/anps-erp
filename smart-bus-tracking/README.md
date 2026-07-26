@@ -7,6 +7,8 @@ Cloudflare Pages app for student-wise bus location.
 - `SMART_BUS_ERP_TOKEN` - same token configured in ERP Render env.
 - Optional KV binding: `SMART_BUS_KV` for persistent synced master data.
 
+Driver GPS links are signed by ERP per vehicle. Do not share the ERP token with drivers.
+
 ## ERP env after deploy
 
 - `SMART_BUS_TRACKING_BASE_URL=https://<cloudflare-pages-url>`

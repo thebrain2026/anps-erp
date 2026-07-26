@@ -10903,12 +10903,16 @@ function getSmartBusSyncPreviewRows() {
       const pickupPoint = getRoutePickupPointForVillage(villageName) || {};
       const assignment = getTransportAssignment(pickupPoint.routeName, pickupPoint.shift) || {};
       const vehicle = getTransportVehicleByNo(assignment.vehicleNo) || {};
+      const vehicleNo = vehicle.vehicleNo || assignment.vehicleNo || "";
+      const vehicleName = vehicle.vehicleName || assignment.vehicleName || "";
       return {
         admissionNo: student.admissionNo || "",
         studentName: student.name || "",
         routeName: pickupPoint.routeName || assignment.routeName || "",
         pickupPoint: pickupPoint.villageName || villageName || "",
-        vehicleName: vehicle.vehicleName || assignment.vehicleName || "",
+        vehicleId: vehicle.id || vehicleNo || vehicleName || "",
+        vehicleNo,
+        vehicleName,
         driverName: vehicle.driverName || assignment.driverName || "",
         trip: pickupPoint.shift || assignment.shift || ""
       };
@@ -10950,8 +10954,13 @@ async function renderSmartBusTracking() {
       <td>${escapeHtml(row.vehicleName || "Not assigned")}</td>
       <td>${escapeHtml(row.driverName || "-")}</td>
       <td>${escapeHtml(row.trip || "-")}</td>
+      <td>
+        ${row.vehicleId
+          ? `<button class="mini-action" type="button" data-open-driver-gps="${escapeHtml(row.vehicleId)}" data-driver-vehicle="${escapeHtml(row.vehicleName || "")}" data-driver-vehicle-no="${escapeHtml(row.vehicleNo || "")}">Open</button>`
+          : `<span class="muted">Assign vehicle</span>`}
+      </td>
     </tr>
-  `).join("") || `<tr><td colspan="7">No transport student ready for sync.</td></tr>`;
+  `).join("") || `<tr><td colspan="8">No transport student ready for sync.</td></tr>`;
 
   const statusBox = document.getElementById("smartBusSyncStatus");
   const statusPill = document.getElementById("smartBusConfigStatus");
@@ -10985,6 +10994,30 @@ async function renderSmartBusTracking() {
       statusPill.className = "danger";
     }
     if (statusBox) statusBox.textContent = error.message || "Smart Bus Tracking config check failed.";
+  }
+}
+
+async function openSmartBusDriverGpsLink(vehicleId, vehicleName = "", vehicleNo = "") {
+  if (!vehicleId) {
+    showToast("Vehicle assign korun.");
+    return;
+  }
+  try {
+    const params = new URLSearchParams({
+      vehicle_id: vehicleId,
+      vehicle: vehicleName || "",
+      vehicle_no: vehicleNo || ""
+    });
+    const response = await backendFetch(`/api/smart-bus/driver-url?${params.toString()}`, {
+      headers: backendHeaders(),
+      cache: "no-store"
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok || !result.ok || !result.url) throw new Error(result.error || "Driver GPS link create kora gelo na.");
+    window.open(result.url, "_blank", "noopener");
+    showToast("Driver GPS signed link opened.");
+  } catch (error) {
+    showToast(error.message || "Driver GPS link failed.");
   }
 }
 
@@ -13612,6 +13645,16 @@ document.querySelectorAll("[data-view-jump]").forEach(button => {
     if (button.dataset.viewJump === "finance") activeFeeReturnView = getSourceView(button);
     setView(button.dataset.viewJump);
   });
+});
+
+document.getElementById("smartBusTracking")?.addEventListener("click", event => {
+  const button = event.target.closest("[data-open-driver-gps]");
+  if (!button) return;
+  openSmartBusDriverGpsLink(
+    button.dataset.openDriverGps,
+    button.dataset.driverVehicle || "",
+    button.dataset.driverVehicleNo || ""
+  );
 });
 
 document.getElementById("menuButton").addEventListener("click", () => {
