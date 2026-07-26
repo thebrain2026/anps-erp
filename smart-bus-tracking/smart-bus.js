@@ -115,7 +115,8 @@ function setMultiBusMap(vehicles, selected) {
     y: (Math.min(...centerPoints.map((point) => point.y)) + Math.max(...centerPoints.map((point) => point.y))) / 2,
   };
   const topLeft = { x: center.x - width / 2, y: center.y - height / 2 };
-  const markers = gpsVehicles.map((vehicle) => {
+  const visibleVehicles = mapFocusMode === "selected" ? gpsVehicles.filter((vehicle) => vehicle.vehicle_id === selectedGps.vehicle_id) : gpsVehicles;
+  const markers = visibleVehicles.map((vehicle) => {
     const point = projectPoint(vehicle.lat, vehicle.lng, zoom);
     const isActive = mapFocusMode === "selected" && vehicle.vehicle_id === selected?.vehicle_id;
     return `<button class="map-bus-marker ${isActive ? "active" : ""}" data-vehicle="${vehicle.vehicle_id}" style="left:${Math.round(point.x - topLeft.x)}px;top:${Math.round(point.y - topLeft.y)}px" title="${vehicle.vehicle_name}">
@@ -123,7 +124,8 @@ function setMultiBusMap(vehicles, selected) {
       <span>${vehicle.vehicle_name}</span>
     </button>`;
   }).join("");
-  map.innerHTML = `<div class="map-grid-bg"></div>${markers}<div class="map-attribution">Private live view | ${gpsVehicles.length} live bus${gpsVehicles.length === 1 ? "" : "es"}</div>`;
+  const viewLabel = mapFocusMode === "selected" ? `${selectedGps.vehicle_name} selected` : `${gpsVehicles.length} live bus${gpsVehicles.length === 1 ? "" : "es"}`;
+  map.innerHTML = `<div class="map-grid-bg"></div>${markers}<div class="map-attribution">Private live view | ${viewLabel}</div>`;
   map.querySelectorAll("[data-vehicle]").forEach((marker) => {
     marker.onclick = () => {
       selectedVehicle = marker.dataset.vehicle;
