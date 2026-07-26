@@ -7,6 +7,7 @@ const $ = (id) => document.getElementById(id);
 let selectedVehicle = "";
 let mapFocusMode = "all";
 let mapZoomDelta = 0;
+let mapFrameState = null;
 let lastSummary = { vehicles: [], pickup_points: [], stoppages: [] };
 
 function ago(iso) {
@@ -127,6 +128,7 @@ function setMultiBusMap(vehicles, selected) {
   if (!map) return;
   const gpsVehicles = vehicles.filter(hasGps);
   if (!gpsVehicles.length) {
+    mapFrameState = null;
     map.innerHTML = `<div class="map-empty"><strong>No live GPS yet</strong><span>Driver mobile theke GPS start korle 11 ta bus marker ei map-e ek sathe dekha jabe.</span></div>`;
     return;
   }
@@ -135,18 +137,25 @@ function setMultiBusMap(vehicles, selected) {
   const selectedGps = selected && hasGps(selected) ? selected : gpsVehicles[0];
   const baseZoom = mapFocusMode === "selected" ? 15 : chooseMapZoom(gpsVehicles, width, height);
   const zoom = clampMapZoom(baseZoom + mapZoomDelta);
-  const centerVehicles = mapFocusMode === "selected" ? [selectedGps] : gpsVehicles;
-  const centerPoints = centerVehicles.map((vehicle) => projectPoint(vehicle.lat, vehicle.lng, zoom));
-  const center = {
-    x: (Math.min(...centerPoints.map((point) => point.x)) + Math.max(...centerPoints.map((point) => point.x))) / 2,
-    y: (Math.min(...centerPoints.map((point) => point.y)) + Math.max(...centerPoints.map((point) => point.y))) / 2,
-  };
-  const topLeft = { x: center.x - width / 2, y: center.y - height / 2 };
-  const centerLatLng = unprojectPoint(center, zoom);
-  const googleSrc = googleMapEmbedSrc(centerLatLng, zoom);
+  const viewKey = `${mapFocusMode}:${selectedGps.vehicle_id}:${zoom}`;
+  if (!mapFrameState || mapFrameState.viewKey !== viewKey) {
+    const centerVehicles = mapFocusMode === "selected" ? [selectedGps] : gpsVehicles;
+    const centerPoints = centerVehicles.map((vehicle) => projectPoint(vehicle.lat, vehicle.lng, zoom));
+    mapFrameState = {
+      viewKey,
+      zoom,
+      center: {
+        x: (Math.min(...centerPoints.map((point) => point.x)) + Math.max(...centerPoints.map((point) => point.x))) / 2,
+        y: (Math.min(...centerPoints.map((point) => point.y)) + Math.max(...centerPoints.map((point) => point.y))) / 2,
+      },
+    };
+  }
+  const topLeft = { x: mapFrameState.center.x - width / 2, y: mapFrameState.center.y - height / 2 };
+  const centerLatLng = unprojectPoint(mapFrameState.center, mapFrameState.zoom);
+  const googleSrc = googleMapEmbedSrc(centerLatLng, mapFrameState.zoom);
   const visibleVehicles = mapFocusMode === "selected" ? gpsVehicles.filter((vehicle) => vehicle.vehicle_id === selectedGps.vehicle_id) : gpsVehicles;
   const markers = visibleVehicles.map((vehicle) => {
-    const point = projectPoint(vehicle.lat, vehicle.lng, zoom);
+    const point = projectPoint(vehicle.lat, vehicle.lng, mapFrameState.zoom);
     const isActive = mapFocusMode === "selected" && vehicle.vehicle_id === selected?.vehicle_id;
     return `<button class="map-bus-marker ${isActive ? "active" : ""}" data-vehicle="${vehicle.vehicle_id}" style="left:${Math.round(point.x - topLeft.x)}px;top:${Math.round(point.y - topLeft.y)}px" title="${vehicle.vehicle_name}">
       <img src="${busSvg}" alt="">
@@ -155,7 +164,14 @@ function setMultiBusMap(vehicles, selected) {
   }).join("");
   const viewLabel = mapFocusMode === "selected" ? `${selectedGps.vehicle_name} selected` : `${gpsVehicles.length} live bus${gpsVehicles.length === 1 ? "" : "es"}`;
   const modeBadge = mapFocusMode === "selected" ? `Single Bus View: ${selectedGps.vehicle_name}` : `Showing All Buses: ${gpsVehicles.length}`;
-  map.innerHTML = `<iframe class="road-map-frame" title="Google road map" src="${googleSrc}" loading="lazy"></iframe><div class="map-marker-layer"><div class="map-mode-badge">${modeBadge}</div>${markers}<div class="map-attribution">Google road map | ${viewLabel}</div></div>`;
+  const markerLayer = `<div class="map-mode-badge">${modeBadge}</div>${markers}<div class="map-attribution">Google road map | ${viewLabel}</div>`;
+  const frame = map.querySelector(".road-map-frame");
+  const layer = map.querySelector(".map-marker-layer");
+  if (!frame || frame.getAttribute("src") !== googleSrc || !layer) {
+    map.innerHTML = `<iframe class="road-map-frame" title="Google road map" src="${googleSrc}" loading="lazy"></iframe><div class="map-marker-layer">${markerLayer}</div>`;
+  } else {
+    layer.innerHTML = markerLayer;
+  }
   map.querySelectorAll("[data-vehicle]").forEach((marker) => {
     marker.onclick = () => {
       selectedVehicle = marker.dataset.vehicle;
