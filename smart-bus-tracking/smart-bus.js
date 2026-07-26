@@ -63,6 +63,63 @@ function setMap(vehicle) {
   }
 }
 
+function hasGps(vehicle) {
+  return Number.isFinite(Number(vehicle?.lat)) && Number.isFinite(Number(vehicle?.lng));
+}
+
+function projectPoint(lat, lng, zoom) {
+  const scale = 256 * (2 ** zoom);
+  const sinLat = Math.sin((Number(lat) * Math.PI) / 180);
+  return {
+    x: ((Number(lng) + 180) / 360) * scale,
+    y: (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * scale,
+  };
+}
+
+function chooseMapZoom(vehicles, width, height) {
+  if (vehicles.length <= 1) return 15;
+  for (let zoom = 16; zoom >= 9; zoom -= 1) {
+    const points = vehicles.map((vehicle) => projectPoint(vehicle.lat, vehicle.lng, zoom));
+    const xs = points.map((point) => point.x);
+    const ys = points.map((point) => point.y);
+    if ((Math.max(...xs) - Math.min(...xs)) < width * 0.72 && (Math.max(...ys) - Math.min(...ys)) < height * 0.72) {
+      return zoom;
+    }
+  }
+  return 9;
+}
+
+function setMultiBusMap(vehicles, selected) {
+  const map = $("googleMap");
+  if (!map) return;
+  const gpsVehicles = vehicles.filter(hasGps);
+  if (!gpsVehicles.length) {
+    map.innerHTML = `<div class="map-empty"><strong>No live GPS yet</strong><span>Driver mobile theke GPS start korle 11 ta bus marker ei map-e ek sathe dekha jabe.</span></div>`;
+    return;
+  }
+  const width = Math.max(map.clientWidth || 900, 320);
+  const height = Math.max(map.clientHeight || 540, 320);
+  const selectedGps = selected && hasGps(selected) ? selected : gpsVehicles[0];
+  const zoom = chooseMapZoom(gpsVehicles, width, height);
+  const center = projectPoint(selectedGps.lat, selectedGps.lng, zoom);
+  const topLeft = { x: center.x - width / 2, y: center.y - height / 2 };
+  const markers = gpsVehicles.map((vehicle) => {
+    const point = projectPoint(vehicle.lat, vehicle.lng, zoom);
+    const isActive = vehicle.vehicle_id === selected?.vehicle_id;
+    return `<button class="map-bus-marker ${isActive ? "active" : ""}" data-vehicle="${vehicle.vehicle_id}" style="left:${Math.round(point.x - topLeft.x)}px;top:${Math.round(point.y - topLeft.y)}px" title="${vehicle.vehicle_name}">
+      <img src="${busSvg}" alt="">
+      <span>${vehicle.vehicle_name}</span>
+    </button>`;
+  }).join("");
+  map.innerHTML = `<div class="map-grid-bg"></div>${markers}<div class="map-attribution">Private live view | ${gpsVehicles.length} live bus${gpsVehicles.length === 1 ? "" : "es"}</div>`;
+  map.querySelectorAll("[data-vehicle]").forEach((marker) => {
+    marker.onclick = () => {
+      selectedVehicle = marker.dataset.vehicle;
+      renderOffice("map");
+    };
+  });
+}
+
 function renderOffice(kind = "map") {
   const vehicles = lastSummary.vehicles || [];
   if (!vehicles.length) {
@@ -73,7 +130,8 @@ function renderOffice(kind = "map") {
     if ($("lastSeen")) $("lastSeen").textContent = "-";
     if ($("vehicleList")) $("vehicleList").innerHTML = `<div class="empty">No real bus data synced yet.</div>`;
     if ($("details")) $("details").innerHTML = `<div class="empty">Sync bus master data from ERP and start driver GPS to show live vehicles here.</div>`;
-    setMap(null);
+    if (kind === "map") setMultiBusMap([], null);
+    else setMap(null);
     if (kind === "stoppage") renderStoppageTable();
     else renderEmptyTable(kind);
     return;
@@ -115,7 +173,8 @@ function renderOffice(kind = "map") {
       ["Last Update", ago(selected.location_updated_at)],
     ].map(([a, b]) => `<article><span>${a}</span><strong>${b}</strong></article>`).join("");
   }
-  setMap(selected);
+  if (kind === "map") setMultiBusMap(vehicles, selected);
+  else setMap(selected);
   if (kind === "route") renderRouteTable(vehicles);
   if (kind === "driver") renderDriverTable(vehicles);
   if (kind === "stoppage") renderStoppageTable();
