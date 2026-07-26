@@ -74,7 +74,12 @@ function setMap(vehicle) {
 }
 
 function hasGps(vehicle) {
-  return Number.isFinite(Number(vehicle?.lat)) && Number.isFinite(Number(vehicle?.lng));
+  return vehicle?.lat != null
+    && vehicle?.lng != null
+    && String(vehicle.lat).trim() !== ""
+    && String(vehicle.lng).trim() !== ""
+    && Number.isFinite(Number(vehicle.lat))
+    && Number.isFinite(Number(vehicle.lng));
 }
 
 function projectPoint(lat, lng, zoom) {
@@ -84,6 +89,20 @@ function projectPoint(lat, lng, zoom) {
     x: ((Number(lng) + 180) / 360) * scale,
     y: (0.5 - Math.log((1 + sinLat) / (1 - sinLat)) / (4 * Math.PI)) * scale,
   };
+}
+
+function unprojectPoint(point, zoom) {
+  const scale = 256 * (2 ** zoom);
+  const lng = (Number(point.x) / scale) * 360 - 180;
+  const n = Math.PI - (2 * Math.PI * Number(point.y)) / scale;
+  const lat = (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
+  return { lat, lng };
+}
+
+function googleMapEmbedSrc(center, zoom) {
+  const lat = Number(center.lat).toFixed(6);
+  const lng = Number(center.lng).toFixed(6);
+  return `https://maps.google.com/maps?q=${lat},${lng}&z=${zoom}&output=embed`;
 }
 
 function chooseMapZoom(vehicles, width, height) {
@@ -123,6 +142,8 @@ function setMultiBusMap(vehicles, selected) {
     y: (Math.min(...centerPoints.map((point) => point.y)) + Math.max(...centerPoints.map((point) => point.y))) / 2,
   };
   const topLeft = { x: center.x - width / 2, y: center.y - height / 2 };
+  const centerLatLng = unprojectPoint(center, zoom);
+  const googleSrc = googleMapEmbedSrc(centerLatLng, zoom);
   const visibleVehicles = mapFocusMode === "selected" ? gpsVehicles.filter((vehicle) => vehicle.vehicle_id === selectedGps.vehicle_id) : gpsVehicles;
   const markers = visibleVehicles.map((vehicle) => {
     const point = projectPoint(vehicle.lat, vehicle.lng, zoom);
@@ -134,7 +155,7 @@ function setMultiBusMap(vehicles, selected) {
   }).join("");
   const viewLabel = mapFocusMode === "selected" ? `${selectedGps.vehicle_name} selected` : `${gpsVehicles.length} live bus${gpsVehicles.length === 1 ? "" : "es"}`;
   const modeBadge = mapFocusMode === "selected" ? `Single Bus View: ${selectedGps.vehicle_name}` : `Showing All Buses: ${gpsVehicles.length}`;
-  map.innerHTML = `<div class="map-grid-bg"></div><div class="map-mode-badge">${modeBadge}</div>${markers}<div class="map-attribution">Private live view | ${viewLabel}</div>`;
+  map.innerHTML = `<iframe class="road-map-frame" title="Google road map" src="${googleSrc}" loading="lazy"></iframe><div class="map-marker-layer"><div class="map-mode-badge">${modeBadge}</div>${markers}<div class="map-attribution">Google road map | ${viewLabel}</div></div>`;
   map.querySelectorAll("[data-vehicle]").forEach((marker) => {
     marker.onclick = () => {
       selectedVehicle = marker.dataset.vehicle;
