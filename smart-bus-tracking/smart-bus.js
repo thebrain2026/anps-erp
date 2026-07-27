@@ -200,6 +200,7 @@ function renderOffice(kind = "map") {
     if (kind === "map") setMultiBusMap([], null);
     else setMap(null);
     if (kind === "stoppage") renderStoppageTable();
+    else if (kind === "distance") renderDistanceTable();
     else renderEmptyTable(kind);
     return;
   }
@@ -257,6 +258,7 @@ function renderOffice(kind = "map") {
   if (kind === "route") renderRouteTable(vehicles);
   if (kind === "driver") renderDriverTable(vehicles);
   if (kind === "stoppage") renderStoppageTable();
+  if (kind === "distance") renderDistanceTable();
   if (kind === "map") renderBusTable(vehicles);
 }
 
@@ -284,9 +286,39 @@ function renderStoppageTable() {
   $("dataTable").innerHTML = rows.length ? rows.map((s) => `<tr><td>${s.vehicle_id}</td><td>${s.route_id}</td><td>${s.stop_name}</td><td>${Math.round((s.duration_seconds || 0) / 60)} min</td><td>${s.started_at}</td><td>${s.ended_at || "Standing"}</td></tr>`).join("") : `<tr><td colspan="6">No stoppage alert now</td></tr>`;
 }
 
+function todayDateKey() {
+  return new Date(Date.now() - (new Date().getTimezoneOffset() * 60000)).toISOString().slice(0, 10);
+}
+
+function formatKm(value) {
+  const km = Number(value || 0);
+  return `${km.toFixed(km >= 10 ? 1 : 2)} km`;
+}
+
+function timeOnly(value) {
+  if (!value) return "-";
+  return new Date(value).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" });
+}
+
+function renderDistanceTable() {
+  if (!$("dataTable")) return;
+  const input = $("distanceDate");
+  if (input && !input.value) input.value = todayDateKey();
+  const date = input?.value || todayDateKey();
+  const dailyRuns = lastSummary.daily_runs || {};
+  const rows = Object.values(dailyRuns[date] || {}).sort((a, b) => String(a.vehicle_name || "").localeCompare(String(b.vehicle_name || "")));
+  const totalKm = rows.reduce((sum, row) => sum + Number(row.total_km || 0), 0);
+  if ($("distanceTotal")) $("distanceTotal").textContent = formatKm(totalKm);
+  if ($("distanceVehicleCount")) $("distanceVehicleCount").textContent = rows.length;
+  if ($("distanceDateLabel")) $("distanceDateLabel").textContent = date;
+  $("dataTable").innerHTML = rows.length
+    ? rows.map((row) => `<tr><td>${row.date || date}</td><td>${row.vehicle_name || row.vehicle_id || "-"}</td><td>${row.route_name || "-"}</td><td>${row.driver_name || "-"}</td><td><strong>${formatKm(row.total_km)}</strong></td><td>${timeOnly(row.first_seen_at)}</td><td>${timeOnly(row.last_seen_at)}</td><td>${row.point_count || 0}</td></tr>`).join("")
+    : `<tr><td colspan="8">Ei date-e kono GPS running distance record nei.</td></tr>`;
+}
+
 function renderEmptyTable(kind) {
   if (!$("dataTable")) return;
-  const spans = { map: 6, route: 5, driver: 6, stoppage: 6 };
+  const spans = { map: 6, route: 5, driver: 6, stoppage: 6, distance: 8 };
   $("dataTable").innerHTML = `<tr><td colspan="${spans[kind] || 6}">No real bus data synced yet.</td></tr>`;
 }
 
@@ -451,6 +483,11 @@ function bootOffice(kind) {
         refresh.textContent = originalText;
       }
     };
+  }
+  const distanceDate = $("distanceDate");
+  if (distanceDate) {
+    distanceDate.value = distanceDate.value || todayDateKey();
+    distanceDate.onchange = () => renderDistanceTable();
   }
   const demo = $("demoBtn");
   if (demo) demo.remove();

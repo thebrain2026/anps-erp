@@ -31,6 +31,77 @@ function stableId(prefix, value = "") {
   return `${prefix}-${normalize(value) || "unknown"}`;
 }
 
+function istDateKey(value = new Date()) {
+  const date = value instanceof Date ? value : new Date(value);
+  return new Date(date.getTime() + (330 * 60 * 1000)).toISOString().slice(0, 10);
+}
+
+function haversineKm(aLat, aLng, bLat, bLng) {
+  const toRad = (value) => (Number(value) * Math.PI) / 180;
+  const lat1 = Number(aLat);
+  const lng1 = Number(aLng);
+  const lat2 = Number(bLat);
+  const lng2 = Number(bLng);
+  if (![lat1, lng1, lat2, lng2].every(Number.isFinite)) return 0;
+  const earthKm = 6371;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const s1 = Math.sin(dLat / 2);
+  const s2 = Math.sin(dLng / 2);
+  const h = (s1 * s1) + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * (s2 * s2);
+  return earthKm * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+function pruneDailyRuns(dailyRuns = {}) {
+  const keepFrom = new Date(Date.now() - (60 * 24 * 60 * 60 * 1000));
+  const keepKey = istDateKey(keepFrom);
+  return Object.fromEntries(Object.entries(dailyRuns).filter(([date]) => date >= keepKey));
+}
+
+function recordDailyRun(state, vehicle, previous, nextPoint, now) {
+  if (!previous || previous.lat == null || previous.lng == null || !previous.location_updated_at) return;
+  const dateKey = istDateKey(now);
+  if (istDateKey(previous.location_updated_at) !== dateKey) return;
+  const km = haversineKm(previous.lat, previous.lng, nextPoint.lat, nextPoint.lng);
+  if (!Number.isFinite(km) || km < 0.01) return;
+  const minutes = Math.max(0, (now.getTime() - new Date(previous.location_updated_at).getTime()) / 60000);
+  if (!Number.isFinite(minutes) || minutes <= 0 || minutes > 45) return;
+  const impliedSpeed = km / (minutes / 60);
+  if (impliedSpeed > 120 || km > 20) return;
+  state.daily_runs = pruneDailyRuns(state.daily_runs || {});
+  state.daily_runs[dateKey] ||= {};
+  const key = String(vehicle.vehicle_id || nextPoint.vehicle_id || "").trim();
+  if (!key) return;
+  const row = state.daily_runs[dateKey][key] || {
+    date: dateKey,
+    vehicle_id: key,
+    vehicle_name: vehicle.vehicle_name || "",
+    vehicle_no: vehicle.vehicle_no || "",
+    route_id: vehicle.route_id || "",
+    route_name: vehicle.route_name || "",
+    driver_id: vehicle.driver_id || "",
+    driver_name: vehicle.driver_name || "",
+    trip_type: vehicle.trip_type || "",
+    total_km: 0,
+    point_count: 0,
+    first_seen_at: previous.location_updated_at,
+    last_seen_at: previous.location_updated_at,
+  };
+  Object.assign(row, {
+    vehicle_name: vehicle.vehicle_name || row.vehicle_name,
+    vehicle_no: vehicle.vehicle_no || row.vehicle_no,
+    route_id: vehicle.route_id || row.route_id,
+    route_name: vehicle.route_name || row.route_name,
+    driver_id: vehicle.driver_id || row.driver_id,
+    driver_name: vehicle.driver_name || row.driver_name,
+    trip_type: vehicle.trip_type || row.trip_type,
+    total_km: Number((Number(row.total_km || 0) + km).toFixed(3)),
+    point_count: Number(row.point_count || 0) + 1,
+    last_seen_at: now.toISOString(),
+  });
+  state.daily_runs[dateKey][key] = row;
+}
+
 function tokenFor(env) {
   return String(env.SMART_BUS_ERP_TOKEN || "");
 }
@@ -458,6 +529,7 @@ async function handleOfficeSummary(env) {
     vehicles: state.vehicles || [],
     pickup_points: state.pickup_points || [],
     stoppages: state.stoppages || [],
+    daily_runs: state.daily_runs || {},
   });
 }
 
@@ -520,6 +592,12 @@ async function handleDriverLocation(request, env) {
   if (!vehicle) {
     return json({ ok: false, error: "Vehicle not found. Sync bus master data from ERP again." }, { status: 404 });
   }
+  const now = new Date();
+  const previous = {
+    lat: vehicle.lat,
+    lng: vehicle.lng,
+    location_updated_at: vehicle.location_updated_at,
+  };
   Object.assign(vehicle, {
     route_id: String(payload.route_id || vehicle.route_id || "").trim(),
     driver_id: String(payload.driver_id || vehicle.driver_id || "").trim(),
@@ -530,9 +608,10 @@ async function handleDriverLocation(request, env) {
     speed_kmph: Number(payload.speed_kmph || 0),
     status: String(payload.status || "running"),
     estimated_arrival_min: Number(payload.estimated_arrival_min || vehicle.estimated_arrival_min || 0),
-    location_updated_at: new Date().toISOString(),
+    location_updated_at: now.toISOString(),
   });
-  state.updated_at = new Date().toISOString();
+  recordDailyRun(state, vehicle, previous, { lat, lng, vehicle_id: vehicleId }, now);
+  state.updated_at = now.toISOString();
   await writeState(env, state);
   return json({ ok: true, vehicle_id: vehicle.vehicle_id, updated_at: vehicle.location_updated_at });
 }
@@ -587,6 +666,7 @@ async function handleSyncMasterData(request, env) {
     return json({ ok: false, error: "Unauthorized Smart Bus ERP sync token." }, { status: 401 });
   }
   const payload = await request.json().catch(() => ({}));
+  const previousState = await readState(env);
   const students = Array.isArray(payload.students) ? payload.students : [];
   const incomingVehicles = Array.isArray(payload.vehicles) ? payload.vehicles : [];
   const vehiclesByName = new Map();
@@ -652,6 +732,7 @@ async function handleSyncMasterData(request, env) {
     routes: Array.isArray(payload.routes) ? payload.routes : [],
     pickup_points: Array.isArray(payload.pickup_points) ? payload.pickup_points : [],
     stoppages: [],
+    daily_runs: pruneDailyRuns(previousState.daily_runs || {}),
     updated_at: new Date().toISOString(),
   };
   await writeState(env, state);
