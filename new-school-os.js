@@ -99,6 +99,7 @@ let activeDailyCollectionDate = "";
 const viewHistoryStack = [];
 const collectedPayments = {};
 const deletedPaymentReceipts = {};
+const deletedStudents = {};
 const selectedHistoryPayments = new Set();
 const openFeeBookDropdowns = new Set();
 let receiptSerial = 1;
@@ -468,6 +469,7 @@ function getAppStateSnapshot() {
     activeSession,
     collectedPayments,
     deletedPaymentReceipts,
+    deletedStudents,
     receiptSerial,
     notices,
     teacherNoticeRequests,
@@ -662,11 +664,45 @@ function mergeStudentRecord(existing = {}, incoming = {}) {
   return merged;
 }
 
-function mergeStudentList(remoteList = [], localList = []) {
+function getDeletedStudentMap(...maps) {
+  const merged = {};
+  maps.forEach(map => {
+    if (!map || typeof map !== "object") return;
+    Object.entries(map).forEach(([admissionNo, deletedAt]) => {
+      const normalizedAdmissionNo = normalizeAdmissionNo(admissionNo) || String(admissionNo || "").trim().toLowerCase();
+      if (!normalizedAdmissionNo) return;
+      merged[normalizedAdmissionNo] = deletedAt || new Date().toISOString();
+    });
+  });
+  return merged;
+}
+
+function isStudentMarkedDeleted(student = {}, deletedMap = deletedStudents) {
+  const normalizedAdmissionNo = normalizeAdmissionNo(student?.admissionNo || "") || String(student?.admissionNo || "").trim().toLowerCase();
+  return Boolean(normalizedAdmissionNo && deletedMap?.[normalizedAdmissionNo]);
+}
+
+function filterDeletedStudents(studentList = [], deletedMap = deletedStudents) {
+  return (Array.isArray(studentList) ? studentList : []).filter(student => !isStudentMarkedDeleted(student, deletedMap));
+}
+
+function markStudentDeleted(admissionNo = "") {
+  const normalizedAdmissionNo = normalizeAdmissionNo(admissionNo) || String(admissionNo || "").trim().toLowerCase();
+  if (!normalizedAdmissionNo) return;
+  deletedStudents[normalizedAdmissionNo] = new Date().toISOString();
+}
+
+function clearStudentDeletedMark(admissionNo = "") {
+  const normalizedAdmissionNo = normalizeAdmissionNo(admissionNo) || String(admissionNo || "").trim().toLowerCase();
+  if (!normalizedAdmissionNo) return;
+  delete deletedStudents[normalizedAdmissionNo];
+}
+
+function mergeStudentList(remoteList = [], localList = [], deletedMap = deletedStudents) {
   const merged = [];
   const indexByKey = new Map();
   const getKey = student => normalizeAdmissionNo(student?.admissionNo || "") || String(student?.name || "").trim().toLowerCase();
-  [...(Array.isArray(remoteList) ? remoteList : []), ...(Array.isArray(localList) ? localList : [])].forEach(student => {
+  [...filterDeletedStudents(remoteList, deletedMap), ...filterDeletedStudents(localList, deletedMap)].forEach(student => {
     if (!student || typeof student !== "object") return;
     const key = getKey(student);
     if (!key) return;
@@ -927,6 +963,7 @@ function mergeClassSubjectAssignments(remoteAssignments = {}, localAssignments =
 
 function mergeStateSnapshots(remoteState = {}, localState = {}) {
   const merged = {...remoteState, ...localState};
+  merged.deletedStudents = getDeletedStudentMap(remoteState.deletedStudents, localState.deletedStudents);
   const primitiveKeys = [
     "customAdmissionClasses",
     "customAdmissionSections",
@@ -963,7 +1000,7 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
     teacherAdvisories: ["id", "teacherId", "subject"],
     homeworkDoubts: ["id", "homeworkId", "studentAdmissionNo"]
   };
-  merged.students = mergeStudentList(remoteState.students || [], localState.students || []);
+  merged.students = mergeStudentList(remoteState.students || [], localState.students || [], merged.deletedStudents);
   Object.entries(objectRules).forEach(([key, fields]) => {
     merged[key] = mergeObjectListByKey(remoteState[key] || [], localState[key] || [], fields);
   });
@@ -1261,8 +1298,12 @@ function saveAppState() {
 
 function applySavedState(saved = {}) {
   try {
+    if (saved.deletedStudents && typeof saved.deletedStudents === "object") {
+      Object.keys(deletedStudents).forEach(admissionNo => delete deletedStudents[admissionNo]);
+      Object.assign(deletedStudents, getDeletedStudentMap(saved.deletedStudents));
+    }
     if (Array.isArray(saved.students)) {
-      students.splice(0, students.length, ...saved.students);
+      students.splice(0, students.length, ...filterDeletedStudents(saved.students, deletedStudents));
     }
     if (saved.financeSessions && typeof saved.financeSessions === "object") {
       Object.keys(financeSessions).forEach(session => delete financeSessions[session]);
@@ -4838,6 +4879,7 @@ function importStudentsExcelFile(file) {
       imported.route = imported.route || "Self";
       imported.studentType = imported.studentType || "New Student";
       const existingIndex = students.findIndex(student => normalizeAdmissionNo(student.admissionNo) === normalizeAdmissionNo(imported.admissionNo));
+      clearStudentDeletedMark(imported.admissionNo);
       if (existingIndex >= 0) {
         students[existingIndex] = {...students[existingIndex], ...imported};
         updated += 1;
@@ -15982,6 +16024,7 @@ admissionForm.addEventListener("submit", event => {
   };
 
   const editIndex = students.findIndex(student => normalizeAdmissionNo(student.admissionNo) === normalizeAdmissionNo(editingAdmissionNo));
+  clearStudentDeletedMark(admissionNo);
   if (editIndex >= 0) students[editIndex] = {...students[editIndex], ...studentData};
   else students.unshift(studentData);
 
@@ -17097,6 +17140,7 @@ document.body.addEventListener("click", event => {
     const student = findStudentByAdmissionNo(admissionNo);
     if (student && confirm(`Delete ${student.name}?`)) {
       const index = students.findIndex(item => normalizeAdmissionNo(item.admissionNo) === normalizeAdmissionNo(admissionNo));
+      markStudentDeleted(admissionNo);
       if (index >= 0) students.splice(index, 1);
       studentUserAccounts.forEach(account => {
         if (normalizeAdmissionNo(account.admissionNo) === normalizeAdmissionNo(admissionNo)) {
