@@ -16,17 +16,17 @@
         <p>Keep this page open while the trip is running.</p>
       </section>
       <section class="phone-body">
-        <div id="driverMessage" class="student-message" role="status">Enter Driver PIN, load route, then start trip.</div>
-
+        <div id="driverMessage" class="student-message" role="status">Enter driver code, load route, then start trip.</div>
+        <div id="gpsConnection" class="gps-connection is-waiting" role="status" aria-live="polite"><span></span><strong>GPS not connected</strong></div>
         <label class="driver-field">
-          <span>Driver PIN</span>
-          <input id="driverPin" type="password" inputmode="numeric" autocomplete="one-time-code" placeholder="Enter Driver PIN" aria-label="Driver PIN">
+          <span>Driver Code</span>
+          <input id="driverPin" type="password" inputmode="text" autocomplete="one-time-code" placeholder="Enter driver code" aria-label="Driver Code">
         </label>
         <label class="driver-field">
           <span>Select route / bus</span>
           <select id="driverVehicle" aria-label="Bus and route"></select>
         </label>
-        <div id="driverRoutePreview" class="driver-route-preview">Route will show after login.</div>
+        <div id="driverRoutePreview" class="driver-route-preview">Route will show after loading.</div>
         <label class="driver-field">
           <span>Trip type</span>
           <select id="driverTripType" aria-label="Trip type">
@@ -34,10 +34,10 @@
             <option value="drop">Drop trip</option>
           </select>
         </label>
-        <button id="loadDriverVehiclesBtn" class="ghost" type="button">Login & Load Routes</button>
+        <button id="loadDriverVehiclesBtn" class="ghost" type="button">Load Bus Routes</button>
 
         <div class="driver-actions">
-          <button id="startTripBtn" class="primary" type="button">Start Trip</button>
+          <button id="startTripBtn" class="primary" type="button" disabled>Start Trip</button>
           <button id="stopTripBtn" class="danger" type="button" disabled>Stop Trip</button>
         </div>
 
@@ -51,10 +51,10 @@
           <div class="student-row"><span>Sent</span><strong id="gpsSent">-</strong></div>
         </div>
 
-        <p class="driver-note">Location is sent only during an active trip. Driver PIN can be changed by office when needed.</p>
+        <p class="driver-note">Location is sent only during an active trip. Office can change the driver code when needed.</p>
       </section>
     </main>
   </div>
-  <script src="./driver-gps.js?v=route-preview"></script>
+  <script src="./driver-gps.js?v=auto-route-gps-status-1"></script>
 </body>
 </html>

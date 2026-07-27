@@ -39,8 +39,8 @@ function officePinFor(env) {
   return String(env.SMART_BUS_OFFICE_PIN || "");
 }
 
-function driverPinFor(env) {
-  return String(env.SMART_BUS_DRIVER_PIN || "");
+function defaultDriverPinFor(env) {
+  return String(env.SMART_BUS_DRIVER_PIN || "2244");
 }
 
 function studentLinkSecret(env) {
@@ -181,6 +181,14 @@ async function signDriverSession(expiresAt, env) {
   return base64Url(await crypto.subtle.sign("HMAC", key, data));
 }
 
+async function driverPinFor(env) {
+  if (env.SMART_BUS_KV) {
+    const saved = await env.SMART_BUS_KV.get("driver-pin");
+    if (saved) return saved;
+  }
+  return defaultDriverPinFor(env);
+}
+
 async function verifyDriverSession(url, env) {
   const token = tokenFor(env);
   const session = url.searchParams.get("driver_session") || "";
@@ -190,10 +198,10 @@ async function verifyDriverSession(url, env) {
     return { ok: false, status: 503, error: "Smart Bus driver token is not configured." };
   }
   if (!expiresAt || !suppliedSig) {
-    return { ok: false, status: 401, error: "Driver PIN login required." };
+    return { ok: false, status: 401, error: "Driver code required." };
   }
   if (Date.now() / 1000 > expiresAt) {
-    return { ok: false, status: 403, error: "Driver PIN login expired. Login again." };
+    return { ok: false, status: 403, error: "Driver code login expired. Login again." };
   }
   const expectedSig = await signDriverSession(expiresAt, env);
   if (expectedSig !== suppliedSig) {
@@ -326,24 +334,40 @@ async function handleOfficeLogin(request, env) {
 }
 
 async function handleDriverLogin(request, env) {
-  if (!tokenFor(env) || !driverPinFor(env)) {
-    return json({ ok: false, error: "Driver PIN is not configured." }, { status: 503 });
+  if (!tokenFor(env)) {
+    return json({ ok: false, error: "Smart Bus driver token is not configured." }, { status: 503 });
   }
   const rateKey = driverLoginRateKey(request);
   const attempts = await readLoginAttempts(request, env, rateKey);
   if (attempts.blocked) {
-    return json({ ok: false, error: "Too many wrong PIN attempts. Please try again after 15 minutes." }, { status: 429 });
+    return json({ ok: false, error: "Too many wrong code attempts. Please try again after 15 minutes." }, { status: 429 });
   }
   const payload = await request.json().catch(() => ({}));
   const suppliedPin = String(payload.pin || "").trim();
-  if (!suppliedPin || suppliedPin !== driverPinFor(env)) {
+  if (!suppliedPin || suppliedPin !== await driverPinFor(env)) {
     await recordFailedLogin(request, env, rateKey);
-    return json({ ok: false, error: "Wrong Driver PIN." }, { status: 401 });
+    return json({ ok: false, error: "Wrong driver code." }, { status: 401 });
   }
   await clearFailedLogin(request, env, rateKey);
   const expiresAt = Math.floor(Date.now() / 1000) + (12 * 60 * 60);
   const sig = await signDriverSession(expiresAt, env);
   return json({ ok: true, driver_session: `${expiresAt}.${sig}`, expires_at: expiresAt });
+}
+
+async function handleDriverSettings(request, env) {
+  if (request.method === "GET") {
+    return json({ ok: true, driver_code: await driverPinFor(env) });
+  }
+  if (!env.SMART_BUS_KV) {
+    return json({ ok: false, error: "Smart Bus KV is required to change driver code." }, { status: 503 });
+  }
+  const payload = await request.json().catch(() => ({}));
+  const nextPin = String(payload.driver_code || payload.pin || "").trim();
+  if (!/^[A-Za-z0-9@#._-]{4,20}$/.test(nextPin)) {
+    return json({ ok: false, error: "Driver code must be 4-20 letters, numbers or @ # . _ -" }, { status: 400 });
+  }
+  await env.SMART_BUS_KV.put("driver-pin", nextPin);
+  return json({ ok: true, driver_code: nextPin, updated_at: new Date().toISOString() });
 }
 
 async function readState(env) {
@@ -617,6 +641,12 @@ export default {
     if (url.pathname === "/api/office/session") {
       const session = await verifyOfficeSession(request, env);
       return json({ ok: session.ok, error: session.ok ? "" : session.error }, { status: session.ok ? 200 : session.status });
+    }
+    if (url.pathname === "/api/office/driver-settings") {
+      let officeAuth = verifyOfficeRequest(request, env);
+      if (officeAuth === null) officeAuth = await verifyOfficeSession(request, env);
+      if (!officeAuth.ok) return json({ ok: false, error: officeAuth.error }, { status: officeAuth.status });
+      return handleDriverSettings(request, env);
     }
     if (url.pathname === "/api/office/summary") {
       let officeAuth = verifyOfficeRequest(request, env);

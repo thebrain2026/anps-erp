@@ -366,9 +366,45 @@ function showOfficeError(error, kind = "map") {
   if ($("lastSeen")) $("lastSeen").textContent = "-";
 }
 
+async function loadDriverCode() {
+  if (!$("driverCodeCurrent")) return;
+  const data = await apiGet("/api/office/driver-settings");
+  $("driverCodeCurrent").textContent = data.driver_code ? `Current: ${data.driver_code}` : "Current: 2244";
+  if ($("driverCodeInput") && !$("driverCodeInput").value) $("driverCodeInput").value = data.driver_code || "2244";
+}
+
+function bindDriverCodeForm() {
+  const form = $("driverCodeForm");
+  if (!form) return;
+  const input = $("driverCodeInput");
+  const status = $("driverCodeStatus");
+  loadDriverCode().catch((error) => {
+    if (status) status.textContent = error.message || "Driver code load failed.";
+  });
+  form.onsubmit = async (event) => {
+    event.preventDefault();
+    const nextCode = (input?.value || "").trim();
+    if (status) status.textContent = "Changing driver code...";
+    try {
+      const res = await fetch("/api/office/driver-settings", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({driver_code: nextCode}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.ok === false) throw new Error(data.error || "Driver code change failed.");
+      if ($("driverCodeCurrent")) $("driverCodeCurrent").textContent = `Current: ${data.driver_code}`;
+      if (status) status.textContent = "Driver code changed.";
+    } catch (error) {
+      if (status) status.textContent = error.message || "Driver code change failed.";
+    }
+  };
+}
+
 function bootOffice(kind) {
   preserveOfficeLinks();
   loadOffice(kind).catch((error) => showOfficeError(error, kind));
+  bindDriverCodeForm();
   const zoomIn = $("mapZoomInBtn");
   if (zoomIn) {
     zoomIn.onclick = () => {
