@@ -18,6 +18,7 @@ import android.os.IBinder;
 
 import org.json.JSONObject;
 
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
@@ -36,6 +37,7 @@ public class DriverLocationService extends Service implements LocationListener {
     private static final int NOTIFICATION_ID = 2244;
     private static final long MIN_TIME_MS = 5000;
     private static final float MIN_DISTANCE_M = 2f;
+    private static final long MAX_LAST_KNOWN_AGE_MS = 120000;
 
     private final ExecutorService sender = Executors.newSingleThreadExecutor();
     private LocationManager locationManager;
@@ -81,7 +83,9 @@ public class DriverLocationService extends Service implements LocationListener {
         try {
             Location last = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
             if (last == null) last = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
-            if (last != null) sendLocation(last, "running");
+            if (last != null && System.currentTimeMillis() - last.getTime() <= MAX_LAST_KNOWN_AGE_MS) {
+                sendLocation(last, "running");
+            }
         } catch (Exception ignored) {}
     }
 
@@ -109,6 +113,8 @@ public class DriverLocationService extends Service implements LocationListener {
                 payload.put("lng", location.getLongitude());
                 payload.put("speed_kmph", Math.max(0, location.getSpeed() * 3.6f));
                 payload.put("heading", location.hasBearing() ? location.getBearing() : 0);
+                payload.put("accuracy_m", location.hasAccuracy() ? location.getAccuracy() : 0);
+                payload.put("provider", location.getProvider() == null ? "" : location.getProvider());
                 payload.put("status", status);
 
                 byte[] body = payload.toString().getBytes(StandardCharsets.UTF_8);
@@ -123,8 +129,13 @@ public class DriverLocationService extends Service implements LocationListener {
                     output.write(body);
                 }
                 int code = connection.getResponseCode();
+                String responseText = readResponse(connection);
                 if (code >= 200 && code < 300) {
-                    updateNotification("Live GPS sending");
+                    if (responseText.contains("\"accepted\":false")) {
+                        updateNotification("GPS accuracy low");
+                    } else {
+                        updateNotification("Live GPS sending");
+                    }
                 } else {
                     updateNotification("GPS retrying");
                 }
@@ -134,6 +145,22 @@ public class DriverLocationService extends Service implements LocationListener {
                 if (connection != null) connection.disconnect();
             }
         });
+    }
+
+    private String readResponse(HttpURLConnection connection) {
+        try {
+            InputStream stream = connection.getInputStream();
+            StringBuilder builder = new StringBuilder();
+            byte[] buffer = new byte[1024];
+            int count;
+            while ((count = stream.read(buffer)) != -1) {
+                builder.append(new String(buffer, 0, count, StandardCharsets.UTF_8));
+            }
+            stream.close();
+            return builder.toString();
+        } catch (Exception ignored) {
+            return "";
+        }
     }
 
     private JSONObject clonePayload() throws Exception {

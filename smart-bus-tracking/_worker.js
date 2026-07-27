@@ -1,4 +1,5 @@
 const SCHOOL_ID = "anps";
+const MAX_DRIVER_ACCURACY_M = 150;
 
 const emptyState = {
   school_id: SCHOOL_ID,
@@ -50,6 +51,22 @@ function haversineKm(aLat, aLng, bLat, bLng) {
   const s2 = Math.sin(dLng / 2);
   const h = (s1 * s1) + Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * (s2 * s2);
   return earthKm * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
+}
+
+function driverAccuracyStatus(payload) {
+  const accuracy = Number(payload.accuracy_m ?? payload.accuracy ?? 0);
+  if (Number.isFinite(accuracy) && accuracy > MAX_DRIVER_ACCURACY_M) {
+    return {
+      ok: false,
+      accuracy,
+      message: `GPS accuracy ${Math.round(accuracy)}m. Open sky-te phone rakhun, tarpor abar try korun.`,
+    };
+  }
+  return {
+    ok: true,
+    accuracy: Number.isFinite(accuracy) && accuracy > 0 ? accuracy : 0,
+    message: "",
+  };
 }
 
 function pruneDailyRuns(dailyRuns = {}) {
@@ -587,6 +604,15 @@ async function handleDriverLocation(request, env) {
   if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
     return json({ ok: false, error: "Valid GPS latitude and longitude are required." }, { status: 400 });
   }
+  const accuracyStatus = driverAccuracyStatus(payload);
+  if (!accuracyStatus.ok) {
+    return json({
+      ok: true,
+      accepted: false,
+      error: accuracyStatus.message,
+      accuracy_m: accuracyStatus.accuracy,
+    });
+  }
   const state = await readState(env);
   const vehicle = (state.vehicles || []).find((item) => String(item.vehicle_id || "") === vehicleId);
   if (!vehicle) {
@@ -606,6 +632,7 @@ async function handleDriverLocation(request, env) {
     lng,
     heading: Number(payload.heading || 0),
     speed_kmph: Number(payload.speed_kmph || 0),
+    accuracy_m: accuracyStatus.accuracy,
     status: String(payload.status || "running"),
     estimated_arrival_min: Number(payload.estimated_arrival_min || vehicle.estimated_arrival_min || 0),
     location_updated_at: now.toISOString(),

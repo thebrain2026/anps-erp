@@ -144,6 +144,7 @@ function driverPayload(position, status = "running") {
     lng: position.coords.longitude,
     speed_kmph: Number(speedKmph.toFixed(1)),
     heading: position.coords.heading == null ? 0 : position.coords.heading,
+    accuracy_m: Number(position.coords.accuracy || 0),
     status,
     estimated_arrival_min: Number(vehicle.estimated_arrival_min || 0),
   };
@@ -179,6 +180,10 @@ async function sendDriverPosition(position, status = "running", force = false) {
     });
     const data = await response.json();
     if (!response.ok || !data.ok) throw new Error(data.error || "Location update failed");
+    if (data.accepted === false) {
+      setDriverMessage(data.error || "GPS accuracy low. Open sky-te phone rakhun.", true);
+      return;
+    }
     driverLastSentAt = Date.now();
     driverElement("gpsSent").textContent = "Just now";
     setDriverMessage(status === "offline" ? "Trip stopped. GPS sharing is off." : "Live location sent successfully.");
