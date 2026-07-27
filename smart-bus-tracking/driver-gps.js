@@ -149,6 +149,20 @@ function driverPayload(position, status = "running") {
   };
 }
 
+function driverBasePayload(status = "running") {
+  const vehicle = selectedDriverVehicle();
+  if (!vehicle) throw new Error("Select an assigned bus");
+  return {
+    school_id: DRIVER_SCHOOL_ID,
+    vehicle_id: vehicle.vehicle_id,
+    route_id: vehicle.route_id,
+    driver_id: vehicle.driver_id,
+    trip_type: driverElement("driverTripType").value,
+    status,
+    estimated_arrival_min: Number(vehicle.estimated_arrival_min || 0),
+  };
+}
+
 async function sendDriverPosition(position, status = "running", force = false) {
   const now = Date.now();
   if (!force && (driverSending || now - driverLastSentAt < DRIVER_SEND_INTERVAL_MS)) return;
@@ -195,6 +209,29 @@ async function sendDriverTripStatus(status = "running") {
   if (!response.ok || !data.ok) throw new Error(data.error || "Trip status update failed");
   driverLastSentAt = Date.now();
   driverElement("gpsSent").textContent = "Just now";
+}
+
+function hasNativeBackgroundGps() {
+  try {
+    return !!window.AnpsDriverNative?.hasNativeBackgroundGps?.();
+  } catch {
+    return false;
+  }
+}
+
+async function startNativeBackgroundGps() {
+  if (!hasNativeBackgroundGps()) return false;
+  const query = await driverQuery();
+  const separator = query.includes("?") ? "&" : "?";
+  const endpoint = `${window.location.origin}/api/driver/location${query}${separator}school_id=${encodeURIComponent(DRIVER_SCHOOL_ID)}`;
+  window.AnpsDriverNative.startTracking(endpoint, JSON.stringify(driverBasePayload("running")));
+  return true;
+}
+
+function stopNativeBackgroundGps() {
+  try {
+    window.AnpsDriverNative?.stopTracking?.();
+  } catch {}
 }
 
 function showDriverPosition(position) {
@@ -300,7 +337,8 @@ async function startDriverTrip() {
   driverTripActive = true;
   try {
     await sendDriverTripStatus("running");
-    setDriverMessage("Trip started. GPS connect হচ্ছে...");
+    const nativeStarted = await startNativeBackgroundGps();
+    setDriverMessage(nativeStarted ? "Trip started. Background GPS service চালু আছে." : "Trip started. GPS connect হচ্ছে...");
   } catch (error) {
     driverTripActive = false;
     driverElement("startTripBtn").disabled = false;
@@ -323,6 +361,7 @@ async function startDriverTrip() {
 }
 
 async function stopDriverTrip() {
+  stopNativeBackgroundGps();
   if (driverWatchId != null) navigator.geolocation.clearWatch(driverWatchId);
   driverWatchId = null;
   driverWatchMode = "high";

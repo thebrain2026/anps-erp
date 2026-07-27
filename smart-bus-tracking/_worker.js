@@ -670,6 +670,36 @@ async function handleSyncMasterData(request, env) {
   const students = Array.isArray(payload.students) ? payload.students : [];
   const incomingVehicles = Array.isArray(payload.vehicles) ? payload.vehicles : [];
   const vehiclesByName = new Map();
+  const previousVehicles = previousState.vehicles || [];
+  const previousByKey = new Map();
+
+  previousVehicles.forEach((vehicle) => {
+    const keys = [
+      vehicle.vehicle_id,
+      vehicle.vehicle_no,
+      vehicle.vehicle_name,
+    ].map(normalize).filter(Boolean);
+    keys.forEach((key) => previousByKey.set(key, vehicle));
+  });
+
+  function preserveLiveGps(vehicle) {
+    const previous = [
+      vehicle.vehicle_id,
+      vehicle.vehicle_no,
+      vehicle.vehicle_name,
+    ].map(normalize).filter(Boolean).map((key) => previousByKey.get(key)).find(Boolean);
+    if (!previous || !previous.location_updated_at) return vehicle;
+    return {
+      ...vehicle,
+      lat: previous.lat ?? vehicle.lat,
+      lng: previous.lng ?? vehicle.lng,
+      heading: previous.heading ?? vehicle.heading,
+      speed_kmph: previous.speed_kmph ?? vehicle.speed_kmph,
+      status: previous.status || vehicle.status,
+      estimated_arrival_min: previous.estimated_arrival_min ?? vehicle.estimated_arrival_min,
+      location_updated_at: previous.location_updated_at,
+    };
+  }
 
   function putVehicle(vehicle) {
     if (!vehicle || typeof vehicle !== "object") return;
@@ -677,7 +707,7 @@ async function handleSyncMasterData(request, env) {
     const vehicleNo = String(vehicle.vehicle_no || vehicle.vehicleNo || "").trim();
     const key = normalize(vehicleNo || vehicleName);
     if (!key || vehiclesByName.has(key)) return;
-    vehiclesByName.set(key, {
+    vehiclesByName.set(key, preserveLiveGps({
       vehicle_id: String(vehicle.vehicle_id || vehicle.id || vehicleNo || vehicleName).trim(),
       vehicle_name: vehicleName || vehicleNo,
       vehicle_no: vehicleNo,
@@ -694,7 +724,7 @@ async function handleSyncMasterData(request, env) {
       status: String(vehicle.status || "no-gps"),
       estimated_arrival_min: Number(vehicle.estimated_arrival_min || vehicle.estimatedArrivalMin || 0),
       location_updated_at: String(vehicle.location_updated_at || vehicle.locationUpdatedAt || ""),
-    });
+    }));
   }
 
   incomingVehicles.forEach(putVehicle);
@@ -705,7 +735,7 @@ async function handleSyncMasterData(request, env) {
     if (!vehicleName && !vehicleNo) return;
     const key = normalize(vehicleNo || vehicleName);
     if (!vehiclesByName.has(key)) {
-      vehiclesByName.set(key, {
+      vehiclesByName.set(key, preserveLiveGps({
         vehicle_id: `vehicle-${vehiclesByName.size + 1}`,
         vehicle_name: vehicleName,
         vehicle_no: vehicleNo,
@@ -722,7 +752,7 @@ async function handleSyncMasterData(request, env) {
         status: "no-gps",
         estimated_arrival_min: 0,
         location_updated_at: "",
-      });
+      }));
     }
   });
   const state = {

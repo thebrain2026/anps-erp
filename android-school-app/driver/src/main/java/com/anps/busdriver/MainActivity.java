@@ -3,6 +3,7 @@ package com.anps.busdriver;
 import android.Manifest;
 import android.annotation.SuppressLint;
 import android.app.Activity;
+import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.net.ConnectivityManager;
@@ -13,6 +14,7 @@ import android.os.Bundle;
 import android.view.View;
 import android.view.WindowManager;
 import android.webkit.GeolocationPermissions;
+import android.webkit.JavascriptInterface;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceError;
 import android.webkit.WebResourceRequest;
@@ -27,6 +29,7 @@ import android.widget.TextView;
 
 public class MainActivity extends Activity {
     private static final int LOCATION_REQUEST_CODE = 301;
+    private static final int NOTIFICATION_REQUEST_CODE = 302;
 
     private WebView webView;
     private LinearLayout offlineView;
@@ -75,6 +78,8 @@ public class MainActivity extends Activity {
             settings.setSafeBrowsingEnabled(true);
         }
 
+        webView.addJavascriptInterface(new DriverNativeBridge(), "AnpsDriverNative");
+
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
             public void onProgressChanged(WebView view, int newProgress) {
@@ -117,7 +122,47 @@ public class MainActivity extends Activity {
         });
 
         requestLocationPermissionIfNeeded();
+        requestNotificationPermissionIfNeeded();
         loadApp();
+    }
+
+    private class DriverNativeBridge {
+        @JavascriptInterface
+        public boolean hasNativeBackgroundGps() {
+            return true;
+        }
+
+        @JavascriptInterface
+        public void startTracking(String endpoint, String basePayloadJson) {
+            runOnUiThread(() -> startNativeTracking(endpoint, basePayloadJson));
+        }
+
+        @JavascriptInterface
+        public void stopTracking() {
+            runOnUiThread(() -> stopNativeTracking());
+        }
+    }
+
+    private void startNativeTracking(String endpoint, String basePayloadJson) {
+        if (!hasLocationPermission()) {
+            requestLocationPermissionIfNeeded();
+            return;
+        }
+        Intent intent = new Intent(this, DriverLocationService.class);
+        intent.setAction(DriverLocationService.ACTION_START);
+        intent.putExtra(DriverLocationService.EXTRA_ENDPOINT, endpoint == null ? "" : endpoint);
+        intent.putExtra(DriverLocationService.EXTRA_PAYLOAD, basePayloadJson == null ? "{}" : basePayloadJson);
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            startForegroundService(intent);
+        } else {
+            startService(intent);
+        }
+    }
+
+    private void stopNativeTracking() {
+        Intent intent = new Intent(this, DriverLocationService.class);
+        intent.setAction(DriverLocationService.ACTION_STOP);
+        startService(intent);
     }
 
     private void handleGeolocationPermission(String origin, GeolocationPermissions.Callback callback) {
@@ -142,6 +187,13 @@ public class MainActivity extends Activity {
                     Manifest.permission.ACCESS_FINE_LOCATION,
                     Manifest.permission.ACCESS_COARSE_LOCATION
             }, LOCATION_REQUEST_CODE);
+        }
+    }
+
+    private void requestNotificationPermissionIfNeeded() {
+        if (Build.VERSION.SDK_INT >= 33
+                && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.POST_NOTIFICATIONS}, NOTIFICATION_REQUEST_CODE);
         }
     }
 
