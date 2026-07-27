@@ -17211,7 +17211,11 @@ document.body.addEventListener("click", event => {
 loadAppState();
 applyProductionCleanSeedOnce();
 setNextReceiptNo();
-if (!openViewFromHash()) {
+const initialHashView = String(window.location.hash || "").replace(/^#/, "").trim();
+if (initialHashView === "smartBusTracking") {
+  window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}#dashboard`);
+  setView("dashboard", {skipHistory: true});
+} else if (!openViewFromHash()) {
   renderDashboardOnly();
   setTimeout(() => openViewFromHash(), 250);
 }
