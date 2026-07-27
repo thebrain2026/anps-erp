@@ -2750,7 +2750,86 @@ def hydrate_state_from_normalized_tables(conn, state):
         persist_restored_staff_members(conn, state["staffMembers"])
     if not state.get("studentUserAccounts"):
         state["studentUserAccounts"] = hydrate_student_user_accounts_from_user_table(conn)
+    state = hydrate_collected_payments_from_fee_tables(conn, state)
     return ensure_state_school(state)
+
+
+def hydrate_collected_payments_from_fee_tables(conn, state):
+    try:
+        receipt_rows = conn.execute(
+            """
+            SELECT * FROM fee_receipts
+            WHERE school_id = ?
+            ORDER BY payment_date DESC, receipt_no DESC
+            """,
+            (school_id_from_state(state),),
+        ).fetchall()
+    except sqlite3.Error:
+        return state
+    if not receipt_rows:
+        return state
+    deleted_receipts = deleted_payment_receipt_map(state.get("deletedPaymentReceipts") or {})
+    hydrated = {}
+    for row in receipt_rows:
+        receipt_no = str(row["receipt_no"] or "").strip()
+        admission_no = str(row["admission_no"] or "").strip()
+        if not receipt_no or not admission_no:
+            continue
+        try:
+            raw_payment = json.loads(row["raw_json"] or "{}")
+        except (TypeError, json.JSONDecodeError):
+            raw_payment = {}
+        if not isinstance(raw_payment, dict):
+            raw_payment = {}
+        session = str(raw_payment.get("session") or state.get("activeSession") or "2026-27")
+        if is_deleted_payment_receipt(deleted_receipts, session, admission_no, receipt_no):
+            continue
+        allocation_rows = conn.execute(
+            """
+            SELECT fee_head, fee_month, amount, is_fine, raw_json
+            FROM fee_payment_allocations
+            WHERE school_id = ? AND receipt_no = ? AND admission_no = ?
+            ORDER BY id
+            """,
+            (school_id_from_state(state), receipt_no, admission_no),
+        ).fetchall()
+        allocations = []
+        for allocation_row in allocation_rows:
+            try:
+                raw_allocation = json.loads(allocation_row["raw_json"] or "{}")
+            except (TypeError, json.JSONDecodeError):
+                raw_allocation = {}
+            if not isinstance(raw_allocation, dict):
+                raw_allocation = {}
+            allocations.append(
+                {
+                    **raw_allocation,
+                    "head": raw_allocation.get("head") or allocation_row["fee_head"] or "",
+                    "month": raw_allocation.get("month") or allocation_row["fee_month"] or "",
+                    "amount": money(raw_allocation.get("amount") or allocation_row["amount"]),
+                }
+            )
+        if not allocations and raw_payment.get("allocations"):
+            allocations = raw_payment.get("allocations") or []
+        payment = {
+            **raw_payment,
+            "id": raw_payment.get("id") or f"receipt-{receipt_no}",
+            "date": raw_payment.get("date") or row["payment_date"] or "",
+            "receipt": receipt_no,
+            "amount": money(raw_payment.get("amount") or row["net_paid"]),
+            "bankAmount": money(raw_payment.get("bankAmount") or row["bank_amount"]),
+            "cashAmount": money(raw_payment.get("cashAmount") or row["cash_amount"]),
+            "discountAmount": money(raw_payment.get("discountAmount") or row["discount"]),
+            "allocations": allocations,
+        }
+        hydrated.setdefault(session, {}).setdefault(admission_no, []).append(payment)
+    if hydrated:
+        state["collectedPayments"] = merge_collected_payments(
+            state.get("collectedPayments") or {},
+            hydrated,
+            deleted_receipts,
+        )
+    return state
 
 
 def hydrate_student_user_accounts_from_user_table(conn):

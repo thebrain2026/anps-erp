@@ -7916,8 +7916,55 @@ function normalizePaymentMonth(month = "") {
   const clean = String(month || "").trim();
   if (!clean) return "";
   if (ACADEMIC_MONTHS.includes(clean)) return clean;
+  const calendarMonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const numericMonth = clean.match(/(?:^|\D)(0?[1-9]|1[0-2])(?:\D|$)/);
+  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(clean)) {
+    const value = Number(clean.split("-")[1]);
+    return calendarMonths[value - 1] || "";
+  }
+  if (/^\d{1,2}-\d{1,2}-\d{2,4}$/.test(clean)) {
+    const value = Number(clean.split("-")[1]);
+    return calendarMonths[value - 1] || "";
+  }
+  if (/^\d{1,2}$/.test(clean)) return calendarMonths[Number(clean) - 1] || "";
+  if (numericMonth && !/[a-z]/i.test(clean)) return calendarMonths[Number(numericMonth[1]) - 1] || "";
   const normalized = clean.toLowerCase().slice(0, 3);
   return ACADEMIC_MONTHS.find(item => item.toLowerCase() === normalized) || "";
+}
+
+function getPaymentAllocationsWithFallback(payment = {}) {
+  const allocations = Array.isArray(payment.allocations)
+    ? payment.allocations.filter(allocation => allocation && typeof allocation === "object")
+    : [];
+  if (allocations.length) return allocations;
+  const headText = String(payment.head || payment.feeHead || payment.fee_head || payment.term || "").trim();
+  const month = normalizePaymentMonth(payment.month || payment.feeMonth || payment.fee_month || payment.paymentMonth || "");
+  const fineAmount = Number(payment.fine || payment.fineAmount || 0);
+  const directAmount = Number(payment.amount || payment.net_paid || payment.netPaid || 0);
+  const splitAmount = Number(payment.bankAmount || payment.bank_amount || 0) + Number(payment.cashAmount || payment.cash_amount || 0);
+  const grossAmount = directAmount || splitAmount;
+  const paidAmount = Math.max(grossAmount - fineAmount, 0);
+  const rows = [];
+  const normalizedHeadText = normalizePaymentFeeHead(headText);
+  const hasTransport = /transport/i.test(headText);
+  const hasTuition = /tuition/i.test(headText) || (!hasTransport && normalizedHeadText);
+  if (fineAmount > 0) {
+    rows.push({
+      head: hasTransport && !hasTuition ? "Transport Late Fine" : "Tuition Late Fine",
+      amount: fineAmount,
+      month,
+      date: payment.date || payment.payment_date || payment.paymentDate || "",
+    });
+  }
+  if (paidAmount > 0 && normalizedHeadText) {
+    rows.push({
+      head: hasTransport && !hasTuition ? "Transport Fees" : normalizedHeadText,
+      amount: paidAmount,
+      month,
+      date: payment.date || payment.payment_date || payment.paymentDate || "",
+    });
+  }
+  return rows;
 }
 
 function allocationMatchesHead(allocation = {}, feeHead = "") {
@@ -8650,9 +8697,9 @@ function getSessionPayments(admissionNo) {
 
 function getPaymentAllocationTotals(admissionNo) {
   return getSessionPayments(admissionNo).reduce((totals, payment) => {
-    payment.allocations.forEach(allocation => {
+    getPaymentAllocationsWithFallback(payment).forEach(allocation => {
       const head = normalizePaymentFeeHead(allocation.head);
-      totals[head] = (totals[head] || 0) + allocation.amount;
+      totals[head] = (totals[head] || 0) + Number(allocation.amount || 0);
     });
     return totals;
   }, {});
@@ -8660,13 +8707,13 @@ function getPaymentAllocationTotals(admissionNo) {
 
 function getTuitionMonthPayments(admissionNo) {
   return getSessionPayments(admissionNo).reduce((months, payment) => {
-    payment.allocations.forEach(allocation => {
+    getPaymentAllocationsWithFallback(payment).forEach(allocation => {
       const month = normalizePaymentMonth(allocation.month);
       if (!month) return;
       const head = normalizePaymentFeeHead(allocation.head);
       if (!months[month]) months[month] = {tuition: 0, fine: 0};
-      if (head === "Tuition Fee") months[month].tuition += allocation.amount;
-      if (head === "Tuition Late Fine") months[month].fine += allocation.amount;
+      if (head === "Tuition Fee") months[month].tuition += Number(allocation.amount || 0);
+      if (head === "Tuition Late Fine") months[month].fine += Number(allocation.amount || 0);
     });
     return months;
   }, {});
@@ -8678,7 +8725,7 @@ function getMonthlyFeePaidAmount(student, row, month) {
   const payments = getSessionPayments(student.admissionNo);
   const exactMonthAmounts = row.months.reduce((totals, itemMonth) => {
     totals[itemMonth] = payments.reduce((sum, payment) => {
-      return sum + (payment.allocations || [])
+      return sum + getPaymentAllocationsWithFallback(payment)
         .filter(allocation => allocationMatchesHead(allocation, row.name) && allocationMatchesMonth(allocation, itemMonth) && !/fine/i.test(normalizePaymentFeeHead(allocation.head)))
         .reduce((allocationSum, allocation) => allocationSum + Number(allocation.amount || 0), 0);
     }, 0);
@@ -8721,7 +8768,7 @@ function getTuitionMonthPaidInfo(student, row, month) {
 
 function hasAnyFinePaidForMonth(admissionNo = "", month = "") {
   if (!admissionNo || !month) return false;
-  return getSessionPayments(admissionNo).some(payment => (payment.allocations || []).some(allocation => (
+  return getSessionPayments(admissionNo).some(payment => getPaymentAllocationsWithFallback(payment).some(allocation => (
     allocationMatchesMonth(allocation, month) &&
     /fine/i.test(String(allocation.head || "")) &&
     Number(allocation.amount || 0) > 0
@@ -8737,13 +8784,13 @@ function shouldWaiveRepeatFineAfterFinePaid(paid = {}, paidKey = "", monthlyAmou
 
 function getTransportMonthPayments(admissionNo) {
   return getSessionPayments(admissionNo).reduce((months, payment) => {
-    payment.allocations.forEach(allocation => {
+    getPaymentAllocationsWithFallback(payment).forEach(allocation => {
       const month = normalizePaymentMonth(allocation.month);
       if (!month) return;
       const head = normalizePaymentFeeHead(allocation.head);
       if (!months[month]) months[month] = {transport: 0, fine: 0};
-      if (head === "Transport Fees") months[month].transport += allocation.amount;
-      if (head === "Transport Late Fine") months[month].fine += allocation.amount;
+      if (head === "Transport Fees") months[month].transport += Number(allocation.amount || 0);
+      if (head === "Transport Late Fine") months[month].fine += Number(allocation.amount || 0);
     });
     return months;
   }, {});
