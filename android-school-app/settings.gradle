@@ -16,3 +16,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "ANPSSchoolApp"
 include ":app"
+include ":driver"

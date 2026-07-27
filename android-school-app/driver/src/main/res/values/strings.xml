@@ -1,0 +1,7 @@
+<resources>
+    <string name="app_name">ANPS Driver GPS</string>
+    <string name="offline_title">No internet connection</string>
+    <string name="offline_message">Please check mobile data and try again.</string>
+    <string name="location_blocked">Location permission is required for live bus tracking.</string>
+    <string name="retry">Retry</string>
+</resources>
