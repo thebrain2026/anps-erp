@@ -9,6 +9,8 @@ let mapFocusMode = "all";
 let mapZoomDelta = 0;
 let mapFrameState = null;
 let lastSummary = { vehicles: [], pickup_points: [], stoppages: [] };
+let officeLoadSeq = 0;
+let officeLoadBusy = false;
 
 function ago(iso) {
   if (!iso) return "-";
@@ -21,7 +23,7 @@ function ago(iso) {
 function statusClass(status, updatedAt) {
   const clean = String(status || "running").toLowerCase();
   if (clean === "no-gps") return "no-gps";
-  if (!updatedAt || Date.now() - new Date(updatedAt).getTime() > 120000) return "offline";
+  if (!updatedAt || Date.now() - new Date(updatedAt).getTime() > 180000) return "offline";
   return clean;
 }
 
@@ -323,14 +325,36 @@ function renderEmptyTable(kind) {
 }
 
 async function loadOffice(kind = "map") {
+  if (officeLoadBusy) return;
+  officeLoadBusy = true;
+  const seq = officeLoadSeq + 1;
+  officeLoadSeq = seq;
   const params = new URLSearchParams(window.location.search);
   params.set("school_id", params.get("school_id") || SCHOOL_ID);
-  lastSummary = await apiGet(`/api/office/summary?${params.toString()}`);
-  localStorage.setItem(OFFICE_CACHE_KEY, JSON.stringify({
-    saved_at: new Date().toISOString(),
-    summary: lastSummary,
-  }));
-  renderOffice(kind);
+  try {
+    const summary = await apiGet(`/api/office/summary?${params.toString()}`);
+    if (seq !== officeLoadSeq) return;
+    lastSummary = summary;
+    localStorage.setItem(OFFICE_CACHE_KEY, JSON.stringify({
+      saved_at: new Date().toISOString(),
+      summary: lastSummary,
+    }));
+    renderOffice(kind);
+  } finally {
+    if (seq === officeLoadSeq) officeLoadBusy = false;
+  }
+}
+
+function renderCachedOffice(kind = "map") {
+  try {
+    const cached = JSON.parse(localStorage.getItem(OFFICE_CACHE_KEY) || "{}");
+    if (!cached.summary || !Array.isArray(cached.summary.vehicles)) return false;
+    lastSummary = cached.summary;
+    renderOffice(kind);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function openDriverGpsLink(vehicleId, button) {
@@ -435,6 +459,7 @@ function bindDriverCodeForm() {
 
 function bootOffice(kind) {
   preserveOfficeLinks();
+  renderCachedOffice(kind);
   loadOffice(kind).catch((error) => showOfficeError(error, kind));
   bindDriverCodeForm();
   const zoomIn = $("mapZoomInBtn");
@@ -491,7 +516,10 @@ function bootOffice(kind) {
   }
   const demo = $("demoBtn");
   if (demo) demo.remove();
-  setInterval(() => loadOffice(kind).catch(() => {}), 3000);
+  setInterval(() => loadOffice(kind).catch(() => {}), 1500);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "visible") loadOffice(kind).catch(() => {});
+  });
 }
 
 function preserveOfficeLinks() {

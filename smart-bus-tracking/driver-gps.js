@@ -1,6 +1,9 @@
 const DRIVER_API = "";
+const DRIVER_API_BASE = window.location.protocol === "file:"
+  ? "https://anpsbus.thebrainerp.com"
+  : window.location.origin;
 const DRIVER_SCHOOL_ID = "anps";
-const DRIVER_SEND_INTERVAL_MS = 5000;
+const DRIVER_SEND_INTERVAL_MS = 3000;
 const DRIVER_LINK_QUERY = window.location.search || "";
 const DRIVER_SESSION_KEY = "anpsSmartBusDriverSession";
 
@@ -42,6 +45,20 @@ function setGpsConnectionStatus(status, label) {
   if (text) text.textContent = label;
 }
 
+function driverApiUrl(path) {
+  return `${DRIVER_API || DRIVER_API_BASE}${path}`;
+}
+
+async function readDriverJson(response) {
+  const text = await response.text();
+  try {
+    return JSON.parse(text);
+  } catch {
+    const status = response.status ? ` (${response.status})` : "";
+    throw new Error(`Server JSON দেয়নি${status}. App reload kore abar try korun.`);
+  }
+}
+
 function selectedDriverVehicle() {
   return driverVehicles.find((vehicle) => vehicle.vehicle_id === driverElement("driverVehicle").value);
 }
@@ -74,12 +91,13 @@ async function ensureDriverSession() {
   if (existing) return existing;
   const pin = driverElement("driverPin").value.trim();
   if (!pin) throw new Error("Driver code দিন, তারপর Load Bus Routes চাপুন.");
-  const response = await fetch(`${DRIVER_API}/api/driver/login`, {
+  const response = await fetch(driverApiUrl("/api/driver/login"), {
     method: "POST",
     headers: {"Content-Type": "application/json"},
     body: JSON.stringify({pin}),
+    cache: "no-store",
   });
-  const data = await response.json();
+  const data = await readDriverJson(response);
   if (!response.ok || !data.ok || !data.driver_session) throw new Error(data.error || "Driver code login failed.");
   sessionStorage.setItem(DRIVER_SESSION_KEY, data.driver_session);
   return data.driver_session;
@@ -103,8 +121,8 @@ async function loadDriverVehicles() {
   try {
     const query = await driverQuery();
     const separator = query.includes("?") ? "&" : "?";
-    const response = await fetch(`${DRIVER_API}/api/driver/vehicles${query}${separator}school_id=${encodeURIComponent(DRIVER_SCHOOL_ID)}`);
-    const data = await response.json();
+    const response = await fetch(driverApiUrl(`/api/driver/vehicles${query}${separator}school_id=${encodeURIComponent(DRIVER_SCHOOL_ID)}`), { cache: "no-store" });
+    const data = await readDriverJson(response);
     if (!response.ok || !data.ok) {
       if (response.status === 401 || response.status === 403) sessionStorage.removeItem(DRIVER_SESSION_KEY);
       throw new Error(data.error || "Unable to load vehicles");
@@ -171,14 +189,15 @@ async function sendDriverPosition(position, status = "running", force = false) {
   try {
     const query = await driverQuery();
     const separator = query.includes("?") ? "&" : "?";
-    const response = await fetch(`${DRIVER_API}/api/driver/location${query}${separator}school_id=${encodeURIComponent(DRIVER_SCHOOL_ID)}`, {
+    const response = await fetch(driverApiUrl(`/api/driver/location${query}${separator}school_id=${encodeURIComponent(DRIVER_SCHOOL_ID)}`), {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(driverPayload(position, status)),
+      cache: "no-store",
     });
-    const data = await response.json();
+    const data = await readDriverJson(response);
     if (!response.ok || !data.ok) throw new Error(data.error || "Location update failed");
     if (data.accepted === false) {
       setDriverMessage(data.error || "GPS accuracy low. Open sky-te phone rakhun.", true);
@@ -197,7 +216,7 @@ async function sendDriverTripStatus(status = "running") {
   if (!vehicle) throw new Error("Select an assigned bus");
   const query = await driverQuery();
   const separator = query.includes("?") ? "&" : "?";
-  const response = await fetch(`${DRIVER_API}/api/driver/trip-status${query}${separator}school_id=${encodeURIComponent(DRIVER_SCHOOL_ID)}`, {
+  const response = await fetch(driverApiUrl(`/api/driver/trip-status${query}${separator}school_id=${encodeURIComponent(DRIVER_SCHOOL_ID)}`), {
     method: "POST",
     headers: {"Content-Type": "application/json"},
     body: JSON.stringify({
@@ -209,8 +228,9 @@ async function sendDriverTripStatus(status = "running") {
       status,
       estimated_arrival_min: Number(vehicle.estimated_arrival_min || 0),
     }),
+    cache: "no-store",
   });
-  const data = await response.json();
+  const data = await readDriverJson(response);
   if (!response.ok || !data.ok) throw new Error(data.error || "Trip status update failed");
   driverLastSentAt = Date.now();
   driverElement("gpsSent").textContent = "Just now";
@@ -228,7 +248,7 @@ async function startNativeBackgroundGps() {
   if (!hasNativeBackgroundGps()) return false;
   const query = await driverQuery();
   const separator = query.includes("?") ? "&" : "?";
-  const endpoint = `${window.location.origin}/api/driver/location${query}${separator}school_id=${encodeURIComponent(DRIVER_SCHOOL_ID)}`;
+  const endpoint = driverApiUrl(`/api/driver/location${query}${separator}school_id=${encodeURIComponent(DRIVER_SCHOOL_ID)}`);
   window.AnpsDriverNative.startTracking(endpoint, JSON.stringify(driverBasePayload("running")));
   return true;
 }

@@ -605,20 +605,35 @@ async function handleDriverLocation(request, env) {
     return json({ ok: false, error: "Valid GPS latitude and longitude are required." }, { status: 400 });
   }
   const accuracyStatus = driverAccuracyStatus(payload);
-  if (!accuracyStatus.ok) {
-    return json({
-      ok: true,
-      accepted: false,
-      error: accuracyStatus.message,
-      accuracy_m: accuracyStatus.accuracy,
-    });
-  }
   const state = await readState(env);
   const vehicle = (state.vehicles || []).find((item) => String(item.vehicle_id || "") === vehicleId);
   if (!vehicle) {
     return json({ ok: false, error: "Vehicle not found. Sync bus master data from ERP again." }, { status: 404 });
   }
   const now = new Date();
+  if (!accuracyStatus.ok) {
+    Object.assign(vehicle, {
+      route_id: String(payload.route_id || vehicle.route_id || "").trim(),
+      driver_id: String(payload.driver_id || vehicle.driver_id || "").trim(),
+      trip_type: String(payload.trip_type || vehicle.trip_type || "").trim(),
+      speed_kmph: Number(payload.speed_kmph || vehicle.speed_kmph || 0),
+      accuracy_m: accuracyStatus.accuracy,
+      status: String(payload.status || "running"),
+      estimated_arrival_min: Number(payload.estimated_arrival_min || vehicle.estimated_arrival_min || 0),
+      low_accuracy_at: now.toISOString(),
+      location_updated_at: now.toISOString(),
+    });
+    state.updated_at = now.toISOString();
+    await writeState(env, state);
+    return json({
+      ok: true,
+      accepted: false,
+      vehicle_id: vehicle.vehicle_id,
+      updated_at: vehicle.location_updated_at,
+      error: accuracyStatus.message,
+      accuracy_m: accuracyStatus.accuracy,
+    });
+  }
   const previous = {
     lat: vehicle.lat,
     lng: vehicle.lng,

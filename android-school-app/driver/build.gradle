@@ -16,10 +16,10 @@ android {
         applicationId "com.anps.busdriver"
         minSdk 23
         targetSdk 35
-        versionCode 3
-        versionName "1.0.2"
+        versionCode 5
+        versionName "1.0.4"
 
-        buildConfigField "String", "APP_URL", "\"https://anpsbus.thebrainerp.com/driver-gps\""
+        buildConfigField "String", "APP_URL", "\"https://anpsbus.thebrainerp.com/driver-gps?v=smooth-driver-1\""
     }
 
     signingConfigs {

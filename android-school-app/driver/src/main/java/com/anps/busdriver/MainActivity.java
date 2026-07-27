@@ -63,6 +63,7 @@ public class MainActivity extends Activity {
                 FrameLayout.LayoutParams.MATCH_PARENT
         ));
         setContentView(root);
+        webView.clearCache(true);
 
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);

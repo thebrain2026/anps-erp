@@ -35,7 +35,7 @@ public class DriverLocationService extends Service implements LocationListener {
 
     private static final String CHANNEL_ID = "driver_gps_tracking";
     private static final int NOTIFICATION_ID = 2244;
-    private static final long MIN_TIME_MS = 5000;
+    private static final long MIN_TIME_MS = 3000;
     private static final float MIN_DISTANCE_M = 2f;
     private static final long MAX_LAST_KNOWN_AGE_MS = 120000;
 
