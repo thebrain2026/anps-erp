@@ -14,6 +14,19 @@ let driverTripActive = false;
 let driverWakeLock = null;
 let driverAutoLoadTimer = null;
 let driverRoutesLoading = false;
+let driverWatchMode = "high";
+
+const highAccuracyOptions = {
+  enableHighAccuracy: true,
+  maximumAge: 10000,
+  timeout: 30000,
+};
+
+const fallbackAccuracyOptions = {
+  enableHighAccuracy: false,
+  maximumAge: 30000,
+  timeout: 45000,
+};
 
 function setDriverMessage(message, isError = false) {
   const element = driverElement("driverMessage");
@@ -198,13 +211,27 @@ function showDriverPosition(position) {
 
 function handleDriverGpsError(error) {
   const messages = {
-    1: "Location permission was denied.",
-    2: "GPS position is unavailable.",
-    3: "GPS request timed out.",
+    1: "Location permission blocked. Phone settings theke Location allow korun.",
+    2: "GPS position unavailable. Location mode High accuracy korun, ba open sky-te phone rakhun.",
+    3: "GPS first fix time নিচ্ছে. আরেকবার চেষ্টা করছি...",
   };
+  if (driverTripActive && driverWatchMode === "high" && (error.code === 2 || error.code === 3)) {
+    restartDriverWatchWithFallback();
+    return;
+  }
   setDriverMessage(messages[error.code] || error.message || "GPS error", true);
   driverElement("gpsStatus").textContent = "GPS error";
   setGpsConnectionStatus("error", "GPS not connected");
+}
+
+function restartDriverWatchWithFallback() {
+  if (driverWatchId != null) navigator.geolocation.clearWatch(driverWatchId);
+  driverWatchId = null;
+  driverWatchMode = "fallback";
+  driverElement("gpsStatus").textContent = "Connecting GPS";
+  setGpsConnectionStatus("connecting", "GPS retrying...");
+  setDriverMessage("GPS signal time নিচ্ছে. Network location দিয়ে connect করার চেষ্টা হচ্ছে.");
+  driverWatchId = navigator.geolocation.watchPosition(showDriverPosition, handleDriverGpsError, fallbackAccuracyOptions);
 }
 
 async function requestDriverWakeLock() {
@@ -240,12 +267,9 @@ async function startDriverWatch() {
   }
   driverElement("gpsStatus").textContent = "Waiting for GPS";
   setGpsConnectionStatus("connecting", "Connecting GPS...");
-  setDriverMessage("Allow location permission to start the trip.");
-  driverWatchId = navigator.geolocation.watchPosition(showDriverPosition, handleDriverGpsError, {
-    enableHighAccuracy: true,
-    maximumAge: 3000,
-    timeout: 15000,
-  });
+  setDriverMessage("Location permission allow korun. GPS fix pete 10-30 sec lagte pare.");
+  driverWatchMode = "high";
+  driverWatchId = navigator.geolocation.watchPosition(showDriverPosition, handleDriverGpsError, highAccuracyOptions);
   await requestDriverWakeLock();
   return true;
 }
@@ -301,6 +325,7 @@ async function startDriverTrip() {
 async function stopDriverTrip() {
   if (driverWatchId != null) navigator.geolocation.clearWatch(driverWatchId);
   driverWatchId = null;
+  driverWatchMode = "high";
   driverTripActive = false;
   await releaseDriverWakeLock();
   if (driverLastPosition) {
@@ -339,11 +364,19 @@ function primeDriverGps() {
     driverElement("gpsSpeed").textContent = `${speedKmph.toFixed(1)} km/h`;
     driverElement("gpsAccuracy").textContent = `${Math.round(position.coords.accuracy)} m`;
     setDriverMessage("GPS ready. Route select kore Start Trip চাপুন.");
-  }, handleDriverGpsError, {
-    enableHighAccuracy: true,
-    maximumAge: 5000,
-    timeout: 10000,
-  });
+  }, () => {
+    navigator.geolocation.getCurrentPosition((position) => {
+      driverLastPosition = position;
+      const speedKmph = position.coords.speed == null ? 0 : Math.max(0, position.coords.speed * 3.6);
+      driverElement("gpsStatus").textContent = "GPS ready";
+      setGpsConnectionStatus("connected", "GPS connected");
+      driverElement("gpsLat").textContent = position.coords.latitude.toFixed(6);
+      driverElement("gpsLng").textContent = position.coords.longitude.toFixed(6);
+      driverElement("gpsSpeed").textContent = `${speedKmph.toFixed(1)} km/h`;
+      driverElement("gpsAccuracy").textContent = `${Math.round(position.coords.accuracy)} m`;
+      setDriverMessage("GPS connected. Accuracy improve hote pare, Start Trip চাপুন.");
+    }, handleDriverGpsError, fallbackAccuracyOptions);
+  }, highAccuracyOptions);
 }
 
 function escapeDriverHtml(value) {
