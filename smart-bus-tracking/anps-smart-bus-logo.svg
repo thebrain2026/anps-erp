@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" role="img" aria-labelledby="title desc">
+  <title id="title">ANPS Smart Bus Tracking</title>
+  <desc id="desc">A school bus with GPS location signal for ANPS Smart Bus Tracking.</desc>
+  <defs>
+    <linearGradient id="bg" x1="20" y1="8" x2="108" y2="120" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#0f766e"/>
+      <stop offset="1" stop-color="#155e75"/>
+    </linearGradient>
+    <linearGradient id="bus" x1="30" y1="42" x2="96" y2="92" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#f8d55b"/>
+      <stop offset="1" stop-color="#f59e0b"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#bg)"/>
+  <path d="M28 87c11 11 58 11 72 0" fill="none" stroke="#a7f3d0" stroke-width="5" stroke-linecap="round" opacity=".75"/>
+  <path d="M37 59h54c7 0 12 5 12 12v18H25V71c0-7 5-12 12-12Z" fill="url(#bus)"/>
+  <path d="M34 49h46c6 0 11 4 13 10H31c1-6 3-10 3-10Z" fill="#fde68a"/>
+  <rect x="37" y="63" width="15" height="13" rx="3" fill="#ecfeff"/>
+  <rect x="57" y="63" width="15" height="13" rx="3" fill="#ecfeff"/>
+  <rect x="77" y="63" width="15" height="13" rx="3" fill="#ecfeff"/>
+  <path d="M25 83h78v8H25z" fill="#0f172a" opacity=".18"/>
+  <circle cx="43" cy="91" r="9" fill="#0f172a"/>
+  <circle cx="85" cy="91" r="9" fill="#0f172a"/>
+  <circle cx="43" cy="91" r="4" fill="#e2e8f0"/>
+  <circle cx="85" cy="91" r="4" fill="#e2e8f0"/>
+  <path d="M91 23c-10 0-18 8-18 18 0 14 18 31 18 31s18-17 18-31c0-10-8-18-18-18Z" fill="#ffffff"/>
+  <circle cx="91" cy="41" r="7" fill="#16a34a"/>
+  <path d="M67 31c-5 3-8 8-8 14M55 27c-7 5-12 12-13 21" fill="none" stroke="#ecfeff" stroke-width="4" stroke-linecap="round" opacity=".85"/>
+  <text x="64" y="115" text-anchor="middle" font-family="Inter, Arial, sans-serif" font-size="15" font-weight="900" fill="#ffffff" letter-spacing=".8">ANPS BUS</text>
+</svg>
