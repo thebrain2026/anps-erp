@@ -160,6 +160,30 @@ async function sendDriverPosition(position, status = "running", force = false) {
   }
 }
 
+async function sendDriverTripStatus(status = "running") {
+  const vehicle = selectedDriverVehicle();
+  if (!vehicle) throw new Error("Select an assigned bus");
+  const query = await driverQuery();
+  const separator = query.includes("?") ? "&" : "?";
+  const response = await fetch(`${DRIVER_API}/api/driver/trip-status${query}${separator}school_id=${encodeURIComponent(DRIVER_SCHOOL_ID)}`, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({
+      school_id: DRIVER_SCHOOL_ID,
+      vehicle_id: vehicle.vehicle_id,
+      route_id: vehicle.route_id,
+      driver_id: vehicle.driver_id,
+      trip_type: driverElement("driverTripType").value,
+      status,
+      estimated_arrival_min: Number(vehicle.estimated_arrival_min || 0),
+    }),
+  });
+  const data = await response.json();
+  if (!response.ok || !data.ok) throw new Error(data.error || "Trip status update failed");
+  driverLastSentAt = Date.now();
+  driverElement("gpsSent").textContent = "Just now";
+}
+
 function showDriverPosition(position) {
   driverLastPosition = position;
   const speedKmph = position.coords.speed == null ? 0 : Math.max(0, position.coords.speed * 3.6);
@@ -250,6 +274,19 @@ async function startDriverTrip() {
   driverElement("driverTripType").disabled = true;
   driverElement("driverPin").disabled = true;
   driverTripActive = true;
+  try {
+    await sendDriverTripStatus("running");
+    setDriverMessage("Trip started. GPS connect হচ্ছে...");
+  } catch (error) {
+    driverTripActive = false;
+    driverElement("startTripBtn").disabled = false;
+    driverElement("stopTripBtn").disabled = true;
+    driverElement("driverVehicle").disabled = false;
+    driverElement("driverTripType").disabled = false;
+    driverElement("driverPin").disabled = false;
+    setDriverMessage(error.message, true);
+    return;
+  }
   const started = await startDriverWatch();
   if (!started) {
     driverTripActive = false;
@@ -273,7 +310,12 @@ async function stopDriverTrip() {
       setDriverMessage(`GPS stopped, but final update failed: ${error.message}`, true);
     }
   } else {
-    setDriverMessage("Trip stopped before a GPS position was received.");
+    try {
+      await sendDriverTripStatus("offline");
+      setDriverMessage("Trip stopped before a GPS position was received.");
+    } catch (error) {
+      setDriverMessage(`Trip stopped, but final update failed: ${error.message}`, true);
+    }
   }
   driverElement("gpsStatus").textContent = "Stopped";
   setGpsConnectionStatus("waiting", "GPS stopped");

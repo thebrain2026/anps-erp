@@ -537,6 +537,33 @@ async function handleDriverLocation(request, env) {
   return json({ ok: true, vehicle_id: vehicle.vehicle_id, updated_at: vehicle.location_updated_at });
 }
 
+async function handleDriverTripStatus(request, env) {
+  const url = new URL(request.url);
+  const auth = await verifyDriverAccess(url, env);
+  if (!auth.ok) return json({ ok: false, error: auth.error }, { status: auth.status });
+  const payload = await request.json().catch(() => ({}));
+  const vehicleId = String(payload.vehicle_id || "").trim();
+  if (auth.vehicleId && vehicleId !== auth.vehicleId) {
+    return json({ ok: false, error: "Driver GPS link does not match selected vehicle." }, { status: 403 });
+  }
+  const state = await readState(env);
+  const vehicle = (state.vehicles || []).find((item) => String(item.vehicle_id || "") === vehicleId);
+  if (!vehicle) {
+    return json({ ok: false, error: "Vehicle not found. Sync bus master data from ERP again." }, { status: 404 });
+  }
+  Object.assign(vehicle, {
+    route_id: String(payload.route_id || vehicle.route_id || "").trim(),
+    driver_id: String(payload.driver_id || vehicle.driver_id || "").trim(),
+    trip_type: String(payload.trip_type || vehicle.trip_type || "").trim(),
+    status: String(payload.status || "running"),
+    estimated_arrival_min: Number(payload.estimated_arrival_min || vehicle.estimated_arrival_min || 0),
+    location_updated_at: new Date().toISOString(),
+  });
+  state.updated_at = new Date().toISOString();
+  await writeState(env, state);
+  return json({ ok: true, vehicle_id: vehicle.vehicle_id, updated_at: vehicle.location_updated_at, status: vehicle.status });
+}
+
 function verifyOfficeRequest(request, env) {
   const url = new URL(request.url);
   const token = tokenFor(env);
@@ -671,6 +698,7 @@ export default {
       if (!auth.ok) return json({ ok: false, error: auth.error }, { status: auth.status });
       return handleDriverVehicles(env, auth.vehicleId);
     }
+    if (url.pathname === "/api/driver/trip-status" && request.method === "POST") return handleDriverTripStatus(request, env);
     if (url.pathname === "/api/driver/location" && request.method === "POST") return handleDriverLocation(request, env);
     if (url.pathname === "/api/erp/sync-master-data" && request.method === "POST") return handleSyncMasterData(request, env);
     if (url.pathname === "/api/office/demo-tick" && request.method === "POST") {

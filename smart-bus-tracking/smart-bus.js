@@ -454,7 +454,7 @@ function bootOffice(kind) {
   }
   const demo = $("demoBtn");
   if (demo) demo.remove();
-  setInterval(() => loadOffice(kind).catch(() => {}), 10000);
+  setInterval(() => loadOffice(kind).catch(() => {}), 3000);
 }
 
 function preserveOfficeLinks() {

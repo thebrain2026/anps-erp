@@ -15,4 +15,24 @@
 .driver-code-panel{margin-bottom:16px}.driver-code-form{display:grid;grid-template-columns:minmax(180px,280px) max-content minmax(0,1fr);align-items:end;gap:12px;padding:14px 16px}.driver-code-form .empty{padding:0;color:var(--muted);font-weight:800}@media(max-width:720px){.driver-code-form{grid-template-columns:1fr}}
 .gps-connection{display:flex;align-items:center;gap:9px;border:1px solid var(--line);border-radius:8px;background:#f8fbff;padding:10px 12px;font-size:.86rem}.gps-connection span{width:13px;height:13px;border-radius:50%;background:#94a3b8;box-shadow:0 0 0 4px rgba(148,163,184,.16)}.gps-connection strong{color:var(--ink)}.gps-connection.is-connecting span{background:#d97706;box-shadow:0 0 0 4px rgba(217,119,6,.16)}.gps-connection.is-connected{border-color:#b7ead1;background:#eefbf4}.gps-connection.is-connected span{background:#16a34a;box-shadow:0 0 0 4px rgba(22,163,74,.16)}.gps-connection.is-error{border-color:#fac8d4;background:#fff1f3}.gps-connection.is-error span{background:#b4234b;box-shadow:0 0 0 4px rgba(180,35,75,.16)}
 
-.gps-connection{display:flex;align-items:center;gap:9px;border:1px solid var(--line);border-radius:8px;background:#f8fbff;padding:10px 12px;font-size:.86rem}.gps-connection span{width:13px;height:13px;border-radius:50
+body:has(.driver-phone){background:#eef4f6}
+.driver-phone{width:min(100%,560px);min-height:100vh;border:0;border-radius:0;box-shadow:none}
+.driver-phone .phone-head{position:sticky;top:0;z-index:10;padding:18px 18px 16px;background:#155e75;box-shadow:0 10px 28px rgba(15,23,42,.14)}
+.driver-phone .phone-head h1{font-size:1.55rem;letter-spacing:0;line-height:1.15}
+.driver-phone .phone-head p{font-size:.95rem;color:#dff4f0}
+.driver-phone .app-kicker{color:#bfe9e1;font-size:.72rem}
+.driver-phone .phone-body{gap:12px;padding:14px 16px 24px;background:#fff}
+.driver-phone .student-message{border:1px solid #cce7e2;background:#f2faf8;color:#0f766e;padding:9px 11px;font-size:.85rem}
+.driver-phone .gps-connection{min-height:46px;border-radius:7px;padding:9px 11px;background:#f8fbff}
+.driver-phone .gps-connection span{width:11px;height:11px}
+.driver-phone .driver-field{gap:5px}
+.driver-phone .driver-field span{font-size:.76rem;letter-spacing:.01em}
+.driver-phone .driver-field input,.driver-phone .driver-field select{min-height:42px;border-radius:7px;font-size:1rem}
+.driver-phone .driver-route-preview{margin-top:-4px;border-radius:7px;padding:9px 11px;background:#f6fbfb}
+.driver-phone .ghost,.driver-phone .primary,.driver-phone .danger{min-height:44px;border-radius:7px;font-size:1rem}
+.driver-phone .driver-actions{position:sticky;bottom:0;z-index:9;margin:2px -16px -24px;padding:10px 16px 14px;background:rgba(255,255,255,.96);box-shadow:0 -10px 24px rgba(15,23,42,.08);backdrop-filter:blur(10px)}
+.driver-phone .driver-readout{background:#f8fafc}
+.driver-phone .driver-note{padding-bottom:72px;font-size:.76rem}
+.driver-phone .student-row{grid-template-columns:94px minmax(0,1fr)}
+@media(min-width:620px){.mobile-wrap:has(.driver-phone){align-items:start;padding:0;background:#eef4f6}.driver-phone{margin:0 auto;border-left:1px solid var(--line);border-right:1px solid var(--line)}}
+@media(max-width:480px){.mobile-wrap:has(.driver-phone){display:block;padding:0;background:#fff}.driver-phone .phone-head{padding:16px 16px 14px}.driver-phone .phone-head h1{font-size:1.42rem}.driver-phone .phone-body{padding:12px 14px 22px}.driver-phone .driver-actions{margin-left:-14px;margin-right:-14px;margin-bottom:-22px;padding-left:14px;padding-right:14px}}
