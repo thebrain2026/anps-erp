@@ -1,5 +1,7 @@
 const SCHOOL_ID = "anps";
 const MAX_DRIVER_ACCURACY_M = 150;
+const LIVE_LOCATION_TTL_SECONDS = 24 * 60 * 60;
+const DAILY_RUN_TTL_SECONDS = 90 * 24 * 60 * 60;
 
 const emptyState = {
   school_id: SCHOOL_ID,
@@ -75,7 +77,97 @@ function pruneDailyRuns(dailyRuns = {}) {
   return Object.fromEntries(Object.entries(dailyRuns).filter(([date]) => date >= keepKey));
 }
 
-function recordDailyRun(state, vehicle, previous, nextPoint, now) {
+function liveVehicleKey(vehicleId = "") {
+  return `live-vehicle:${String(vehicleId || "").trim()}`;
+}
+
+function dailyRunKey(dateKey = "") {
+  return `daily-runs:${dateKey}`;
+}
+
+async function readJsonKey(env, key, fallback = null) {
+  if (env.SMART_BUS_KV) {
+    const raw = await env.SMART_BUS_KV.get(key);
+    if (raw) {
+      try {
+        return JSON.parse(raw);
+      } catch (error) {
+        console.warn(`Invalid Smart Bus KV JSON for ${key}`, error);
+      }
+    }
+  }
+  return fallback;
+}
+
+async function writeJsonKey(env, key, value, options = {}) {
+  if (env.SMART_BUS_KV) {
+    await env.SMART_BUS_KV.put(key, JSON.stringify(value), options);
+  }
+}
+
+async function readLiveVehicle(env, vehicleId) {
+  const key = String(vehicleId || "").trim();
+  if (!key) return null;
+  const fallback = (memoryState.vehicles || []).find((vehicle) => String(vehicle.vehicle_id || "") === key) || null;
+  return readJsonKey(env, liveVehicleKey(key), fallback);
+}
+
+async function writeLiveVehicle(env, vehicleId, liveVehicle) {
+  const key = String(vehicleId || "").trim();
+  if (!key) return;
+  memoryState.vehicles = (memoryState.vehicles || []).map((vehicle) =>
+    String(vehicle.vehicle_id || "") === key ? { ...vehicle, ...liveVehicle } : vehicle
+  );
+  await writeJsonKey(env, liveVehicleKey(key), liveVehicle, { expirationTtl: LIVE_LOCATION_TTL_SECONDS });
+}
+
+function mergeStaticAndLiveVehicle(vehicle, liveVehicle) {
+  if (!liveVehicle) return vehicle;
+  return {
+    ...vehicle,
+    ...liveVehicle,
+    vehicle_id: vehicle.vehicle_id || liveVehicle.vehicle_id || "",
+    vehicle_name: vehicle.vehicle_name || liveVehicle.vehicle_name || "",
+    vehicle_no: vehicle.vehicle_no || liveVehicle.vehicle_no || "",
+    route_id: liveVehicle.route_id || vehicle.route_id || "",
+    route_name: liveVehicle.route_name || vehicle.route_name || "",
+    trip_type: liveVehicle.trip_type || vehicle.trip_type || "",
+    driver_id: liveVehicle.driver_id || vehicle.driver_id || "",
+    driver_name: liveVehicle.driver_name || vehicle.driver_name || "",
+    mobile: vehicle.mobile || liveVehicle.mobile || "",
+  };
+}
+
+async function mergeLiveVehicles(env, vehicles = []) {
+  const liveRows = await Promise.all(vehicles.map((vehicle) => readLiveVehicle(env, vehicle.vehicle_id)));
+  return vehicles.map((vehicle, index) => mergeStaticAndLiveVehicle(vehicle, liveRows[index]));
+}
+
+async function readDailyRunsForDate(env, dateKey) {
+  if (!dateKey) return {};
+  return readJsonKey(env, dailyRunKey(dateKey), (memoryState.daily_runs || {})[dateKey] || {});
+}
+
+async function writeDailyRunsForDate(env, dateKey, rows) {
+  if (!dateKey) return;
+  memoryState.daily_runs = pruneDailyRuns(memoryState.daily_runs || {});
+  memoryState.daily_runs[dateKey] = rows || {};
+  await writeJsonKey(env, dailyRunKey(dateKey), rows || {}, { expirationTtl: DAILY_RUN_TTL_SECONDS });
+}
+
+async function readRecentDailyRuns(env) {
+  const result = {};
+  for (let i = 0; i < 14; i += 1) {
+    const date = new Date(Date.now() - (i * 24 * 60 * 60 * 1000));
+    const dateKey = istDateKey(date);
+    const rows = await readDailyRunsForDate(env, dateKey);
+    if (rows && Object.keys(rows).length) result[dateKey] = rows;
+  }
+  if (!Object.keys(result).length) return pruneDailyRuns(memoryState.daily_runs || {});
+  return result;
+}
+
+async function recordDailyRun(env, vehicle, previous, nextPoint, now) {
   if (!previous || previous.lat == null || previous.lng == null || !previous.location_updated_at) return;
   const dateKey = istDateKey(now);
   if (istDateKey(previous.location_updated_at) !== dateKey) return;
@@ -85,11 +177,10 @@ function recordDailyRun(state, vehicle, previous, nextPoint, now) {
   if (!Number.isFinite(minutes) || minutes <= 0 || minutes > 45) return;
   const impliedSpeed = km / (minutes / 60);
   if (impliedSpeed > 120 || km > 20) return;
-  state.daily_runs = pruneDailyRuns(state.daily_runs || {});
-  state.daily_runs[dateKey] ||= {};
   const key = String(vehicle.vehicle_id || nextPoint.vehicle_id || "").trim();
   if (!key) return;
-  const row = state.daily_runs[dateKey][key] || {
+  const dailyRows = await readDailyRunsForDate(env, dateKey);
+  const row = dailyRows[key] || {
     date: dateKey,
     vehicle_id: key,
     vehicle_name: vehicle.vehicle_name || "",
@@ -116,7 +207,8 @@ function recordDailyRun(state, vehicle, previous, nextPoint, now) {
     point_count: Number(row.point_count || 0) + 1,
     last_seen_at: now.toISOString(),
   });
-  state.daily_runs[dateKey][key] = row;
+  dailyRows[key] = row;
+  await writeDailyRunsForDate(env, dateKey, dailyRows);
 }
 
 function tokenFor(env) {
@@ -517,7 +609,10 @@ async function handleStudentLocation(request, env) {
       error: "No synced bus assignment found for this student. Please sync Smart Bus master data from ERP.",
     }, { status: 404 });
   }
-  const vehicle = vehicleForStudent(state, student);
+  const vehicle = mergeStaticAndLiveVehicle(
+    vehicleForStudent(state, student),
+    await readLiveVehicle(env, vehicleForStudent(state, student).vehicle_id)
+  );
   const { speed_kmph, ...studentSafeVehicle } = vehicle;
   return json({
     ok: true,
@@ -543,10 +638,10 @@ async function handleOfficeSummary(env) {
   return json({
     ok: true,
     school_id: state.school_id || SCHOOL_ID,
-    vehicles: state.vehicles || [],
+    vehicles: await mergeLiveVehicles(env, state.vehicles || []),
     pickup_points: state.pickup_points || [],
     stoppages: state.stoppages || [],
-    daily_runs: state.daily_runs || {},
+    daily_runs: await readRecentDailyRuns(env),
   });
 }
 
@@ -611,8 +706,16 @@ async function handleDriverLocation(request, env) {
     return json({ ok: false, error: "Vehicle not found. Sync bus master data from ERP again." }, { status: 404 });
   }
   const now = new Date();
+  const previousLive = await readLiveVehicle(env, vehicleId);
+  const previous = {
+    lat: previousLive?.lat ?? vehicle.lat,
+    lng: previousLive?.lng ?? vehicle.lng,
+    location_updated_at: previousLive?.location_updated_at ?? vehicle.location_updated_at,
+  };
+  const liveBase = mergeStaticAndLiveVehicle(vehicle, previousLive);
   if (!accuracyStatus.ok) {
-    Object.assign(vehicle, {
+    const liveVehicle = {
+      ...liveBase,
       route_id: String(payload.route_id || vehicle.route_id || "").trim(),
       driver_id: String(payload.driver_id || vehicle.driver_id || "").trim(),
       trip_type: String(payload.trip_type || vehicle.trip_type || "").trim(),
@@ -622,24 +725,19 @@ async function handleDriverLocation(request, env) {
       estimated_arrival_min: Number(payload.estimated_arrival_min || vehicle.estimated_arrival_min || 0),
       low_accuracy_at: now.toISOString(),
       location_updated_at: now.toISOString(),
-    });
-    state.updated_at = now.toISOString();
-    await writeState(env, state);
+    };
+    await writeLiveVehicle(env, vehicleId, liveVehicle);
     return json({
       ok: true,
       accepted: false,
-      vehicle_id: vehicle.vehicle_id,
-      updated_at: vehicle.location_updated_at,
+      vehicle_id: liveVehicle.vehicle_id,
+      updated_at: liveVehicle.location_updated_at,
       error: accuracyStatus.message,
       accuracy_m: accuracyStatus.accuracy,
     });
   }
-  const previous = {
-    lat: vehicle.lat,
-    lng: vehicle.lng,
-    location_updated_at: vehicle.location_updated_at,
-  };
-  Object.assign(vehicle, {
+  const liveVehicle = {
+    ...liveBase,
     route_id: String(payload.route_id || vehicle.route_id || "").trim(),
     driver_id: String(payload.driver_id || vehicle.driver_id || "").trim(),
     trip_type: String(payload.trip_type || vehicle.trip_type || "").trim(),
@@ -651,11 +749,10 @@ async function handleDriverLocation(request, env) {
     status: String(payload.status || "running"),
     estimated_arrival_min: Number(payload.estimated_arrival_min || vehicle.estimated_arrival_min || 0),
     location_updated_at: now.toISOString(),
-  });
-  recordDailyRun(state, vehicle, previous, { lat, lng, vehicle_id: vehicleId }, now);
-  state.updated_at = now.toISOString();
-  await writeState(env, state);
-  return json({ ok: true, vehicle_id: vehicle.vehicle_id, updated_at: vehicle.location_updated_at });
+  };
+  await recordDailyRun(env, liveVehicle, previous, { lat, lng, vehicle_id: vehicleId }, now);
+  await writeLiveVehicle(env, vehicleId, liveVehicle);
+  return json({ ok: true, vehicle_id: liveVehicle.vehicle_id, updated_at: liveVehicle.location_updated_at });
 }
 
 async function handleDriverTripStatus(request, env) {
@@ -672,17 +769,18 @@ async function handleDriverTripStatus(request, env) {
   if (!vehicle) {
     return json({ ok: false, error: "Vehicle not found. Sync bus master data from ERP again." }, { status: 404 });
   }
-  Object.assign(vehicle, {
+  const previousLive = await readLiveVehicle(env, vehicleId);
+  const liveVehicle = {
+    ...mergeStaticAndLiveVehicle(vehicle, previousLive),
     route_id: String(payload.route_id || vehicle.route_id || "").trim(),
     driver_id: String(payload.driver_id || vehicle.driver_id || "").trim(),
     trip_type: String(payload.trip_type || vehicle.trip_type || "").trim(),
     status: String(payload.status || "running"),
     estimated_arrival_min: Number(payload.estimated_arrival_min || vehicle.estimated_arrival_min || 0),
     location_updated_at: new Date().toISOString(),
-  });
-  state.updated_at = new Date().toISOString();
-  await writeState(env, state);
-  return json({ ok: true, vehicle_id: vehicle.vehicle_id, updated_at: vehicle.location_updated_at, status: vehicle.status });
+  };
+  await writeLiveVehicle(env, vehicleId, liveVehicle);
+  return json({ ok: true, vehicle_id: liveVehicle.vehicle_id, updated_at: liveVehicle.location_updated_at, status: liveVehicle.status });
 }
 
 function verifyOfficeRequest(request, env) {
@@ -813,50 +911,55 @@ async function handleSyncMasterData(request, env) {
 
 export default {
   async fetch(request, env) {
-    const url = new URL(request.url);
-    if (request.method === "OPTIONS") return json({ ok: true });
-    if (url.pathname === "/api/student/bus-location") return handleStudentLocation(request, env);
-    if (url.pathname === "/api/office/login" && request.method === "POST") return handleOfficeLogin(request, env);
-    if (url.pathname === "/api/driver/login" && request.method === "POST") return handleDriverLogin(request, env);
-    if (url.pathname === "/api/office/session") {
-      const session = await verifyOfficeSession(request, env);
-      return json({ ok: session.ok, error: session.ok ? "" : session.error }, { status: session.ok ? 200 : session.status });
-    }
-    if (url.pathname === "/api/office/driver-settings") {
-      let officeAuth = verifyOfficeRequest(request, env);
-      if (officeAuth === null) officeAuth = await verifyOfficeSession(request, env);
-      if (!officeAuth.ok) return json({ ok: false, error: officeAuth.error }, { status: officeAuth.status });
-      return handleDriverSettings(request, env);
-    }
-    if (url.pathname === "/api/office/summary") {
-      let officeAuth = verifyOfficeRequest(request, env);
-      if (officeAuth === null) {
-        const hasSignedLink = url.searchParams.get("source") === "erp-office" && url.searchParams.get("sig");
-        officeAuth = hasSignedLink ? await verifySignedOfficeLink(url, env) : await verifyOfficeSession(request, env);
+    try {
+      const url = new URL(request.url);
+      if (request.method === "OPTIONS") return json({ ok: true });
+      if (url.pathname === "/api/student/bus-location") return handleStudentLocation(request, env);
+      if (url.pathname === "/api/office/login" && request.method === "POST") return handleOfficeLogin(request, env);
+      if (url.pathname === "/api/driver/login" && request.method === "POST") return handleDriverLogin(request, env);
+      if (url.pathname === "/api/office/session") {
+        const session = await verifyOfficeSession(request, env);
+        return json({ ok: session.ok, error: session.ok ? "" : session.error }, { status: session.ok ? 200 : session.status });
       }
-      if (!officeAuth.ok) return json({ ok: false, error: officeAuth.error }, { status: officeAuth.status });
-      return handleOfficeSummary(env);
-    }
-    if (url.pathname === "/api/office/driver-link" && request.method === "GET") {
-      let officeAuth = verifyOfficeRequest(request, env);
-      if (officeAuth === null) {
-        const hasSignedLink = url.searchParams.get("source") === "erp-office" && url.searchParams.get("sig");
-        officeAuth = hasSignedLink ? await verifySignedOfficeLink(url, env) : await verifyOfficeSession(request, env);
+      if (url.pathname === "/api/office/driver-settings") {
+        let officeAuth = verifyOfficeRequest(request, env);
+        if (officeAuth === null) officeAuth = await verifyOfficeSession(request, env);
+        if (!officeAuth.ok) return json({ ok: false, error: officeAuth.error }, { status: officeAuth.status });
+        return handleDriverSettings(request, env);
       }
-      if (!officeAuth.ok) return json({ ok: false, error: officeAuth.error }, { status: officeAuth.status });
-      return handleOfficeDriverLink(request, env);
+      if (url.pathname === "/api/office/summary") {
+        let officeAuth = verifyOfficeRequest(request, env);
+        if (officeAuth === null) {
+          const hasSignedLink = url.searchParams.get("source") === "erp-office" && url.searchParams.get("sig");
+          officeAuth = hasSignedLink ? await verifySignedOfficeLink(url, env) : await verifyOfficeSession(request, env);
+        }
+        if (!officeAuth.ok) return json({ ok: false, error: officeAuth.error }, { status: officeAuth.status });
+        return handleOfficeSummary(env);
+      }
+      if (url.pathname === "/api/office/driver-link" && request.method === "GET") {
+        let officeAuth = verifyOfficeRequest(request, env);
+        if (officeAuth === null) {
+          const hasSignedLink = url.searchParams.get("source") === "erp-office" && url.searchParams.get("sig");
+          officeAuth = hasSignedLink ? await verifySignedOfficeLink(url, env) : await verifyOfficeSession(request, env);
+        }
+        if (!officeAuth.ok) return json({ ok: false, error: officeAuth.error }, { status: officeAuth.status });
+        return handleOfficeDriverLink(request, env);
+      }
+      if (url.pathname === "/api/driver/vehicles" && request.method === "GET") {
+        const auth = await verifyDriverAccess(url, env);
+        if (!auth.ok) return json({ ok: false, error: auth.error }, { status: auth.status });
+        return handleDriverVehicles(env, auth.vehicleId);
+      }
+      if (url.pathname === "/api/driver/trip-status" && request.method === "POST") return handleDriverTripStatus(request, env);
+      if (url.pathname === "/api/driver/location" && request.method === "POST") return handleDriverLocation(request, env);
+      if (url.pathname === "/api/erp/sync-master-data" && request.method === "POST") return handleSyncMasterData(request, env);
+      if (url.pathname === "/api/office/demo-tick" && request.method === "POST") {
+        return json({ ok: false, error: "Demo movement is disabled. Real driver GPS data is required." }, { status: 400 });
+      }
+      return env.ASSETS.fetch(request);
+    } catch (error) {
+      console.error("Smart Bus worker error", error);
+      return json({ ok: false, error: "Smart Bus server error. App reload kore abar try korun." }, { status: 500 });
     }
-    if (url.pathname === "/api/driver/vehicles" && request.method === "GET") {
-      const auth = await verifyDriverAccess(url, env);
-      if (!auth.ok) return json({ ok: false, error: auth.error }, { status: auth.status });
-      return handleDriverVehicles(env, auth.vehicleId);
-    }
-    if (url.pathname === "/api/driver/trip-status" && request.method === "POST") return handleDriverTripStatus(request, env);
-    if (url.pathname === "/api/driver/location" && request.method === "POST") return handleDriverLocation(request, env);
-    if (url.pathname === "/api/erp/sync-master-data" && request.method === "POST") return handleSyncMasterData(request, env);
-    if (url.pathname === "/api/office/demo-tick" && request.method === "POST") {
-      return json({ ok: false, error: "Demo movement is disabled. Real driver GPS data is required." }, { status: 400 });
-    }
-    return env.ASSETS.fetch(request);
   },
 };
