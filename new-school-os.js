@@ -140,6 +140,7 @@ let backendSyncReady = false;
 let backendHydrating = false;
 let backendLastUpdatedAt = "";
 let backendLastLocalSaveAt = 0;
+let transportBackendSavePending = false;
 let backendNetworkFailCount = 0;
 let backendLastHealthOkAt = 0;
 const BACKEND_SAVE_DEBOUNCE_MS = 250;
@@ -1336,6 +1337,7 @@ async function processBackendSaveQueue() {
     showNoInternetSaveWarning();
     if (rollbackRawState) restoreStateFromRaw(rollbackRawState);
     setTopbarSaveStatus("saved");
+    finishTransportBackendSave("error", "Backend not connected. Route data was not saved to server.");
     return;
   }
   const snapshot = backendQueuedSnapshot;
@@ -1349,6 +1351,7 @@ async function processBackendSaveQueue() {
     if (!hasToken) {
       showNoInternetSaveWarning();
       if (!backendQueuedSnapshot && rollbackRawState) restoreStateFromRaw(rollbackRawState);
+      finishTransportBackendSave("error", "Login/server connection needed before backend save.");
       return;
     }
     const result = await putBackendState(snapshot);
@@ -1356,6 +1359,7 @@ async function processBackendSaveQueue() {
     if (result?.updated_at) backendLastUpdatedAt = result.updated_at;
     backendLastLocalSaveAt = Date.now();
     if (!backendQueuedSnapshot) localStorage.removeItem(BACKEND_PENDING_STATE_KEY);
+    finishTransportBackendSave("saved", `Backend saved at ${new Date().toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"})}.`);
   } catch (error) {
     markBackendConnectionIssue();
     if (!backendQueuedSnapshot) {
@@ -1364,6 +1368,7 @@ async function processBackendSaveQueue() {
       storePendingBackendSnapshot(snapshot);
     }
     scheduleBackendReconnect();
+    finishTransportBackendSave("error", "Backend save pending. Server sync will retry automatically.");
     showToast("Saved locally. Server sync will retry automatically.", "warning", 6000);
     console.warn(
       backendQueuedSnapshot
@@ -2003,6 +2008,45 @@ function setTopbarSaveStatus(status = "saved") {
   const isSaving = status === "saving";
   button.textContent = isSaving ? "Saving..." : "Saved";
   button.classList.toggle("saving", isSaving);
+}
+
+function setTransportBackendStatus(status = "saved", message = "") {
+  const nodes = [
+    document.getElementById("transportRouteBackendStatus"),
+    document.getElementById("transportRoutePickupBackendStatus")
+  ].filter(Boolean);
+  if (!nodes.length) return;
+  const fallback = {
+    saving: "Saving route data to backend...",
+    saved: "Backend saved.",
+    error: "Backend save failed. Please save again."
+  }[status] || message || "Backend save status will appear here.";
+  nodes.forEach(node => {
+    node.textContent = message || fallback;
+    node.classList.toggle("saving", status === "saving");
+    node.classList.toggle("saved", status === "saved");
+    node.classList.toggle("error", status === "error");
+  });
+}
+
+function markTransportBackendSavePending(message = "Saving route data to backend...") {
+  transportBackendSavePending = true;
+  setTransportBackendStatus("saving", message);
+}
+
+function finishTransportBackendSave(status = "saved", message = "") {
+  if (!transportBackendSavePending && status !== "error") return;
+  transportBackendSavePending = false;
+  setTransportBackendStatus(status, message);
+}
+
+function trackTransportSaveResult(saved, savingMessage = "Saving route data to backend...") {
+  if (saved) {
+    markTransportBackendSavePending(savingMessage);
+  } else {
+    finishTransportBackendSave("error", "Backend save failed. Please check internet/server and save again.");
+  }
+  return saved;
 }
 
 function setTopbarNetworkStatus(status = navigator.onLine ? "checking" : "offline") {
@@ -14025,7 +14069,7 @@ document.getElementById("transportRouteRows")?.addEventListener("click", event =
       transportRouteForm.reset();
       transportRouteForm.querySelector("button[type='submit']").textContent = "Add Route";
     }
-    saveAppState();
+    trackTransportSaveResult(saveAppState(), "Saving route deletion to backend...");
     renderTransportRoutes();
     renderTransportVehicleAssignments();
     renderTransportRoutePickupPoints();
@@ -14104,7 +14148,7 @@ document.getElementById("transportAssignVehicleRows")?.addEventListener("click",
       transportAssignVehicleForm.reset();
       transportAssignVehicleForm.querySelector("button[type='submit']").textContent = "Assign Vehicle";
     }
-    saveAppState();
+    trackTransportSaveResult(saveAppState(), "Saving vehicle assignment deletion to backend...");
     renderTransportVehicleAssignments();
     renderTransportRoutePickupPoints();
     showToast("Vehicle assignment deleted.");
@@ -14126,7 +14170,7 @@ document.getElementById("transportRoutePickupRows")?.addEventListener("click", e
       return;
     }
     upsertRoutePickupVillageMapping(villageName, {routeName, shift, time, sequence});
-    saveAppState();
+    trackTransportSaveResult(saveAppState(), `Saving ${villageName} route to backend...`);
     renderTransportRoutePickupPoints();
     showToast(`${villageName} pickup route saved.`);
     return;
@@ -14137,7 +14181,7 @@ document.getElementById("transportRoutePickupRows")?.addEventListener("click", e
     if (!confirm(`Clear route mapping for ${villageName}?`)) return;
     clearRoutePickupVillageMapping(villageName);
     editingTransportPickupIndex = -1;
-    saveAppState();
+    trackTransportSaveResult(saveAppState(), `Saving ${villageName} route clear to backend...`);
     renderTransportRoutePickupPoints();
     showToast(`${villageName} route cleared.`);
   }
@@ -14155,7 +14199,7 @@ document.getElementById("transportRoutePickupRows")?.addEventListener("change", 
   const time = row?.querySelector("[data-route-pickup-time]")?.value || "";
   const sequence = row?.querySelector("[data-route-pickup-sequence]")?.value || "";
   if (!upsertRoutePickupVillageMapping(villageName, {routeName, shift, time, sequence})) return;
-  saveAppState();
+  trackTransportSaveResult(saveAppState(), `Saving ${villageName} route to backend...`);
   renderTransportRoutePickupPoints();
   showToast(routeName ? `${villageName} route mapped.` : `${villageName} route cleared.`);
 });
@@ -14173,7 +14217,7 @@ document.getElementById("transportRoutePickupRows")?.addEventListener("focusout"
   const time = row?.querySelector("[data-route-pickup-time]")?.value || "";
   const sequence = row?.querySelector("[data-route-pickup-sequence]")?.value || "";
   if (!upsertRoutePickupVillageMapping(villageName, {routeName, shift, time, sequence})) return;
-  saveAppState();
+  trackTransportSaveResult(saveAppState(), `Saving ${villageName} timing to backend...`);
   renderTransportRoutePickupPoints();
 });
 
@@ -15423,7 +15467,7 @@ if (transportRouteForm) {
       transportRoutes.push(routeEntry);
     }
     transportRoutes.sort((a, b) => String(a.routeName || "").localeCompare(String(b.routeName || ""), undefined, {numeric: true}));
-    if (!saveAppState()) {
+    if (!trackTransportSaveResult(saveAppState(), `Saving ${routeName} route to backend...`)) {
       renderTransportRoutes();
       renderTransportVehicleAssignments();
       renderTransportRoutePickupPoints();
@@ -15480,7 +15524,7 @@ if (transportAssignVehicleForm) {
       String(a.routeName || "").localeCompare(String(b.routeName || ""), undefined, {numeric: true}) ||
       String(a.shift || "").localeCompare(String(b.shift || ""), undefined, {numeric: true})
     );
-    if (!saveAppState()) {
+    if (!trackTransportSaveResult(saveAppState(), `Saving ${routeName} vehicle assignment to backend...`)) {
       renderTransportVehicleAssignments();
       renderTransportRoutePickupPoints();
       showToast("Vehicle assignment was not saved. Please check the internet or server connection.", "error", 6000);
@@ -15529,7 +15573,7 @@ if (transportRoutePickupForm) {
       Number(a.sequence || 999) - Number(b.sequence || 999) ||
       String(a.villageName || "").localeCompare(String(b.villageName || ""), undefined, {numeric: true})
     );
-    if (!saveAppState()) {
+    if (!trackTransportSaveResult(saveAppState(), `Saving ${villageName} pickup mapping to backend...`)) {
       renderTransportRoutePickupPoints();
       showToast("Pickup mapping was not saved. Please check the internet or server connection.", "error", 6000);
       return;

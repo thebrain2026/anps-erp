@@ -7537,6 +7537,59 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   font-weight: 850;
 }
 
+.transport-backend-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  margin: 0 0 12px;
+  padding: 7px 11px;
+  border: 1px solid #d5e6f0;
+  border-radius: 8px;
+  background: #f8fbfd;
+  color: #526173;
+  font-size: .8rem;
+  font-weight: 850;
+}
+
+.transport-backend-status::before {
+  content: "";
+  width: 9px;
+  height: 9px;
+  border-radius: 999px;
+  background: #94a3b8;
+}
+
+.transport-backend-status.saving {
+  border-color: #f5d58b;
+  background: #fffbeb;
+  color: #855f12;
+}
+
+.transport-backend-status.saving::before {
+  background: #d97706;
+}
+
+.transport-backend-status.saved {
+  border-color: #bfe8d3;
+  background: #f0fdf4;
+  color: #166534;
+}
+
+.transport-backend-status.saved::before {
+  background: #22c55e;
+}
+
+.transport-backend-status.error {
+  border-color: #fecdd3;
+  background: #fff1f2;
+  color: #9f1239;
+}
+
+.transport-backend-status.error::before {
+  background: #e11d48;
+}
+
 .route-pickup-tabs {
   display: inline-flex;
   gap: 6px;
