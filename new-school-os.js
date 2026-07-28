@@ -100,6 +100,13 @@ const viewHistoryStack = [];
 const collectedPayments = {};
 const deletedPaymentReceipts = {};
 const deletedStudents = {};
+const deletedTransportRecords = {
+  routes: {},
+  vehicles: {},
+  assignments: {},
+  pickupPoints: {},
+  villages: {}
+};
 const selectedHistoryPayments = new Set();
 const openFeeBookDropdowns = new Set();
 let receiptSerial = 1;
@@ -470,6 +477,7 @@ function getAppStateSnapshot() {
     collectedPayments,
     deletedPaymentReceipts,
     deletedStudents,
+    deletedTransportRecords,
     receiptSerial,
     notices,
     teacherNoticeRequests,
@@ -771,6 +779,75 @@ function mergePaymentList(remotePayments = [], localPayments = []) {
   return merged;
 }
 
+function mergeObjectListByCompositeKey(remoteList = [], localList = [], keyFields = []) {
+  const merged = [];
+  const indexByKey = new Map();
+  const getKey = item => {
+    if (!item || typeof item !== "object") return "";
+    const parts = keyFields
+      .map(field => {
+        const value = String(item[field] || "").trim().toLowerCase();
+        return value ? `${field}:${value}` : "";
+      })
+      .filter(Boolean);
+    return parts.join("|") || JSON.stringify(item);
+  };
+  [...remoteList, ...localList].forEach(item => {
+    if (!item || typeof item !== "object") return;
+    const key = getKey(item);
+    if (!indexByKey.has(key)) {
+      indexByKey.set(key, merged.length);
+      merged.push(item);
+      return;
+    }
+    merged[indexByKey.get(key)] = {...merged[indexByKey.get(key)], ...item};
+  });
+  return merged;
+}
+
+function mergeDeletedTransportRecords(...maps) {
+  const merged = {routes: {}, vehicles: {}, assignments: {}, pickupPoints: {}, villages: {}};
+  maps.forEach(map => {
+    if (!map || typeof map !== "object") return;
+    Object.keys(merged).forEach(group => {
+      const rows = map[group];
+      if (!rows || typeof rows !== "object") return;
+      Object.entries(rows).forEach(([key, deletedAt]) => {
+        const normalizedKey = String(key || "").trim().toLowerCase();
+        if (normalizedKey) merged[group][normalizedKey] = deletedAt || new Date().toISOString();
+      });
+    });
+  });
+  return merged;
+}
+
+function markDeletedTransportRecord(group, key) {
+  const normalizedKey = String(key || "").trim().toLowerCase();
+  if (!deletedTransportRecords[group] || !normalizedKey) return;
+  deletedTransportRecords[group][normalizedKey] = new Date().toISOString();
+}
+
+function clearDeletedTransportRecord(group, key) {
+  const normalizedKey = String(key || "").trim().toLowerCase();
+  if (deletedTransportRecords[group] && normalizedKey) delete deletedTransportRecords[group][normalizedKey];
+}
+
+function transportAssignmentKey(item = {}) {
+  return [
+    String(item.routeName || "").trim().toLowerCase(),
+    String(item.vehicleNo || "").trim().toLowerCase(),
+    String(item.shift || item.tripShift || "").trim().toLowerCase()
+  ].join("|");
+}
+
+function transportPickupPointKey(item = {}) {
+  return [
+    normalizeVillageName(item.villageName || item.pickupPoint || ""),
+    String(item.routeName || "").trim().toLowerCase(),
+    String(item.shift || item.tripShift || "").trim().toLowerCase()
+  ].join("|");
+}
+
 function getDeletedPaymentReceiptMap(...maps) {
   const merged = {};
   maps.forEach(map => {
@@ -964,6 +1041,7 @@ function mergeClassSubjectAssignments(remoteAssignments = {}, localAssignments =
 function mergeStateSnapshots(remoteState = {}, localState = {}) {
   const merged = {...remoteState, ...localState};
   merged.deletedStudents = getDeletedStudentMap(remoteState.deletedStudents, localState.deletedStudents);
+  merged.deletedTransportRecords = mergeDeletedTransportRecords(remoteState.deletedTransportRecords, localState.deletedTransportRecords);
   const primitiveKeys = [
     "customAdmissionClasses",
     "customAdmissionSections",
@@ -990,10 +1068,6 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
     marksheetEntries: ["id", "studentAdmissionNo", "exam", "subject"],
     externalExamFees: ["id", "admissionNo", "examName", "subject"],
     holidayReports: ["id", "date", "holidayName"],
-    transportRoutes: ["routeName"],
-    transportVehicles: ["id", "vehicleNo"],
-    transportVehicleAssignments: ["routeName", "vehicleNo", "shift"],
-    transportRoutePickupPoints: ["routeName", "villageName", "shift"],
     notices: ["id", "title"],
     teacherNoticeRequests: ["id", "title", "teacherId"],
     teacherLeaves: ["id", "teacherId", "from", "to", "type"],
@@ -1004,6 +1078,28 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
   Object.entries(objectRules).forEach(([key, fields]) => {
     merged[key] = mergeObjectListByKey(remoteState[key] || [], localState[key] || [], fields);
   });
+  merged.transportRoutes = mergeObjectListByCompositeKey(remoteState.transportRoutes || [], localState.transportRoutes || [], ["routeName"])
+    .filter(route => !merged.deletedTransportRecords.routes[String(route.routeName || "").trim().toLowerCase()]);
+  merged.transportVehicles = mergeObjectListByCompositeKey(remoteState.transportVehicles || [], localState.transportVehicles || [], ["vehicleNo"])
+    .filter(vehicle => !merged.deletedTransportRecords.vehicles[String(vehicle.vehicleNo || "").trim().toLowerCase()]);
+  merged.transportVehicleAssignments = mergeObjectListByCompositeKey(
+    remoteState.transportVehicleAssignments || [],
+    localState.transportVehicleAssignments || [],
+    ["routeName", "vehicleNo", "shift"]
+  ).filter(assignment =>
+    !merged.deletedTransportRecords.assignments[transportAssignmentKey(assignment)] &&
+    !merged.deletedTransportRecords.routes[String(assignment.routeName || "").trim().toLowerCase()] &&
+    !merged.deletedTransportRecords.vehicles[String(assignment.vehicleNo || "").trim().toLowerCase()]
+  );
+  merged.transportRoutePickupPoints = mergeObjectListByCompositeKey(
+    remoteState.transportRoutePickupPoints || [],
+    localState.transportRoutePickupPoints || [],
+    ["villageName", "routeName", "shift"]
+  ).filter(point =>
+    !merged.deletedTransportRecords.pickupPoints[transportPickupPointKey(point)] &&
+    !merged.deletedTransportRecords.routes[String(point.routeName || "").trim().toLowerCase()] &&
+    !merged.deletedTransportRecords.villages[normalizeVillageName(point.villageName || point.pickupPoint || "")]
+  );
   merged.transportVillageDistances = {...(remoteState.transportVillageDistances || {}), ...(localState.transportVillageDistances || {})};
   merged.transportVillageFees = mergeTransportVillageFees(remoteState.transportVillageFees || {}, localState.transportVillageFees || {});
   merged.rolePermissions = {...(remoteState.rolePermissions || {}), ...(localState.rolePermissions || {})};
@@ -1020,6 +1116,7 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
 
 function mergeSetupSafeState(backendState = {}, localSnapshot = {}) {
   const deletedMap = getDeletedPaymentReceiptMap(backendState.deletedPaymentReceipts, localSnapshot.deletedPaymentReceipts);
+  const deletedTransportMap = mergeDeletedTransportRecords(backendState.deletedTransportRecords, localSnapshot.deletedTransportRecords);
   return {
     ...backendState,
     customAdmissionClasses: mergePrimitiveList(backendState.customAdmissionClasses || [], localSnapshot.customAdmissionClasses || []),
@@ -1032,10 +1129,23 @@ function mergeSetupSafeState(backendState = {}, localSnapshot = {}) {
     transportVillageDistances: {...(backendState.transportVillageDistances || {}), ...(localSnapshot.transportVillageDistances || {})},
     transportVillageFees: mergeTransportVillageFees(backendState.transportVillageFees || {}, localSnapshot.transportVillageFees || {}),
     transportFineSetup: {...(backendState.transportFineSetup || {}), ...(localSnapshot.transportFineSetup || {})},
-    transportRoutes: mergeObjectListByKey(backendState.transportRoutes || [], localSnapshot.transportRoutes || [], ["routeName"]),
-    transportVehicles: mergeObjectListByKey(backendState.transportVehicles || [], localSnapshot.transportVehicles || [], ["id", "vehicleNo"]),
-    transportVehicleAssignments: mergeObjectListByKey(backendState.transportVehicleAssignments || [], localSnapshot.transportVehicleAssignments || [], ["routeName", "vehicleNo", "shift"]),
-    transportRoutePickupPoints: mergeObjectListByKey(backendState.transportRoutePickupPoints || [], localSnapshot.transportRoutePickupPoints || [], ["routeName", "villageName", "shift"]),
+    deletedTransportRecords: deletedTransportMap,
+    transportRoutes: mergeObjectListByCompositeKey(backendState.transportRoutes || [], localSnapshot.transportRoutes || [], ["routeName"])
+      .filter(route => !deletedTransportMap.routes[String(route.routeName || "").trim().toLowerCase()]),
+    transportVehicles: mergeObjectListByCompositeKey(backendState.transportVehicles || [], localSnapshot.transportVehicles || [], ["vehicleNo"])
+      .filter(vehicle => !deletedTransportMap.vehicles[String(vehicle.vehicleNo || "").trim().toLowerCase()]),
+    transportVehicleAssignments: mergeObjectListByCompositeKey(backendState.transportVehicleAssignments || [], localSnapshot.transportVehicleAssignments || [], ["routeName", "vehicleNo", "shift"])
+      .filter(assignment =>
+        !deletedTransportMap.assignments[transportAssignmentKey(assignment)] &&
+        !deletedTransportMap.routes[String(assignment.routeName || "").trim().toLowerCase()] &&
+        !deletedTransportMap.vehicles[String(assignment.vehicleNo || "").trim().toLowerCase()]
+      ),
+    transportRoutePickupPoints: mergeObjectListByCompositeKey(backendState.transportRoutePickupPoints || [], localSnapshot.transportRoutePickupPoints || [], ["villageName", "routeName", "shift"])
+      .filter(point =>
+        !deletedTransportMap.pickupPoints[transportPickupPointKey(point)] &&
+        !deletedTransportMap.routes[String(point.routeName || "").trim().toLowerCase()] &&
+        !deletedTransportMap.villages[normalizeVillageName(point.villageName || point.pickupPoint || "")]
+      ),
     studentUserAccounts: mergeObjectListByKey(backendState.studentUserAccounts || [], localSnapshot.studentUserAccounts || [], ["loginId", "admissionNo"]),
     financeSessions: mergeFinanceSessions(backendState.financeSessions || {}, localSnapshot.financeSessions || {}),
     deletedPaymentReceipts: deletedMap,
@@ -1316,6 +1426,13 @@ function applySavedState(saved = {}) {
     if (saved.deletedPaymentReceipts && typeof saved.deletedPaymentReceipts === "object") {
       Object.keys(deletedPaymentReceipts).forEach(session => delete deletedPaymentReceipts[session]);
       Object.assign(deletedPaymentReceipts, getDeletedPaymentReceiptMap(saved.deletedPaymentReceipts));
+    }
+    if (saved.deletedTransportRecords && typeof saved.deletedTransportRecords === "object") {
+      const mergedDeletedTransport = mergeDeletedTransportRecords(saved.deletedTransportRecords);
+      Object.keys(deletedTransportRecords).forEach(group => {
+        Object.keys(deletedTransportRecords[group]).forEach(key => delete deletedTransportRecords[group][key]);
+        Object.assign(deletedTransportRecords[group], mergedDeletedTransport[group] || {});
+      });
     }
     pruneDeletedCollectedPayments(collectedPayments, deletedPaymentReceipts);
     if (Number(saved.receiptSerial) > 0) {
@@ -10537,6 +10654,7 @@ function upsertRoutePickupVillageMapping(villageName = "", patch = {}) {
   const sequence = Object.prototype.hasOwnProperty.call(patch, "sequence")
     ? String(patch.sequence || "").trim()
     : String(first.sequence || "").trim();
+  clearDeletedTransportRecord("pickupPoints", transportPickupPointKey({villageName: cleanVillageName, routeName, shift}));
   if (matching.length) {
     matching.forEach(({point}, index) => {
       point.routeName = routeName;
@@ -13852,6 +13970,7 @@ document.getElementById("transportPickupPoint").addEventListener("click", event 
   if (!button) return;
   const village = button.dataset.deleteVillage;
   if (!confirm(`Delete ${village}?`)) return;
+  markDeletedTransportRecord("villages", normalizeVillageName(village));
   const index = transportVillages.indexOf(village);
   if (index >= 0) transportVillages.splice(index, 1);
   delete transportVillageDistances[village];
@@ -13887,14 +14006,17 @@ document.getElementById("transportRouteRows")?.addEventListener("click", event =
     if (!route) return;
     if (!confirm(`Delete route ${route.routeName || ""}? Related assignment and pickup mappings will also be removed.`)) return;
     const routeName = String(route.routeName || "").trim().toLowerCase();
+    markDeletedTransportRecord("routes", routeName);
     transportRoutes.splice(index, 1);
     for (let i = transportVehicleAssignments.length - 1; i >= 0; i -= 1) {
       if (String(transportVehicleAssignments[i].routeName || "").trim().toLowerCase() === routeName) {
+        markDeletedTransportRecord("assignments", transportAssignmentKey(transportVehicleAssignments[i]));
         transportVehicleAssignments.splice(i, 1);
       }
     }
     for (let i = transportRoutePickupPoints.length - 1; i >= 0; i -= 1) {
       if (String(transportRoutePickupPoints[i].routeName || "").trim().toLowerCase() === routeName) {
+        markDeletedTransportRecord("pickupPoints", transportPickupPointKey(transportRoutePickupPoints[i]));
         transportRoutePickupPoints.splice(i, 1);
       }
     }
@@ -13933,9 +14055,11 @@ document.getElementById("transportVehicleRows")?.addEventListener("click", event
     if (!vehicle) return;
     if (!confirm(`Delete vehicle ${vehicle.vehicleNo || ""}? Related vehicle assignments will also be removed.`)) return;
     const vehicleNo = String(vehicle.vehicleNo || "").trim().toUpperCase();
+    markDeletedTransportRecord("vehicles", vehicleNo);
     transportVehicles.splice(index, 1);
     for (let i = transportVehicleAssignments.length - 1; i >= 0; i -= 1) {
       if (String(transportVehicleAssignments[i].vehicleNo || "").trim().toUpperCase() === vehicleNo) {
+        markDeletedTransportRecord("assignments", transportAssignmentKey(transportVehicleAssignments[i]));
         transportVehicleAssignments.splice(i, 1);
       }
     }
@@ -13973,6 +14097,7 @@ document.getElementById("transportAssignVehicleRows")?.addEventListener("click",
     const assignment = transportVehicleAssignments[index];
     if (!assignment) return;
     if (!confirm(`Delete assignment for ${assignment.routeName || ""} / ${assignment.shift || ""}?`)) return;
+    markDeletedTransportRecord("assignments", transportAssignmentKey(assignment));
     transportVehicleAssignments.splice(index, 1);
     editingTransportAssignmentIndex = -1;
     if (transportAssignVehicleForm) {
@@ -15173,6 +15298,7 @@ if (transportVillageForm) {
     const promotedStudentFee = Number(data.get("promotedStudentFee") || 0);
     const specialStudentFee = Number(data.get("specialStudentFee") || 0);
     if (!villageName) return;
+    clearDeletedTransportRecord("villages", normalizeVillageName(villageName));
     if (findTransportVillageByName(villageName)) {
       showToast(`${villageName} already exists.`);
       return;
@@ -15226,6 +15352,7 @@ if (transportVehicleForm) {
       status: "Active",
       updatedAt: new Date().toISOString()
     };
+    clearDeletedTransportRecord("vehicles", vehicleNo);
     if (wasEditingVehicle) {
       transportVehicles[editingTransportVehicleIndex] = vehicleEntry;
       transportVehicleAssignments.forEach(assignment => {
@@ -15278,6 +15405,7 @@ if (transportRouteForm) {
       ? String(transportRoutes[editingTransportRouteIndex]?.routeName || "").trim()
       : "";
     const routeEntry = {routeName, routeNote, status: "Active"};
+    clearDeletedTransportRecord("routes", routeName);
     if (editingTransportRouteIndex >= 0) {
       transportRoutes[editingTransportRouteIndex] = routeEntry;
       transportVehicleAssignments.forEach(assignment => {
@@ -15332,6 +15460,7 @@ if (transportAssignVehicleForm) {
       shift,
       status: "Active"
     };
+    clearDeletedTransportRecord("assignments", transportAssignmentKey(assignment));
     const existingIndex = transportVehicleAssignments.findIndex((item, index) =>
       index !== editingTransportAssignmentIndex &&
       String(item.routeName || "").toLowerCase() === routeName.toLowerCase() &&

@@ -1766,6 +1766,78 @@ def merge_collected_payments(server_collected, incoming_collected, deleted_map=N
     return merged
 
 
+def merge_primitive_lists(server_items, incoming_items):
+    merged = []
+    seen = set()
+    for item in [*(server_items if isinstance(server_items, list) else []), *(incoming_items if isinstance(incoming_items, list) else [])]:
+        text = str(item or "").strip()
+        if not text:
+            continue
+        key = text.lower()
+        if key in seen:
+            continue
+        seen.add(key)
+        merged.append(text)
+    return merged
+
+
+def merge_transport_village_fees(server_fees, incoming_fees):
+    if not isinstance(server_fees, dict):
+        server_fees = {}
+    if not isinstance(incoming_fees, dict):
+        incoming_fees = {}
+    merged = {}
+    for village in sorted(set(server_fees) | set(incoming_fees), key=lambda value: str(value).lower()):
+        server_row = server_fees.get(village) if isinstance(server_fees.get(village), dict) else {}
+        incoming_row = incoming_fees.get(village) if isinstance(incoming_fees.get(village), dict) else {}
+        row = {**server_row, **incoming_row}
+        for key in ("newStudentFee", "promotedStudentFee", "specialStudentFee"):
+            if not money(row.get(key)):
+                row[key] = money(incoming_row.get(key)) or money(server_row.get(key))
+        merged[village] = row
+    return merged
+
+
+def merge_deleted_transport_records(*maps):
+    merged = {"routes": {}, "vehicles": {}, "assignments": {}, "pickupPoints": {}, "villages": {}}
+    for map_value in maps:
+        if not isinstance(map_value, dict):
+            continue
+        for group in merged:
+            rows = map_value.get(group)
+            if not isinstance(rows, dict):
+                continue
+            for key, deleted_at in rows.items():
+                normalized_key = str(key or "").strip().lower()
+                if normalized_key:
+                    merged[group][normalized_key] = deleted_at or datetime.now().isoformat(timespec="seconds")
+    return merged
+
+
+def transport_assignment_key(item):
+    if not isinstance(item, dict):
+        return ""
+    return "|".join(
+        [
+            str(item.get("routeName") or "").strip().lower(),
+            str(item.get("vehicleNo") or "").strip().lower(),
+            str(item.get("shift") or item.get("tripShift") or "").strip().lower(),
+        ]
+    )
+
+
+def transport_pickup_point_key(item):
+    if not isinstance(item, dict):
+        return ""
+    return "|".join(
+        [
+            normalize_lookup(item.get("villageName") or item.get("pickupPoint") or ""),
+            str(item.get("routeName") or "").strip().lower(),
+            str(item.get("shift") or item.get("tripShift") or "").strip().lower(),
+        ]
+    )
+
+
 def merge_state_without_losing_receipts(server_state, incoming_state):
     if not isinstance(server_state, dict):
         server_state = {}
@@ -1789,6 +1861,10 @@ def merge_state_without_losing_receipts(server_state, incoming_state):
         **(server_state.get("mobileAppSettings") if isinstance(server_state.get("mobileAppSettings"), dict) else {}),
         **(incoming_state.get("mobileAppSettings") if isinstance(incoming_state.get("mobileAppSettings"), dict) else {}),
     }
+    merged["deletedTransportRecords"] = merge_deleted_transport_records(
+        server_state.get("deletedTransportRecords"),
+        incoming_state.get("deletedTransportRecords"),
+    )
     if "staffMembers" in incoming_state and isinstance(incoming_state.get("staffMembers"), list):
         incoming_staff = incoming_state.get("staffMembers") or []
         merged["staffMembers"] = (
@@ -1810,6 +1886,66 @@ def merge_state_without_losing_receipts(server_state, incoming_state):
         "studentUserAccounts": ["loginId", "admissionNo"],
     }.items():
         merged[key] = merge_object_lists(server_state.get(key) or [], incoming_state.get(key) or [], fields)
+    merged["transportRoutes"] = merge_object_lists_by_composite_key(
+        server_state.get("transportRoutes") or [],
+        incoming_state.get("transportRoutes") or [],
+        ["routeName"],
+    )
+    merged["transportRoutes"] = [
+        route for route in merged["transportRoutes"]
+        if not merged["deletedTransportRecords"]["routes"].get(str(route.get("routeName") or "").strip().lower())
+    ]
+    merged["transportVehicles"] = merge_object_lists_by_composite_key(
+        server_state.get("transportVehicles") or [],
+        incoming_state.get("transportVehicles") or [],
+        ["vehicleNo"],
+    )
+    merged["transportVehicles"] = [
+        vehicle for vehicle in merged["transportVehicles"]
+        if not merged["deletedTransportRecords"]["vehicles"].get(str(vehicle.get("vehicleNo") or "").strip().lower())
+    ]
+    merged["transportVehicleAssignments"] = merge_object_lists_by_composite_key(
+        server_state.get("transportVehicleAssignments") or [],
+        incoming_state.get("transportVehicleAssignments") or [],
+        ["routeName", "vehicleNo", "shift", "tripShift"],
+    )
+    merged["transportVehicleAssignments"] = [
+        assignment for assignment in merged["transportVehicleAssignments"]
+        if not merged["deletedTransportRecords"]["assignments"].get(transport_assignment_key(assignment))
+        and not merged["deletedTransportRecords"]["routes"].get(str(assignment.get("routeName") or "").strip().lower())
+        and not merged["deletedTransportRecords"]["vehicles"].get(str(assignment.get("vehicleNo") or "").strip().lower())
+    ]
+    merged["transportRoutePickupPoints"] = merge_object_lists_by_composite_key(
+        server_state.get("transportRoutePickupPoints") or [],
+        incoming_state.get("transportRoutePickupPoints") or [],
+        ["villageName", "routeName", "shift", "tripShift"],
+    )
+    merged["transportRoutePickupPoints"] = [
+        point for point in merged["transportRoutePickupPoints"]
+        if not merged["deletedTransportRecords"]["pickupPoints"].get(transport_pickup_point_key(point))
+        and not merged["deletedTransportRecords"]["routes"].get(str(point.get("routeName") or "").strip().lower())
+        and not merged["deletedTransportRecords"]["villages"].get(normalize_lookup(point.get("villageName") or point.get("pickupPoint") or ""))
+    ]
+    merged["transportVillages"] = merge_primitive_lists(
+        server_state.get("transportVillages") or [],
+        incoming_state.get("transportVillages") or [],
+    )
+    merged["transportVillages"] = [
+        village for village in merged["transportVillages"]
+        if not merged["deletedTransportRecords"]["villages"].get(normalize_lookup(village))
+    ]
+    merged["customTransportVillages"] = merge_primitive_lists(
+        server_state.get("customTransportVillages") or [],
+        incoming_state.get("customTransportVillages") or [],
+    )
+    merged["transportVillageDistances"] = {
+        **(server_state.get("transportVillageDistances") if isinstance(server_state.get("transportVillageDistances"), dict) else {}),
+        **(incoming_state.get("transportVillageDistances") if isinstance(incoming_state.get("transportVillageDistances"), dict) else {}),
+    }
+    merged["transportVillageFees"] = merge_transport_village_fees(
+        server_state.get("transportVillageFees") or {},
+        incoming_state.get("transportVillageFees") or {},
+    )
     push_tokens = {}
     for item in [*(server_state.get("mobilePushTokens") or []), *(incoming_state.get("mobilePushTokens") or [])]:
         if not isinstance(item, dict):
@@ -1902,6 +2038,32 @@ def merge_object_lists(server_items, incoming_items, key_fields):
             merged[index_by_key[key]] = {**merged[index_by_key[key]], **item}
             continue
         index_by_key[key or f"row:{len(merged)}"] = len(merged)
+        merged.append(item)
+    return merged
+
+
+def merge_object_lists_by_composite_key(server_items, incoming_items, key_fields):
+    merged = []
+    index_by_key = {}
+
+    def item_key(item):
+        if not isinstance(item, dict):
+            return ""
+        parts = []
+        for field in key_fields:
+            value = str(item.get(field) or "").strip().lower()
+            if value:
+                parts.append(f"{field}:{value}")
+        return "|".join(parts)
+
+    for item in [*(server_items or []), *(incoming_items or [])]:
+        if not isinstance(item, dict):
+            continue
+        key = item_key(item) or json.dumps(item, ensure_ascii=False, sort_keys=True)
+        if key in index_by_key:
+            merged[index_by_key[key]] = {**merged[index_by_key[key]], **item}
+            continue
+        index_by_key[key] = len(merged)
         merged.append(item)
     return merged
 
