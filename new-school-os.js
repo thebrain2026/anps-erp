@@ -8442,7 +8442,7 @@ function renderFinanceSession(includeTables = true) {
   document.getElementById("academicYearText").textContent = `Academic year ${activeSession}`;
   document.getElementById("sessionSummaryText").textContent = session.summary;
   document.getElementById("kpiFeesCollected").textContent = formatRs(dashboardMonthly.collected);
-  document.getElementById("kpiFeesNote").textContent = `${dashboardMonthly.percent}% fee-month collections`;
+  document.getElementById("kpiFeesNote").textContent = `${dashboardMonthly.percent}% payment-date collections`;
   const monthlyBreakdown = document.getElementById("kpiFeesMonthlyBreakdown");
   if (monthlyBreakdown) {
     monthlyBreakdown.innerHTML = dashboardMonthly.monthlyBreakdown.map(item => `
@@ -8467,48 +8467,24 @@ function renderFinanceSession(includeTables = true) {
   renderDueFeesSearch();
 }
 
-function isDashboardMonthlyFeeHead(head = "") {
-  const normalized = normalizePaymentFeeHead(head).toLowerCase();
-  if (!normalized) return false;
-  return [
-    "tuition fee",
-    "transport fees",
-    "day boarding fees",
-    "robotics fees",
-    "tiffin fees",
-    "others fees",
-    "other fees"
-  ].includes(normalized);
-}
-
-function getDashboardPaymentMonth(payment = {}, allocation = {}) {
-  return normalizePaymentMonth(allocation.month || allocation.feeMonth || allocation.fee_month || "");
-}
-
 function getDashboardMonthlyFeeCollectionSummary() {
   const activeStudents = getActiveStudents();
   const expected = activeStudents.reduce((sum, student) => {
     return sum + getStudentFeeItems(student)
-      .filter(item => Array.isArray(item.months) && item.months.length && isDashboardMonthlyFeeHead(item.name))
+      .filter(item => Array.isArray(item.months) && item.months.length)
       .reduce((itemSum, item) => itemSum + Number(item.total || 0), 0);
   }, 0);
-  const sessionPayments = collectedPayments[activeSession] || {};
   const monthlyTotals = ACADEMIC_MONTHS.reduce((totals, month) => {
     totals[month] = 0;
     return totals;
   }, {});
-  const collected = Object.values(sessionPayments).reduce((sum, payments) => {
-    return sum + (payments || []).reduce((paymentSum, payment) => {
-      return paymentSum + getPaymentAllocationsWithFallback(payment).reduce((allocationSum, allocation) => {
-        if (!isDashboardMonthlyFeeHead(allocation.head)) return allocationSum;
-        const amount = Number(allocation.amount || 0);
-        const dashboardMonth = getDashboardPaymentMonth(payment, allocation);
-        if (!dashboardMonth || !Object.prototype.hasOwnProperty.call(monthlyTotals, dashboardMonth)) return allocationSum;
-        monthlyTotals[dashboardMonth] += amount;
-        return allocationSum + amount;
-      }, 0);
-    }, 0);
-  }, 0);
+  getDailyCollectionReportRows().forEach(row => {
+    const collectionDate = parseDateDDMMYYYY(row.date);
+    const month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][collectionDate.getMonth()] || "";
+    if (!Object.prototype.hasOwnProperty.call(monthlyTotals, month)) return;
+    monthlyTotals[month] += Number(row.total || 0);
+  });
+  const collected = Object.values(monthlyTotals).reduce((sum, amount) => sum + Number(amount || 0), 0);
   return {
     expected,
     collected,
