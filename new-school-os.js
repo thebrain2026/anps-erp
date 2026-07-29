@@ -8442,7 +8442,7 @@ function renderFinanceSession(includeTables = true) {
   document.getElementById("academicYearText").textContent = `Academic year ${activeSession}`;
   document.getElementById("sessionSummaryText").textContent = session.summary;
   document.getElementById("kpiFeesCollected").textContent = formatRs(dashboardMonthly.collected);
-  document.getElementById("kpiFeesNote").textContent = `${dashboardMonthly.percent}% monthly fees collected, yearly fees excluded`;
+  document.getElementById("kpiFeesNote").textContent = `${dashboardMonthly.percent}% fee-month collections`;
   const monthlyBreakdown = document.getElementById("kpiFeesMonthlyBreakdown");
   if (monthlyBreakdown) {
     monthlyBreakdown.innerHTML = dashboardMonthly.monthlyBreakdown.map(item => `
@@ -8469,7 +8469,8 @@ function renderFinanceSession(includeTables = true) {
 
 function isDashboardMonthlyFeeHead(head = "") {
   const normalized = normalizePaymentFeeHead(head);
-  return ["Tuition Fee", "Transport Fees"].includes(normalized);
+  if (!normalized) return false;
+  return !["Tuition Late Fine", "Transport Late Fine"].includes(normalized);
 }
 
 function getDashboardPaymentMonth(payment = {}, allocation = {}) {
