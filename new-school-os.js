@@ -8468,22 +8468,12 @@ function renderFinanceSession(includeTables = true) {
 }
 
 function isDashboardMonthlyFeeHead(head = "") {
-  const clean = String(head || "").trim();
-  const normalized = clean.toLowerCase();
-  const yearlyHeads = ["admission fee", "annual fee", "form fee"];
-  if (!clean || yearlyHeads.includes(normalized)) return false;
-  if (["Tuition Late Fine", "Transport Late Fine"].includes(clean)) return false;
-  return true;
+  const normalized = normalizePaymentFeeHead(head);
+  return ["Tuition Fee", "Transport Fees"].includes(normalized);
 }
 
 function getDashboardPaymentMonth(payment = {}, allocation = {}) {
-  const allocationMonth = String(allocation.month || "").trim();
-  if (ACADEMIC_MONTHS.includes(allocationMonth)) return allocationMonth;
-  const dateValue = allocation.date || payment.date;
-  if (!dateValue) return "";
-  const date = parseDateDDMMYYYY(dateValue);
-  const month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][date.getMonth()];
-  return ACADEMIC_MONTHS.includes(month) ? month : "";
+  return normalizePaymentMonth(allocation.month || allocation.feeMonth || allocation.fee_month || "");
 }
 
 function getDashboardMonthlyFeeCollectionSummary() {
@@ -8500,13 +8490,12 @@ function getDashboardMonthlyFeeCollectionSummary() {
   }, {});
   const collected = Object.values(sessionPayments).reduce((sum, payments) => {
     return sum + (payments || []).reduce((paymentSum, payment) => {
-      return paymentSum + (payment.allocations || []).reduce((allocationSum, allocation) => {
+      return paymentSum + getPaymentAllocationsWithFallback(payment).reduce((allocationSum, allocation) => {
         if (!isDashboardMonthlyFeeHead(allocation.head)) return allocationSum;
         const amount = Number(allocation.amount || 0);
         const dashboardMonth = getDashboardPaymentMonth(payment, allocation);
-        if (dashboardMonth && Object.prototype.hasOwnProperty.call(monthlyTotals, dashboardMonth)) {
-          monthlyTotals[dashboardMonth] += amount;
-        }
+        if (!dashboardMonth || !Object.prototype.hasOwnProperty.call(monthlyTotals, dashboardMonth)) return allocationSum;
+        monthlyTotals[dashboardMonth] += amount;
         return allocationSum + amount;
       }, 0);
     }, 0);
