@@ -8468,9 +8468,17 @@ function renderFinanceSession(includeTables = true) {
 }
 
 function isDashboardMonthlyFeeHead(head = "") {
-  const normalized = normalizePaymentFeeHead(head);
+  const normalized = normalizePaymentFeeHead(head).toLowerCase();
   if (!normalized) return false;
-  return !["Tuition Late Fine", "Transport Late Fine"].includes(normalized);
+  return [
+    "tuition fee",
+    "transport fees",
+    "day boarding fees",
+    "robotics fees",
+    "tiffin fees",
+    "others fees",
+    "other fees"
+  ].includes(normalized);
 }
 
 function getDashboardPaymentMonth(payment = {}, allocation = {}) {
