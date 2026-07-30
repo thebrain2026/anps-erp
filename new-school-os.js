@@ -6127,14 +6127,6 @@ function renderAcademicProfileModule() {
   `;
 }
 
-function toDateInputValue(value = new Date()) {
-  const date = parseDateDDMMYYYY(value);
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
 function getHolidayDate(holiday) {
   return parseDateDDMMYYYY(holiday?.date || new Date());
 }
@@ -8442,7 +8434,7 @@ function renderFinanceSession(includeTables = true) {
   document.getElementById("academicYearText").textContent = `Academic year ${activeSession}`;
   document.getElementById("sessionSummaryText").textContent = session.summary;
   document.getElementById("kpiFeesCollected").textContent = formatRs(dashboardMonthly.collected);
-  document.getElementById("kpiFeesNote").textContent = `${dashboardMonthly.percent}% payment-date collections`;
+  document.getElementById("kpiFeesNote").textContent = "Payment-date collections";
   const monthlyBreakdown = document.getElementById("kpiFeesMonthlyBreakdown");
   if (monthlyBreakdown) {
     monthlyBreakdown.innerHTML = dashboardMonthly.monthlyBreakdown.map(item => `
