@@ -219,7 +219,6 @@
             <strong id="kpiFeesCollected">Rs. 0</strong>
             <small id="kpiFeesNote">0% of selected session</small>
             <div class="monthly-fee-breakdown" id="kpiFeesMonthlyBreakdown" aria-label="Monthly fee collection summary"></div>
-            <div class="monthly-fee-details" id="kpiFeesMonthDetails" hidden></div>
           </article>
           <article class="kpi-card due-students-kpi-card">
             <span>Due Students</span>
@@ -3775,6 +3774,19 @@
         </div>
       </header>
       <div id="receiptPreviewBody"></div>
+    </section>
+  </div>
+
+  <div class="modal-backdrop" id="monthlyFeeDetailsModal" aria-hidden="true">
+    <section class="monthly-fee-details-modal" role="dialog" aria-modal="true" aria-labelledby="monthlyFeeDetailsTitle">
+      <header class="modal-head">
+        <div>
+          <p class="eyebrow">Dashboard</p>
+          <h2 id="monthlyFeeDetailsTitle">Monthly Collection Details</h2>
+        </div>
+        <button class="mini" id="closeMonthlyFeeDetails" type="button">Close</button>
+      </header>
+      <div id="monthlyFeeDetailsBody"></div>
     </section>
   </div>
 

@@ -8479,7 +8479,6 @@ function renderFinanceSession(includeTables = true) {
       </button>
     `).join("");
   }
-  renderDashboardFeeMonthDetails(activeDashboardFeeMonth);
   const followUpsKpi = document.getElementById("kpiFollowUps");
   const followUpsNote = document.getElementById("kpiFollowUpsNote");
   if (followUpsKpi) followUpsKpi.textContent = String(dashboardFollowUps.length).padStart(2, "0");
@@ -8576,12 +8575,13 @@ function getDashboardFeeMonthDetails(month = "") {
   return monthTotals;
 }
 
-function renderDashboardFeeMonthDetails(month = "") {
-  const box = document.getElementById("kpiFeesMonthDetails");
-  if (!box) return;
+function openDashboardFeeMonthDetails(month = "") {
+  const modal = document.getElementById("monthlyFeeDetailsModal");
+  const box = document.getElementById("monthlyFeeDetailsBody");
+  const title = document.getElementById("monthlyFeeDetailsTitle");
+  if (!modal || !box) return;
   const selectedMonth = String(month || "").trim();
   if (!selectedMonth) {
-    box.hidden = true;
     box.innerHTML = "";
     return;
   }
@@ -8589,7 +8589,7 @@ function renderDashboardFeeMonthDetails(month = "") {
   const headRows = [...details.heads.entries()]
     .sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0))
     .slice(0, 8);
-  box.hidden = false;
+  if (title) title.textContent = `${selectedMonth} Collection Details`;
   box.innerHTML = `
     <div class="monthly-fee-detail-head">
       <strong>${escapeHtml(selectedMonth)} Collection Details</strong>
@@ -8608,6 +8608,15 @@ function renderDashboardFeeMonthDetails(month = "") {
       ${details.discount > 0 ? `<div class="discount"><span>Discount adjusted</span><strong>${formatRs(details.discount)}</strong></div>` : ""}
     </div>
   `;
+  modal.setAttribute("aria-hidden", "false");
+  document.body.classList.add("modal-open");
+}
+
+function closeDashboardFeeMonthDetails() {
+  const modal = document.getElementById("monthlyFeeDetailsModal");
+  if (!modal) return;
+  modal.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("modal-open");
 }
 
 function formatRs(amount) {
@@ -16414,6 +16423,7 @@ document.getElementById("printReceiptPreview")?.addEventListener("click", printL
 document.getElementById("closeCombinedCollection").addEventListener("click", closeCombinedCollectionPopup);
 document.getElementById("cancelCombinedCollection").addEventListener("click", closeCombinedCollectionPopup);
 document.getElementById("closeComplaintReview")?.addEventListener("click", closeComplaintReviewModal);
+document.getElementById("closeMonthlyFeeDetails")?.addEventListener("click", closeDashboardFeeMonthDetails);
 document.getElementById("acceptComplaintReviewAction")?.addEventListener("click", acceptComplaintReview);
 document.getElementById("cancelComplaintReviewAction")?.addEventListener("click", cancelComplaintReviewWithReason);
 document.getElementById("solveComplaintReviewAction")?.addEventListener("click", solveComplaintReviewWithNote);
@@ -16431,6 +16441,10 @@ combinedCollectionModal.addEventListener("click", event => {
   if (event.target === combinedCollectionModal) closeCombinedCollectionPopup();
 });
 
+document.getElementById("monthlyFeeDetailsModal")?.addEventListener("click", event => {
+  if (event.target === event.currentTarget) closeDashboardFeeMonthDetails();
+});
+
 complaintReviewModal?.addEventListener("click", event => {
   if (event.target === complaintReviewModal) closeComplaintReviewModal();
 });
@@ -16440,6 +16454,7 @@ document.addEventListener("click", event => {
   if (dashboardFeeMonthButton) {
     activeDashboardFeeMonth = dashboardFeeMonthButton.dataset.dashboardFeeMonth || "";
     renderFinanceSession(false);
+    openDashboardFeeMonthDetails(activeDashboardFeeMonth);
     return;
   }
 
@@ -16483,6 +16498,7 @@ document.addEventListener("keydown", event => {
   if (event.key === "Escape" && receiptPreviewModal.getAttribute("aria-hidden") === "false") closeReceiptPreview();
   if (event.key === "Escape" && combinedCollectionModal.getAttribute("aria-hidden") === "false") closeCombinedCollectionPopup();
   if (event.key === "Escape" && complaintReviewModal?.getAttribute("aria-hidden") === "false") closeComplaintReviewModal();
+  if (event.key === "Escape" && document.getElementById("monthlyFeeDetailsModal")?.getAttribute("aria-hidden") === "false") closeDashboardFeeMonthDetails();
   if (event.key === "Escape") closeDatePickerPopover();
 });
 

@@ -1043,7 +1043,17 @@ h2 { font-size: 1.15rem; }
   text-overflow: clip;
 }
 
-.monthly-fee-details {
+.monthly-fee-details-modal {
+  width: min(720px, calc(100vw - 24px));
+  max-height: min(86vh, 720px);
+  overflow: auto;
+  padding: 18px;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 24px 70px rgba(15, 23, 42, .24);
+}
+
+#monthlyFeeDetailsBody {
   display: grid;
   gap: 8px;
   margin-top: 10px;
@@ -1051,10 +1061,6 @@ h2 { font-size: 1.15rem; }
   border: 1px solid rgba(15, 23, 42, .08);
   border-radius: 8px;
   background: #ffffff;
-}
-
-.monthly-fee-details[hidden] {
-  display: none;
 }
 
 .monthly-fee-detail-head {
