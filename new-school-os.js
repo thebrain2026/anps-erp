@@ -14552,7 +14552,10 @@ subjectAssignForm.addEventListener("submit", event => {
 admissionEnquiryForm?.addEventListener("submit", event => {
   event.preventDefault();
   const data = new FormData(admissionEnquiryForm);
+  const previousEnquiry = editingAdmissionEnquiryIndex >= 0 ? admissionEnquiries[editingAdmissionEnquiryIndex] || {} : {};
   const enquiry = {
+    ...previousEnquiry,
+    id: previousEnquiry.id || `enquiry-${Date.now()}`,
     date: formatDateDDMMYYYY(data.get("date") || new Date()),
     studentName: String(data.get("studentName") || "").trim(),
     guardianName: String(data.get("guardianName") || "").trim(),

@@ -1879,6 +1879,8 @@ def merge_state_without_losing_receipts(server_state, incoming_state):
     else:
         merged["staffMembers"] = server_state.get("staffMembers") or []
     for key, fields in {
+        "admissionEnquiries": ["id", "mobile", "studentName"],
+        "complaintRecords": ["id", "complaintNo", "subject"],
         "departments": ["name"],
         "roles": ["name"],
         "designations": ["name"],
