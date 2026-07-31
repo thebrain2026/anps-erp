@@ -1673,18 +1673,55 @@ def payment_merge_key(payment):
     )
 
 
+def allocation_merge_key(allocation):
+    if not isinstance(allocation, dict):
+        return ""
+    return "|".join(
+        [
+            str(allocation.get("head") or "").strip().lower(),
+            str(allocation.get("month") or "").strip().lower(),
+            str(money(allocation.get("amount"))),
+            str(allocation.get("date") or "").strip().lower(),
+            str(allocation.get("paymentType") or "").strip().lower(),
+        ]
+    )
+
+
+def dedupe_payment_allocations(allocations):
+    rows = []
+    seen = set()
+    for allocation in allocations or []:
+        if not isinstance(allocation, dict):
+            continue
+        key = allocation_merge_key(allocation)
+        if key in seen:
+            continue
+        seen.add(key)
+        rows.append(allocation)
+    return rows
+
+
+def normalize_payment_record(payment):
+    if not isinstance(payment, dict):
+        return payment
+    normalized = dict(payment)
+    normalized["allocations"] = dedupe_payment_allocations(payment.get("allocations") or [])
+    return normalized
+
+
 def merge_payment_lists(server_payments, incoming_payments):
     merged = []
     index_by_key = {}
     for payment in list(server_payments or []) + list(incoming_payments or []):
         if not isinstance(payment, dict):
             continue
-        key = payment_merge_key(payment)
+        clean_payment = normalize_payment_record(payment)
+        key = payment_merge_key(clean_payment)
         if key not in index_by_key:
             index_by_key[key] = len(merged)
-            merged.append(dict(payment))
+            merged.append(clean_payment)
             continue
-        merged[index_by_key[key]].update(payment)
+        merged[index_by_key[key]] = normalize_payment_record({**merged[index_by_key[key]], **clean_payment})
     return merged
 
 
@@ -2415,7 +2452,7 @@ def sync_state_tables(conn, state):
                         continue
                     if is_deleted_payment_receipt(deleted_receipts, session, admission_no, receipt_no):
                         continue
-                    allocations = payment.get("allocations") or []
+                    allocations = dedupe_payment_allocations(payment.get("allocations") or [])
                     fine_total = sum(
                         money(item.get("amount"))
                         for item in allocations
@@ -2449,7 +2486,7 @@ def sync_state_tables(conn, state):
                             "fine": fine_total,
                             "net_paid": net_paid,
                             "status": "Paid",
-                            "raw_json": json.dumps({**payment, "session": session}, ensure_ascii=False),
+                            "raw_json": json.dumps({**payment, "allocations": allocations, "session": session}, ensure_ascii=False),
                         },
                     )
                     for allocation in allocations:
@@ -2975,6 +3012,7 @@ def hydrate_collected_payments_from_fee_tables(conn, state):
             )
         if not allocations and raw_payment.get("allocations"):
             allocations = raw_payment.get("allocations") or []
+        allocations = dedupe_payment_allocations(allocations)
         payment = {
             **raw_payment,
             "id": raw_payment.get("id") or f"receipt-{receipt_no}",
@@ -2986,7 +3024,7 @@ def hydrate_collected_payments_from_fee_tables(conn, state):
             "discountAmount": money(raw_payment.get("discountAmount") or row["discount"]),
             "allocations": allocations,
         }
-        hydrated.setdefault(session, {}).setdefault(admission_no, []).append(payment)
+        hydrated.setdefault(session, {}).setdefault(admission_no, []).append(normalize_payment_record(payment))
     if hydrated:
         state["collectedPayments"] = merge_collected_payments(
             state.get("collectedPayments") or {},

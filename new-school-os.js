@@ -731,8 +731,39 @@ function createPaymentId() {
   return `pay-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function getAllocationMergeKey(allocation = {}) {
+  return [
+    String(allocation.head || "").trim().toLowerCase(),
+    String(allocation.month || "").trim().toLowerCase(),
+    Number(allocation.amount || 0),
+    String(allocation.date || "").trim().toLowerCase(),
+    String(allocation.paymentType || "").trim().toLowerCase()
+  ].join("|");
+}
+
+function dedupePaymentAllocations(allocations = []) {
+  const rows = [];
+  const seen = new Set();
+  (Array.isArray(allocations) ? allocations : []).forEach(allocation => {
+    if (!allocation || typeof allocation !== "object") return;
+    const key = getAllocationMergeKey(allocation);
+    if (seen.has(key)) return;
+    seen.add(key);
+    rows.push(allocation);
+  });
+  return rows;
+}
+
+function normalizePaymentRecord(payment = {}) {
+  if (!payment || typeof payment !== "object") return payment;
+  return {
+    ...payment,
+    allocations: dedupePaymentAllocations(payment.allocations || [])
+  };
+}
+
 function getPaymentAllocationSignature(payment = {}) {
-  const allocations = (payment.allocations || []).map(allocation => ({
+  const allocations = dedupePaymentAllocations(payment.allocations || []).map(allocation => ({
     head: String(allocation.head || "").trim(),
     month: String(allocation.month || "").trim(),
     amount: Number(allocation.amount || 0),
@@ -769,13 +800,14 @@ function mergePaymentList(remotePayments = [], localPayments = []) {
   const indexByKey = new Map();
   [...(Array.isArray(remotePayments) ? remotePayments : []), ...(Array.isArray(localPayments) ? localPayments : [])].forEach(payment => {
     if (!payment || typeof payment !== "object") return;
-    const key = getPaymentMergeKey(payment);
+    const cleanPayment = normalizePaymentRecord(payment);
+    const key = getPaymentMergeKey(cleanPayment);
     if (!indexByKey.has(key)) {
       indexByKey.set(key, merged.length);
-      merged.push(payment);
+      merged.push(cleanPayment);
       return;
     }
-    merged[indexByKey.get(key)] = {...merged[indexByKey.get(key)], ...payment};
+    merged[indexByKey.get(key)] = normalizePaymentRecord({...merged[indexByKey.get(key)], ...cleanPayment});
   });
   return merged;
 }
@@ -954,7 +986,9 @@ function pruneDeletedCollectedPayments(targetCollected = collectedPayments, dele
     if (!sessionRows || typeof sessionRows !== "object") return;
     Object.entries(sessionRows).forEach(([admissionNo, payments]) => {
       if (!Array.isArray(payments)) return;
-      sessionRows[admissionNo] = payments.filter(payment => !isPaymentReceiptDeleted(deletedMap, session, admissionNo, payment?.receipt));
+      sessionRows[admissionNo] = payments
+        .filter(payment => !isPaymentReceiptDeleted(deletedMap, session, admissionNo, payment?.receipt))
+        .map(normalizePaymentRecord);
     });
   });
   return targetCollected;
