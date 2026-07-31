@@ -425,6 +425,7 @@ const transportVehicleForm = document.getElementById("transportVehicleForm");
 const transportAssignVehicleForm = document.getElementById("transportAssignVehicleForm");
 const transportRoutePickupForm = document.getElementById("transportRoutePickupForm");
 let activeFilter = "All";
+let activeDashboardFeeMonth = "";
 let editingAdmissionNo = "";
 let editingAdmissionEnquiryIndex = -1;
 let editingComplaintIndex = -1;
@@ -8472,12 +8473,13 @@ function renderFinanceSession(includeTables = true) {
   const monthlyBreakdown = document.getElementById("kpiFeesMonthlyBreakdown");
   if (monthlyBreakdown) {
     monthlyBreakdown.innerHTML = dashboardMonthly.monthlyBreakdown.map(item => `
-      <div class="monthly-fee-pill">
+      <button class="monthly-fee-pill ${activeDashboardFeeMonth === item.month ? "active" : ""}" type="button" data-dashboard-fee-month="${escapeHtml(item.month)}" aria-pressed="${activeDashboardFeeMonth === item.month ? "true" : "false"}">
         <span>${item.month}</span>
         <strong>${Number(item.amount || 0).toLocaleString("en-IN")}</strong>
-      </div>
+      </button>
     `).join("");
   }
+  renderDashboardFeeMonthDetails(activeDashboardFeeMonth);
   const followUpsKpi = document.getElementById("kpiFollowUps");
   const followUpsNote = document.getElementById("kpiFollowUpsNote");
   if (followUpsKpi) followUpsKpi.textContent = String(dashboardFollowUps.length).padStart(2, "0");
@@ -8520,6 +8522,92 @@ function getDashboardMonthlyFeeCollectionSummary() {
       amount: monthlyTotals[month] || 0
     }))
   };
+}
+
+function getDashboardFeeMonthDetails(month = "") {
+  const selectedMonth = String(month || "").trim();
+  const monthTotals = {
+    month: selectedMonth,
+    total: 0,
+    bank: 0,
+    cash: 0,
+    fine: 0,
+    discount: 0,
+    receipts: new Set(),
+    students: new Set(),
+    heads: new Map()
+  };
+  if (!selectedMonth) return monthTotals;
+  const calendarMonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  const sessionPayments = collectedPayments[activeSession] || {};
+  Object.entries(sessionPayments).forEach(([admissionNo, payments]) => {
+    const student = findStudentByAdmissionNo(admissionNo);
+    (payments || []).forEach(payment => {
+      const paymentMonth = calendarMonths[parseDateDDMMYYYY(payment.date).getMonth()] || "";
+      if (paymentMonth !== selectedMonth) return;
+      const allocations = dedupePaymentAllocations(payment.allocations || []);
+      const grossTotal = allocations.length
+        ? allocations.reduce((sum, allocation) => sum + Number(allocation.amount || 0), 0)
+        : Number(payment.amount || 0);
+      const discount = Number(payment.discountAmount || 0);
+      const total = Math.max(grossTotal - discount, 0);
+      const split = getPaymentSplitForAmount(payment, total);
+      const fine = allocations
+        .filter(allocation => ["Tuition Late Fine", "Transport Late Fine"].includes(allocation.head))
+        .reduce((sum, allocation) => sum + Number(allocation.amount || 0), 0);
+      monthTotals.total += total;
+      monthTotals.bank += split.bank;
+      monthTotals.cash += split.cash;
+      monthTotals.fine += fine;
+      monthTotals.discount += discount;
+      if (payment.receipt) monthTotals.receipts.add(String(payment.receipt));
+      if (student?.name || admissionNo) monthTotals.students.add(student?.name || admissionNo);
+      if (!allocations.length) {
+        const fallbackHead = normalizePaymentFeeHead(payment.head || payment.feeHead || payment.fee_head || "Payment");
+        monthTotals.heads.set(fallbackHead, (monthTotals.heads.get(fallbackHead) || 0) + total);
+        return;
+      }
+      allocations.forEach(allocation => {
+        const head = normalizePaymentFeeHead(allocation.head || "Payment");
+        monthTotals.heads.set(head, (monthTotals.heads.get(head) || 0) + Number(allocation.amount || 0));
+      });
+    });
+  });
+  return monthTotals;
+}
+
+function renderDashboardFeeMonthDetails(month = "") {
+  const box = document.getElementById("kpiFeesMonthDetails");
+  if (!box) return;
+  const selectedMonth = String(month || "").trim();
+  if (!selectedMonth) {
+    box.hidden = true;
+    box.innerHTML = "";
+    return;
+  }
+  const details = getDashboardFeeMonthDetails(selectedMonth);
+  const headRows = [...details.heads.entries()]
+    .sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0))
+    .slice(0, 8);
+  box.hidden = false;
+  box.innerHTML = `
+    <div class="monthly-fee-detail-head">
+      <strong>${escapeHtml(selectedMonth)} Collection Details</strong>
+      <span>${details.receipts.size} receipt(s)</span>
+    </div>
+    <div class="monthly-fee-detail-stats">
+      <article><span>Bank</span><b>${formatRs(details.bank)}</b></article>
+      <article><span>Cash</span><b>${formatRs(details.cash)}</b></article>
+      <article><span>Fine</span><b>${formatRs(details.fine)}</b></article>
+      <article><span>Total</span><b>${formatRs(details.total)}</b></article>
+    </div>
+    <div class="monthly-fee-head-list">
+      ${headRows.map(([head, amount]) => `
+        <div><span>${escapeHtml(head)}</span><strong>${formatRs(amount)}</strong></div>
+      `).join("") || `<p>No collection found for ${escapeHtml(selectedMonth)}.</p>`}
+      ${details.discount > 0 ? `<div class="discount"><span>Discount adjusted</span><strong>${formatRs(details.discount)}</strong></div>` : ""}
+    </div>
+  `;
 }
 
 function formatRs(amount) {
@@ -16348,6 +16436,13 @@ complaintReviewModal?.addEventListener("click", event => {
 });
 
 document.addEventListener("click", event => {
+  const dashboardFeeMonthButton = event.target.closest("[data-dashboard-fee-month]");
+  if (dashboardFeeMonthButton) {
+    activeDashboardFeeMonth = dashboardFeeMonthButton.dataset.dashboardFeeMonth || "";
+    renderFinanceSession(false);
+    return;
+  }
+
   const dateButton = event.target.closest("[data-open-combined-date-picker]");
   if (dateButton) {
     const shell = dateButton.closest(".calendar-input-shell");

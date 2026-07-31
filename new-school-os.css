@@ -1008,7 +1008,22 @@ h2 { font-size: 1.15rem; }
   border: 1px solid rgba(245, 158, 11, .28);
   border-radius: 8px;
   background: linear-gradient(180deg, #fffaf0, #ffffff);
+  color: inherit;
+  cursor: pointer;
   overflow: hidden;
+  text-align: left;
+  transition: border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+.monthly-fee-pill:hover,
+.monthly-fee-pill.active {
+  border-color: rgba(245, 158, 11, .72);
+  box-shadow: 0 8px 18px rgba(245, 158, 11, .14);
+  transform: translateY(-1px);
+}
+
+.monthly-fee-pill.active {
+  background: linear-gradient(180deg, #fff3d0, #ffffff);
 }
 
 .kpi-card.fees-kpi .monthly-fee-pill span {
@@ -1026,6 +1041,97 @@ h2 { font-size: 1.15rem; }
   white-space: nowrap;
   overflow: hidden;
   text-overflow: clip;
+}
+
+.monthly-fee-details {
+  display: grid;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid rgba(15, 23, 42, .08);
+  border-radius: 8px;
+  background: #ffffff;
+}
+
+.monthly-fee-details[hidden] {
+  display: none;
+}
+
+.monthly-fee-detail-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.monthly-fee-detail-head strong {
+  color: #111827;
+  font-size: .86rem;
+  font-weight: 950;
+}
+
+.monthly-fee-detail-head span {
+  color: #64748b;
+  font-size: .72rem !important;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.monthly-fee-detail-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.monthly-fee-detail-stats article {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  padding: 7px;
+  border-radius: 7px;
+  background: #f8fafc;
+}
+
+.monthly-fee-detail-stats article span {
+  color: #64748b;
+  font-size: .68rem !important;
+  font-weight: 850;
+}
+
+.monthly-fee-detail-stats article b {
+  color: #0f172a;
+  font-size: .74rem;
+  font-weight: 900;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.monthly-fee-head-list {
+  display: grid;
+  gap: 5px;
+}
+
+.monthly-fee-head-list div,
+.monthly-fee-head-list p {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin: 0;
+  padding: 6px 0;
+  border-top: 1px solid rgba(15, 23, 42, .06);
+  color: #475569;
+  font-size: .74rem;
+  font-weight: 800;
+}
+
+.monthly-fee-head-list div.discount {
+  color: #92400e;
+}
+
+.monthly-fee-head-list strong {
+  color: #111827;
+  white-space: nowrap;
 }
 
 .control-card {
