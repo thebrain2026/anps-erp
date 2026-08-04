@@ -1166,6 +1166,7 @@ function mergeSetupSafeState(backendState = {}, localSnapshot = {}) {
     transportVillageFees: mergeTransportVillageFees(backendState.transportVillageFees || {}, localSnapshot.transportVillageFees || {}),
     transportFineSetup: {...(backendState.transportFineSetup || {}), ...(localSnapshot.transportFineSetup || {})},
     deletedTransportRecords: deletedTransportMap,
+    students: mergeStudentList(backendState.students || [], localSnapshot.students || [], getDeletedStudentMap(backendState.deletedStudents, localSnapshot.deletedStudents)),
     transportRoutes: mergeObjectListByCompositeKey(backendState.transportRoutes || [], localSnapshot.transportRoutes || [], ["routeName"])
       .filter(route => !deletedTransportMap.routes[String(route.routeName || "").trim().toLowerCase()]),
     transportVehicles: mergeObjectListByCompositeKey(backendState.transportVehicles || [], localSnapshot.transportVehicles || [], ["vehicleNo"])
@@ -1202,6 +1203,7 @@ function hasSetupSafeMergeChanges(mergedState = {}, backendState = {}) {
     "transportVillageDistances",
     "transportVillageFees",
     "transportFineSetup",
+    "students",
     "transportRoutes",
     "transportVehicles",
     "transportVehicleAssignments",
