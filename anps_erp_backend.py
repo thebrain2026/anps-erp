@@ -54,6 +54,7 @@ ICICI_ENCRYPTION_KEY = os.environ.get("ANPS_ICICI_ENCRYPTION_KEY", "").strip()
 ICICI_PAYMENT_URL = os.environ.get("ANPS_ICICI_PAYMENT_URL", "").strip()
 ICICI_RETURN_URL = os.environ.get("ANPS_ICICI_RETURN_URL", "").strip()
 ICICI_WEBHOOK_SECRET = os.environ.get("ANPS_ICICI_WEBHOOK_SECRET", "").strip()
+BIOMETRIC_BRIDGE_TOKEN = os.environ.get("ANPS_BIOMETRIC_BRIDGE_TOKEN", "").strip()
 SMART_BUS_TRACKING_BASE_URL = os.environ.get("SMART_BUS_TRACKING_BASE_URL", "").strip().rstrip("/")
 SMART_BUS_TRACKING_DASHBOARD_URL = os.environ.get("SMART_BUS_TRACKING_DASHBOARD_URL", "").strip()
 SMART_BUS_ERP_TOKEN = os.environ.get("SMART_BUS_ERP_TOKEN", "").strip()
@@ -1851,6 +1852,99 @@ def merge_deleted_transport_records(*maps):
     return merged
 
 
+EDITABLE_OBJECT_MERGE_RULES = {
+    "disabledStudents": ["admissionNo", "name"],
+    "staffMembers": ["staffId", "email", "phone", "mobile", "name"],
+    "departments": ["name"],
+    "roles": ["name"],
+    "designations": ["name"],
+    "userAccessAccounts": ["loginId", "id", "username"],
+    "studentUserAccounts": ["loginId", "admissionNo"],
+    "mobileAppActivity": ["loginId", "admissionNo"],
+    "admissionEnquiries": ["id", "mobile", "studentName"],
+    "complaintRecords": ["id", "complaintNo", "subject"],
+    "staffAttendanceRecords": ["id", "staffId", "date"],
+    "syllabusEntries": ["id"],
+    "marksheetEntries": ["id", "studentAdmissionNo", "exam", "subject"],
+    "externalExamFees": ["id", "admissionNo", "examName", "subject"],
+    "holidayReports": ["id", "date", "holidayName"],
+    "notices": ["id", "title"],
+    "teacherNoticeRequests": ["id", "title", "teacherId"],
+    "teacherLeaves": ["id", "teacherId", "from", "to", "type"],
+    "teacherAdvisories": ["id", "teacherId", "subject"],
+    "homeworkDoubts": ["id", "homeworkId", "studentAdmissionNo"],
+}
+
+
+PRIMITIVE_SETUP_LIST_UPDATED_AT = {
+    "customAdmissionClasses": "customAdmissionClassesUpdatedAt",
+    "customAdmissionSections": "customAdmissionSectionsUpdatedAt",
+    "customSubjects": "customSubjectsUpdatedAt",
+}
+
+
+def merge_primitive_setup_list(server_state, incoming_state, key):
+    updated_key = PRIMITIVE_SETUP_LIST_UPDATED_AT.get(key)
+    if updated_key:
+        server_time = record_updated_time({"updatedAt": (server_state or {}).get(updated_key)})
+        incoming_time = record_updated_time({"updatedAt": (incoming_state or {}).get(updated_key)})
+        if server_time or incoming_time:
+            return merge_primitive_lists(
+                [],
+                (incoming_state if incoming_time >= server_time else server_state).get(key) or [],
+            )
+    return merge_primitive_lists(
+        (server_state or {}).get(key) or [],
+        (incoming_state or {}).get(key) or [],
+    )
+
+
+def class_timetable_group_key(entry):
+    if not isinstance(entry, dict):
+        return ""
+    class_section = str(
+        entry.get("classSection")
+        or " ".join(
+            part
+            for part in (
+                str(entry.get("className") or "").strip(),
+                str(entry.get("sectionName") or "").strip(),
+            )
+            if part
+        )
+    ).strip().lower()
+    day = str(entry.get("day") or "").strip().lower()
+    return f"{class_section}|{day}" if class_section or day else ""
+
+
+def merge_class_timetable_entries(server_entries, incoming_entries):
+    groups = {}
+    for source, entries in (("server", server_entries or []), ("incoming", incoming_entries or [])):
+        if not isinstance(entries, list):
+            continue
+        for entry in entries:
+            key = class_timetable_group_key(entry)
+            if not key:
+                continue
+            groups.setdefault(key, {"server": [], "incoming": []})[source].append(entry)
+    merged = []
+    for group in groups.values():
+        server_time = max([record_updated_time(entry) for entry in group["server"]] or [0])
+        incoming_time = max([record_updated_time(entry) for entry in group["incoming"]] or [0])
+        if group["incoming"] and (not group["server"] or incoming_time >= server_time):
+            merged.extend(group["incoming"])
+        else:
+            merged.extend(group["server"])
+    return sorted(
+        merged,
+        key=lambda entry: (
+            str(entry.get("classSection") or ""),
+            str(entry.get("day") or ""),
+            numeric_value(entry.get("period")),
+        ),
+    )
+
+
 def transport_assignment_key(item):
     if not isinstance(item, dict):
         return ""
@@ -1898,33 +1992,36 @@ def merge_state_without_losing_receipts(server_state, incoming_state):
         **(server_state.get("mobileAppSettings") if isinstance(server_state.get("mobileAppSettings"), dict) else {}),
         **(incoming_state.get("mobileAppSettings") if isinstance(incoming_state.get("mobileAppSettings"), dict) else {}),
     }
+    merged["staffBiometricDevice"] = {
+        **(server_state.get("staffBiometricDevice") if isinstance(server_state.get("staffBiometricDevice"), dict) else {}),
+        **(incoming_state.get("staffBiometricDevice") if isinstance(incoming_state.get("staffBiometricDevice"), dict) else {}),
+    }
     merged["deletedTransportRecords"] = merge_deleted_transport_records(
         server_state.get("deletedTransportRecords"),
         incoming_state.get("deletedTransportRecords"),
     )
-    if "staffMembers" in incoming_state and isinstance(incoming_state.get("staffMembers"), list):
-        incoming_staff = incoming_state.get("staffMembers") or []
-        merged["staffMembers"] = (
-            []
-            if not incoming_staff
-            else merge_object_lists(
-                server_state.get("staffMembers") or [],
-                incoming_staff,
-                ["staffId", "email", "phone", "mobile", "name"],
-            )
-        )
-    else:
-        merged["staffMembers"] = server_state.get("staffMembers") or []
-    for key, fields in {
-        "admissionEnquiries": ["id", "mobile", "studentName"],
-        "complaintRecords": ["id", "complaintNo", "subject"],
-        "departments": ["name"],
-        "roles": ["name"],
-        "designations": ["name"],
-        "userAccessAccounts": ["loginId", "id", "username"],
-        "studentUserAccounts": ["loginId", "admissionNo"],
-    }.items():
+    for key, fields in EDITABLE_OBJECT_MERGE_RULES.items():
         merged[key] = merge_object_lists(server_state.get(key) or [], incoming_state.get(key) or [], fields)
+    merged["rolePermissions"] = {
+        **(server_state.get("rolePermissions") if isinstance(server_state.get("rolePermissions"), dict) else {}),
+        **(incoming_state.get("rolePermissions") if isinstance(incoming_state.get("rolePermissions"), dict) else {}),
+    }
+    merged["rolePermissionAudit"] = {
+        **(server_state.get("rolePermissionAudit") if isinstance(server_state.get("rolePermissionAudit"), dict) else {}),
+        **(incoming_state.get("rolePermissionAudit") if isinstance(incoming_state.get("rolePermissionAudit"), dict) else {}),
+    }
+    merged["classTimetableEntries"] = merge_class_timetable_entries(
+        server_state.get("classTimetableEntries") or [],
+        incoming_state.get("classTimetableEntries") or [],
+    )
+    for key, updated_key in PRIMITIVE_SETUP_LIST_UPDATED_AT.items():
+        server_time = record_updated_time({"updatedAt": server_state.get(updated_key)})
+        incoming_time = record_updated_time({"updatedAt": incoming_state.get(updated_key)})
+        merged[key] = merge_primitive_setup_list(server_state, incoming_state, key)
+        if incoming_time >= server_time:
+            merged[updated_key] = incoming_state.get(updated_key) or server_state.get(updated_key) or ""
+        else:
+            merged[updated_key] = server_state.get(updated_key) or incoming_state.get(updated_key) or ""
     merged["transportRoutes"] = merge_object_lists_by_composite_key(
         server_state.get("transportRoutes") or [],
         incoming_state.get("transportRoutes") or [],
@@ -4322,6 +4419,184 @@ def static_file_allowed(path):
     return True
 
 
+def parse_biometric_timestamp(value, fallback_date=""):
+    clean = str(value or "").strip()
+    if not clean:
+        return "", "", None
+    formats = (
+        "%Y-%m-%dT%H:%M:%S%z",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%d %H:%M:%S",
+        "%d-%m-%Y %H:%M:%S",
+        "%d/%m/%Y %H:%M:%S",
+        "%d.%m.%Y %H:%M:%S",
+        "%Y-%m-%d %H:%M",
+        "%d-%m-%Y %H:%M",
+        "%d/%m/%Y %H:%M",
+        "%d.%m.%Y %H:%M",
+    )
+    normalized = clean.replace("Z", "+0000")
+    if re.search(r"[+-]\d\d:\d\d$", normalized):
+        normalized = normalized[:-3] + normalized[-2:]
+    for fmt in formats:
+        try:
+            dt = datetime.strptime(normalized, fmt)
+            return dt.strftime("%d-%m-%Y"), dt.strftime("%H:%M"), dt
+        except ValueError:
+            continue
+    time_match = re.search(r"(\d{1,2}:\d{2})(?::\d{2})?", clean)
+    date = format_date_ddmmyyyy(fallback_date) if fallback_date else ""
+    return date, time_match.group(1) if time_match else "", None
+
+
+def format_date_ddmmyyyy(value):
+    clean = str(value or "").strip()
+    if not clean:
+        return ""
+    for fmt in ("%d-%m-%Y", "%d/%m/%Y", "%d.%m.%Y", "%Y-%m-%d", "%Y/%m/%d"):
+        try:
+            return datetime.strptime(clean, fmt).strftime("%d-%m-%Y")
+        except ValueError:
+            continue
+    return clean
+
+
+def staff_lookup_maps(state):
+    by_staff_id = {}
+    by_biometric_id = {}
+    by_name = {}
+    for staff in state.get("staffMembers", []) or state.get("staff", []) or []:
+        if not isinstance(staff, dict):
+            continue
+        staff_id = str(staff.get("staffId") or staff.get("id") or staff.get("staff_id") or "").strip().lower()
+        biometric_id = str(staff.get("biometricId") or staff.get("biometricUserId") or "").strip().lower()
+        name = str(staff.get("name") or staff.get("staffName") or "").strip().lower()
+        if staff_id:
+            by_staff_id[staff_id] = staff
+        if biometric_id:
+            by_biometric_id[biometric_id] = staff
+        if name:
+            by_name[name] = staff
+    return by_staff_id, by_biometric_id, by_name
+
+
+def find_staff_for_biometric_punch(state, punch):
+    by_staff_id, by_biometric_id, by_name = staff_lookup_maps(state)
+    staff_id = str(punch.get("staffId") or punch.get("staff_id") or "").strip().lower()
+    biometric_id = str(
+        punch.get("biometricId")
+        or punch.get("biometricUserId")
+        or punch.get("userId")
+        or punch.get("userNo")
+        or punch.get("enrollId")
+        or ""
+    ).strip().lower()
+    name = str(punch.get("staffName") or punch.get("name") or "").strip().lower()
+    return by_staff_id.get(staff_id) or by_biometric_id.get(biometric_id) or by_name.get(name) or {}
+
+
+def merge_staff_biometric_punches(state, payload):
+    if not isinstance(state, dict):
+        state = {}
+    punches = payload.get("punches") if isinstance(payload, dict) else []
+    if isinstance(punches, dict):
+        punches = [punches]
+    if not isinstance(punches, list):
+        raise ValueError("punches must be a list")
+    device = payload.get("device") if isinstance(payload.get("device"), dict) else {}
+    device_id = str(device.get("id") or device.get("deviceId") or device.get("ip") or payload.get("deviceId") or "").strip()
+    device_model = str(device.get("model") or payload.get("deviceModel") or "").strip()
+    if device:
+        state["staffBiometricDevice"] = {
+            **(state.get("staffBiometricDevice") if isinstance(state.get("staffBiometricDevice"), dict) else {}),
+            "device": device.get("ip") or device_id,
+            "port": str(device.get("port") or ""),
+            "model": device_model,
+            "note": device.get("note") or "TeamOffice biometric",
+            "source": "Biometric Bridge",
+            "lastSyncAt": datetime.now().isoformat(timespec="seconds"),
+        }
+    records = state.get("staffAttendanceRecords")
+    if not isinstance(records, list):
+        records = []
+        state["staffAttendanceRecords"] = records
+    by_key = {}
+    for index, record in enumerate(records):
+        if not isinstance(record, dict):
+            continue
+        key = (
+            str(record.get("date") or "").strip(),
+            str(record.get("staffId") or record.get("biometricId") or "").strip().lower(),
+        )
+        if key[0] and key[1]:
+            by_key[key] = index
+    imported = 0
+    ignored = 0
+    now = datetime.now().isoformat(timespec="seconds")
+    for punch in punches:
+        if not isinstance(punch, dict):
+            ignored += 1
+            continue
+        raw_date = punch.get("date") or punch.get("attendanceDate") or ""
+        raw_time = punch.get("time") or punch.get("punchTime") or punch.get("inTime") or punch.get("timestamp") or ""
+        date, time_text, parsed_dt = parse_biometric_timestamp(raw_time, raw_date)
+        date = date or format_date_ddmmyyyy(raw_date)
+        if not time_text and punch.get("inTime"):
+            time_text = str(punch.get("inTime") or "").strip()
+        biometric_id = str(
+            punch.get("biometricId")
+            or punch.get("biometricUserId")
+            or punch.get("userId")
+            or punch.get("userNo")
+            or punch.get("enrollId")
+            or ""
+        ).strip()
+        staff = find_staff_for_biometric_punch(state, punch)
+        staff_id = str(staff.get("staffId") or punch.get("staffId") or punch.get("staff_id") or biometric_id).strip()
+        staff_name = str(staff.get("name") or punch.get("staffName") or punch.get("name") or "").strip()
+        if not date or not (staff_id or staff_name or biometric_id):
+            ignored += 1
+            continue
+        key = (date, str(staff_id or biometric_id).lower())
+        base = {
+            "id": f"bio-{date.replace('-', '')}-{re.sub(r'[^A-Za-z0-9]+', '', staff_id or biometric_id)}",
+            "date": date,
+            "staffId": staff.get("staffId") or staff_id,
+            "biometricId": biometric_id,
+            "staffName": staff_name,
+            "department": staff.get("department") or punch.get("department") or "",
+            "designation": staff.get("designation") or punch.get("designation") or "",
+            "deviceId": device_id or str(punch.get("deviceId") or ""),
+            "deviceModel": device_model,
+            "source": "Biometric Bridge",
+            "updatedAt": now,
+            "rawPunch": punch,
+        }
+        index = by_key.get(key)
+        if index is None:
+            record = {**base, "inTime": time_text, "outTime": punch.get("outTime") or "", "status": punch.get("status") or ""}
+            records.insert(0, record)
+            by_key[key] = 0
+            by_key = {item_key: item_index + 1 for item_key, item_index in by_key.items() if item_key != key}
+            by_key[key] = 0
+        else:
+            record = records[index]
+            record.update({key_name: value for key_name, value in base.items() if value not in ("", None)})
+            current_in = str(record.get("inTime") or "").strip()
+            current_out = str(record.get("outTime") or "").strip()
+            if time_text:
+                if not current_in or time_text < current_in:
+                    record["inTime"] = time_text
+                if not current_out or time_text > current_out:
+                    record["outTime"] = time_text
+            if punch.get("outTime"):
+                record["outTime"] = str(punch.get("outTime") or "").strip()
+            if punch.get("status"):
+                record["status"] = punch.get("status")
+        imported += 1
+    return {"state": state, "imported": imported, "ignored": ignored}
+
+
 class SchoolERPHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
@@ -4338,7 +4613,7 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
         elif "*" in ALLOWED_ORIGINS:
             self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Biometric-Bridge-Token")
         self.send_header("Access-Control-Max-Age", "600")
         self.send_header("X-Content-Type-Options", "nosniff")
         self.send_header("X-Frame-Options", "SAMEORIGIN")
@@ -4376,6 +4651,12 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             return True
         self.json_response({"ok": False, "error": "Unauthorized"}, status=401)
         return False
+
+    def biometric_bridge_authorized(self):
+        supplied = self.headers.get("X-Biometric-Bridge-Token", "").strip()
+        if BIOMETRIC_BRIDGE_TOKEN and supplied and hmac.compare_digest(supplied, BIOMETRIC_BRIDGE_TOKEN):
+            return True
+        return self.authorized(write=True)
 
     def do_GET(self):
         parsed = urlparse(self.path)
@@ -4538,6 +4819,8 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             return self.login_request()
         if path == "/api/payments/icici/callback":
             return self.icici_payment_callback_request()
+        if path == "/api/staff-biometric/punches":
+            return self.staff_biometric_punch_request()
         if not self.authorized(write=True):
             return
         if path == "/api/backup":
@@ -4609,6 +4892,29 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
                 state = merge_state_without_losing_receipts(current_record.get("state") or {}, state)
             updated_at = write_state(state)
             self.json_response({"ok": True, "updated_at": updated_at, "state": state})
+        except Exception as exc:
+            self.json_response({"ok": False, "error": str(exc)}, status=400)
+
+    def staff_biometric_punch_request(self):
+        if not self.biometric_bridge_authorized():
+            return
+        length = int(self.headers.get("Content-Length") or "0")
+        if length > MAX_BODY:
+            self.send_error(413, "Request body too large")
+            return
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+            record = read_state_record() or {"state": {}}
+            state = record.get("state") or {}
+            result = merge_staff_biometric_punches(state, payload)
+            updated_at = write_state(result["state"])
+            return self.json_response({
+                "ok": True,
+                "imported": result["imported"],
+                "ignored": result["ignored"],
+                "updated_at": updated_at,
+                "staffAttendanceRecords": len(result["state"].get("staffAttendanceRecords") or []),
+            })
         except Exception as exc:
             self.json_response({"ok": False, "error": str(exc)}, status=400)
 

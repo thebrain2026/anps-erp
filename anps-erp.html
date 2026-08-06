@@ -1155,6 +1155,9 @@
               <label>Staff ID
                 <input name="staffId" placeholder="ANPS-STF-001" readonly required />
               </label>
+              <label>Biometric User ID
+                <input name="biometricId" placeholder="Machine user no" />
+              </label>
               <label>Staff Name
                 <input name="name" placeholder="Full name" required />
               </label>
@@ -1240,10 +1243,13 @@
                 <input id="staffAttendanceDate" type="text" placeholder="DD-MM-YYYY" />
               </label>
               <label>Device ID / IP
-                <input id="staffAttendanceDevice" placeholder="Biometric device ID or IP" />
+                <input id="staffAttendanceDevice" placeholder="192.168.16.174" />
               </label>
               <label>Device Model
-                <input id="staffAttendanceDeviceModel" placeholder="Team Office TM230F(W)" />
+                <input id="staffAttendanceDeviceModel" placeholder="TeamOffice TM23C01(W)" />
+              </label>
+              <label>Device Port
+                <input id="staffAttendanceDevicePort" placeholder="5005" />
               </label>
               <label>Device Note
                 <input id="staffAttendanceDeviceNote" placeholder="Office biometric / main gate" />
@@ -1278,7 +1284,7 @@
               </div>
             </div>
             <div class="receipt">
-              CSV/API format ready: Staff ID, Staff Name, Date, In Time, Out Time, Device ID. Later biometric machine software/API connect korle ei page-e auto data show korbe.
+              Device reachable: 192.168.16.174:5005. Local bridge/API punch sync ready for staff attendance. Staff-er biometric user ID Staff Details-e map kore deben.
             </div>
           </section>
         </div>

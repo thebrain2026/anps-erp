@@ -53,8 +53,9 @@ const transportVehicles = [];
 const transportVehicleAssignments = [];
 const transportRoutePickupPoints = [];
 const staffBiometricDevice = {
-  device: "",
-  model: "",
+  device: "192.168.16.174",
+  model: "TeamOffice TM23C01(W)",
+  port: "5005",
   note: "",
   source: "CSV Import"
 };
@@ -275,6 +276,9 @@ const transportFineSetup = {...DEFAULT_TRANSPORT_FINE_SETUP};
 const customAdmissionClasses = [];
 const customAdmissionSections = [];
 const customSubjects = [];
+let customAdmissionClassesUpdatedAt = "";
+let customAdmissionSectionsUpdatedAt = "";
+let customSubjectsUpdatedAt = "";
 const classSubjectAssignments = {};
 
 const titleMap = {
@@ -512,8 +516,11 @@ function getAppStateSnapshot() {
     holidayReports,
     staffBiometricDevice,
     customAdmissionClasses,
+    customAdmissionClassesUpdatedAt,
     customAdmissionSections,
+    customAdmissionSectionsUpdatedAt,
     customSubjects,
+    customSubjectsUpdatedAt,
     classSubjectAssignments,
     classSectionMasterInitialized,
     tuitionFineSetup,
@@ -1074,6 +1081,87 @@ function mergeClassSubjectAssignments(remoteAssignments = {}, localAssignments =
   return merged;
 }
 
+const PRIMITIVE_SETUP_LIST_UPDATED_AT = {
+  customAdmissionClasses: "customAdmissionClassesUpdatedAt",
+  customAdmissionSections: "customAdmissionSectionsUpdatedAt",
+  customSubjects: "customSubjectsUpdatedAt"
+};
+
+function mergePrimitiveSetupList(remoteState = {}, localState = {}, key = "") {
+  const updatedKey = PRIMITIVE_SETUP_LIST_UPDATED_AT[key];
+  if (updatedKey) {
+    const remoteTime = getRecordUpdatedTime({updatedAt: remoteState[updatedKey]});
+    const localTime = getRecordUpdatedTime({updatedAt: localState[updatedKey]});
+    if (remoteTime || localTime) {
+      return localTime >= remoteTime
+        ? mergePrimitiveList([], localState[key] || [])
+        : mergePrimitiveList([], remoteState[key] || []);
+    }
+  }
+  return mergePrimitiveList(remoteState[key] || [], localState[key] || []);
+}
+
+const EDITABLE_OBJECT_MERGE_RULES = {
+  disabledStudents: ["admissionNo", "name"],
+  staffMembers: ["staffId", "email", "phone", "name"],
+  departments: ["name"],
+  roles: ["name"],
+  designations: ["name"],
+  userAccessAccounts: ["loginId", "id", "username"],
+  studentUserAccounts: ["loginId", "admissionNo"],
+  mobileAppActivity: ["loginId", "admissionNo"],
+  admissionEnquiries: ["id", "mobile", "studentName"],
+  complaintRecords: ["id", "complaintNo", "subject"],
+  staffAttendanceRecords: ["id", "staffId", "date"],
+  syllabusEntries: ["id"],
+  marksheetEntries: ["id", "studentAdmissionNo", "exam", "subject"],
+  externalExamFees: ["id", "admissionNo", "examName", "subject"],
+  holidayReports: ["id", "date", "holidayName"],
+  notices: ["id", "title"],
+  teacherNoticeRequests: ["id", "title", "teacherId"],
+  teacherLeaves: ["id", "teacherId", "from", "to", "type"],
+  teacherAdvisories: ["id", "teacherId", "subject"],
+  homeworkDoubts: ["id", "homeworkId", "studentAdmissionNo"]
+};
+
+function mergeEditableObjectLists(remoteState = {}, localState = {}) {
+  return Object.fromEntries(Object.entries(EDITABLE_OBJECT_MERGE_RULES).map(([key, fields]) => [
+    key,
+    mergeObjectListByKey(remoteState[key] || [], localState[key] || [], fields)
+  ]));
+}
+
+function mergeClassTimetableEntries(remoteEntries = [], localEntries = []) {
+  const remoteList = Array.isArray(remoteEntries) ? remoteEntries : [];
+  const localList = Array.isArray(localEntries) ? localEntries : [];
+  const groups = new Map();
+  const groupKey = entry => [
+    String(entry?.classSection || `${entry?.className || ""} ${entry?.sectionName || ""}`.trim()).trim().toLowerCase(),
+    String(entry?.day || "").trim().toLowerCase()
+  ].join("|");
+  const addGroup = (entry, source) => {
+    if (!entry || typeof entry !== "object") return;
+    const key = groupKey(entry);
+    if (!key || key === "|") return;
+    if (!groups.has(key)) groups.set(key, {remote: [], local: []});
+    groups.get(key)[source].push(entry);
+  };
+  remoteList.forEach(entry => addGroup(entry, "remote"));
+  localList.forEach(entry => addGroup(entry, "local"));
+  const merged = [];
+  groups.forEach(group => {
+    const remoteTime = Math.max(0, ...group.remote.map(getRecordUpdatedTime));
+    const localTime = Math.max(0, ...group.local.map(getRecordUpdatedTime));
+    if (group.local.length && (!group.remote.length || localTime >= remoteTime)) merged.push(...group.local);
+    else merged.push(...group.remote);
+  });
+  return merged.sort((a, b) =>
+    String(a.classSection || "").localeCompare(String(b.classSection || ""), undefined, {numeric: true}) ||
+    String(a.day || "").localeCompare(String(b.day || ""), undefined, {numeric: true}) ||
+    Number(a.period || 0) - Number(b.period || 0)
+  );
+}
+
 function mergeStateSnapshots(remoteState = {}, localState = {}) {
   const merged = {...remoteState, ...localState};
   merged.deletedStudents = getDeletedStudentMap(remoteState.deletedStudents, localState.deletedStudents);
@@ -1086,34 +1174,15 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
     "customTransportVillages"
   ];
   primitiveKeys.forEach(key => {
-    merged[key] = mergePrimitiveList(remoteState[key] || [], localState[key] || []);
+    merged[key] = mergePrimitiveSetupList(remoteState, localState, key);
   });
-  const objectRules = {
-    disabledStudents: ["admissionNo", "name"],
-    staffMembers: ["staffId", "email", "phone", "name"],
-    departments: ["name"],
-    roles: ["name"],
-    designations: ["name"],
-    userAccessAccounts: ["loginId", "id", "username"],
-    studentUserAccounts: ["loginId", "admissionNo"],
-    mobileAppActivity: ["loginId", "admissionNo"],
-    admissionEnquiries: ["id", "mobile", "studentName"],
-    complaintRecords: ["id", "complaintNo", "subject"],
-    staffAttendanceRecords: ["id", "staffId", "date"],
-    syllabusEntries: ["id"],
-    marksheetEntries: ["id", "studentAdmissionNo", "exam", "subject"],
-    externalExamFees: ["id", "admissionNo", "examName", "subject"],
-    holidayReports: ["id", "date", "holidayName"],
-    notices: ["id", "title"],
-    teacherNoticeRequests: ["id", "title", "teacherId"],
-    teacherLeaves: ["id", "teacherId", "from", "to", "type"],
-    teacherAdvisories: ["id", "teacherId", "subject"],
-    homeworkDoubts: ["id", "homeworkId", "studentAdmissionNo"]
-  };
+  Object.values(PRIMITIVE_SETUP_LIST_UPDATED_AT).forEach(key => {
+    merged[key] = getRecordUpdatedTime({updatedAt: localState[key]}) >= getRecordUpdatedTime({updatedAt: remoteState[key]})
+      ? localState[key] || remoteState[key] || ""
+      : remoteState[key] || localState[key] || "";
+  });
   merged.students = mergeStudentList(remoteState.students || [], localState.students || [], merged.deletedStudents);
-  Object.entries(objectRules).forEach(([key, fields]) => {
-    merged[key] = mergeObjectListByKey(remoteState[key] || [], localState[key] || [], fields);
-  });
+  Object.assign(merged, mergeEditableObjectLists(remoteState, localState));
   merged.transportRoutes = mergeObjectListByCompositeKey(remoteState.transportRoutes || [], localState.transportRoutes || [], ["routeName"])
     .filter(route => !merged.deletedTransportRecords.routes[String(route.routeName || "").trim().toLowerCase()]);
   merged.transportVehicles = mergeObjectListByCompositeKey(remoteState.transportVehicles || [], localState.transportVehicles || [], ["vehicleNo"])
@@ -1140,10 +1209,9 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
   merged.transportVillageFees = mergeTransportVillageFees(remoteState.transportVillageFees || {}, localState.transportVillageFees || {});
   merged.rolePermissions = {...(remoteState.rolePermissions || {}), ...(localState.rolePermissions || {})};
   merged.rolePermissionAudit = {...(remoteState.rolePermissionAudit || {}), ...(localState.rolePermissionAudit || {})};
+  merged.staffBiometricDevice = {...(remoteState.staffBiometricDevice || {}), ...(localState.staffBiometricDevice || {})};
   merged.classSubjectAssignments = mergeClassSubjectAssignments(remoteState.classSubjectAssignments || {}, localState.classSubjectAssignments || {});
-  merged.classTimetableEntries = Array.isArray(remoteState.classTimetableEntries)
-    ? remoteState.classTimetableEntries
-    : [];
+  merged.classTimetableEntries = mergeClassTimetableEntries(remoteState.classTimetableEntries, localState.classTimetableEntries);
   merged.deletedPaymentReceipts = getDeletedPaymentReceiptMap(remoteState.deletedPaymentReceipts, localState.deletedPaymentReceipts);
   merged.collectedPayments = mergeCollectedPayments(remoteState.collectedPayments || {}, localState.collectedPayments || {}, merged.deletedPaymentReceipts);
   merged.financeSessions = mergeFinanceSessions(remoteState.financeSessions || {}, localState.financeSessions || {});
@@ -1155,9 +1223,18 @@ function mergeSetupSafeState(backendState = {}, localSnapshot = {}) {
   const deletedTransportMap = mergeDeletedTransportRecords(backendState.deletedTransportRecords, localSnapshot.deletedTransportRecords);
   return {
     ...backendState,
-    customAdmissionClasses: mergePrimitiveList(backendState.customAdmissionClasses || [], localSnapshot.customAdmissionClasses || []),
-    customAdmissionSections: mergePrimitiveList(backendState.customAdmissionSections || [], localSnapshot.customAdmissionSections || []),
-    customSubjects: mergePrimitiveList(backendState.customSubjects || [], localSnapshot.customSubjects || []),
+    customAdmissionClasses: mergePrimitiveSetupList(backendState, localSnapshot, "customAdmissionClasses"),
+    customAdmissionClassesUpdatedAt: getRecordUpdatedTime({updatedAt: localSnapshot.customAdmissionClassesUpdatedAt}) >= getRecordUpdatedTime({updatedAt: backendState.customAdmissionClassesUpdatedAt})
+      ? localSnapshot.customAdmissionClassesUpdatedAt || backendState.customAdmissionClassesUpdatedAt || ""
+      : backendState.customAdmissionClassesUpdatedAt || localSnapshot.customAdmissionClassesUpdatedAt || "",
+    customAdmissionSections: mergePrimitiveSetupList(backendState, localSnapshot, "customAdmissionSections"),
+    customAdmissionSectionsUpdatedAt: getRecordUpdatedTime({updatedAt: localSnapshot.customAdmissionSectionsUpdatedAt}) >= getRecordUpdatedTime({updatedAt: backendState.customAdmissionSectionsUpdatedAt})
+      ? localSnapshot.customAdmissionSectionsUpdatedAt || backendState.customAdmissionSectionsUpdatedAt || ""
+      : backendState.customAdmissionSectionsUpdatedAt || localSnapshot.customAdmissionSectionsUpdatedAt || "",
+    customSubjects: mergePrimitiveSetupList(backendState, localSnapshot, "customSubjects"),
+    customSubjectsUpdatedAt: getRecordUpdatedTime({updatedAt: localSnapshot.customSubjectsUpdatedAt}) >= getRecordUpdatedTime({updatedAt: backendState.customSubjectsUpdatedAt})
+      ? localSnapshot.customSubjectsUpdatedAt || backendState.customSubjectsUpdatedAt || ""
+      : backendState.customSubjectsUpdatedAt || localSnapshot.customSubjectsUpdatedAt || "",
     classSectionMasterInitialized: backendState.classSectionMasterInitialized === true || localSnapshot.classSectionMasterInitialized === true,
     classSubjectAssignments: mergeClassSubjectAssignments(backendState.classSubjectAssignments || {}, localSnapshot.classSubjectAssignments || {}),
     transportVillages: mergePrimitiveList(backendState.transportVillages || [], localSnapshot.transportVillages || []),
@@ -1167,6 +1244,11 @@ function mergeSetupSafeState(backendState = {}, localSnapshot = {}) {
     transportFineSetup: {...(backendState.transportFineSetup || {}), ...(localSnapshot.transportFineSetup || {})},
     deletedTransportRecords: deletedTransportMap,
     students: mergeStudentList(backendState.students || [], localSnapshot.students || [], getDeletedStudentMap(backendState.deletedStudents, localSnapshot.deletedStudents)),
+    ...mergeEditableObjectLists(backendState, localSnapshot),
+    classTimetableEntries: mergeClassTimetableEntries(backendState.classTimetableEntries, localSnapshot.classTimetableEntries),
+    rolePermissions: {...(backendState.rolePermissions || {}), ...(localSnapshot.rolePermissions || {})},
+    rolePermissionAudit: {...(backendState.rolePermissionAudit || {}), ...(localSnapshot.rolePermissionAudit || {})},
+    staffBiometricDevice: {...(backendState.staffBiometricDevice || {}), ...(localSnapshot.staffBiometricDevice || {})},
     transportRoutes: mergeObjectListByCompositeKey(backendState.transportRoutes || [], localSnapshot.transportRoutes || [], ["routeName"])
       .filter(route => !deletedTransportMap.routes[String(route.routeName || "").trim().toLowerCase()]),
     transportVehicles: mergeObjectListByCompositeKey(backendState.transportVehicles || [], localSnapshot.transportVehicles || [], ["vehicleNo"])
@@ -1183,7 +1265,6 @@ function mergeSetupSafeState(backendState = {}, localSnapshot = {}) {
         !deletedTransportMap.routes[String(point.routeName || "").trim().toLowerCase()] &&
         !deletedTransportMap.villages[normalizeVillageName(point.villageName || point.pickupPoint || "")]
       ),
-    studentUserAccounts: mergeObjectListByKey(backendState.studentUserAccounts || [], localSnapshot.studentUserAccounts || [], ["loginId", "admissionNo"]),
     financeSessions: mergeFinanceSessions(backendState.financeSessions || {}, localSnapshot.financeSessions || {}),
     deletedPaymentReceipts: deletedMap,
     collectedPayments: mergeCollectedPayments(backendState.collectedPayments || {}, localSnapshot.collectedPayments || {}, deletedMap),
@@ -1196,6 +1277,7 @@ function hasSetupSafeMergeChanges(mergedState = {}, backendState = {}) {
     "customAdmissionClasses",
     "customAdmissionSections",
     "customSubjects",
+    ...Object.values(PRIMITIVE_SETUP_LIST_UPDATED_AT),
     "classSectionMasterInitialized",
     "classSubjectAssignments",
     "transportVillages",
@@ -1203,12 +1285,16 @@ function hasSetupSafeMergeChanges(mergedState = {}, backendState = {}) {
     "transportVillageDistances",
     "transportVillageFees",
     "transportFineSetup",
+    "staffBiometricDevice",
     "students",
+    ...Object.keys(EDITABLE_OBJECT_MERGE_RULES),
+    "classTimetableEntries",
+    "rolePermissions",
+    "rolePermissionAudit",
     "transportRoutes",
     "transportVehicles",
     "transportVehicleAssignments",
     "transportRoutePickupPoints",
-    "studentUserAccounts",
     "financeSessions",
     "deletedPaymentReceipts",
     "collectedPayments",
@@ -1617,12 +1703,15 @@ function applySavedState(saved = {}) {
     if (Array.isArray(saved.customAdmissionClasses)) {
       customAdmissionClasses.splice(0, customAdmissionClasses.length, ...saved.customAdmissionClasses.filter(Boolean));
     }
+    customAdmissionClassesUpdatedAt = saved.customAdmissionClassesUpdatedAt || customAdmissionClassesUpdatedAt || "";
     if (Array.isArray(saved.customAdmissionSections)) {
       customAdmissionSections.splice(0, customAdmissionSections.length, ...saved.customAdmissionSections.filter(Boolean));
     }
+    customAdmissionSectionsUpdatedAt = saved.customAdmissionSectionsUpdatedAt || customAdmissionSectionsUpdatedAt || "";
     if (Array.isArray(saved.customSubjects)) {
       customSubjects.splice(0, customSubjects.length, ...saved.customSubjects.filter(Boolean));
     }
+    customSubjectsUpdatedAt = saved.customSubjectsUpdatedAt || customSubjectsUpdatedAt || "";
     if (saved.classSubjectAssignments && typeof saved.classSubjectAssignments === "object") {
       Object.keys(classSubjectAssignments).forEach(className => delete classSubjectAssignments[className]);
       Object.entries(saved.classSubjectAssignments).forEach(([className, subjects]) => {
@@ -1766,8 +1855,9 @@ function applyProductionCleanSeedOnce() {
   receiptSerial = 1;
   currentAdmissionPhoto = "";
   currentStaffPhoto = "";
-  staffBiometricDevice.device = "";
-  staffBiometricDevice.model = "";
+  staffBiometricDevice.device = "192.168.16.174";
+  staffBiometricDevice.model = "TeamOffice TM23C01(W)";
+  staffBiometricDevice.port = "5005";
   staffBiometricDevice.note = "";
   staffBiometricDevice.source = "CSV Import";
   customAdmissionClasses.splice(0, customAdmissionClasses.length, ...DEFAULT_ADMISSION_CLASSES);
@@ -5121,12 +5211,16 @@ function importStaffAttendanceFile(file) {
     };
     let imported = 0;
     rows.slice(1).forEach(row => {
-      const staffId = getCell(row, ["staffid", "employeeid", "empid", "userid", "id"]);
+      const biometricId = getCell(row, ["biometricid", "biometricuserid", "userid", "userno", "enrollid", "employeeid", "empid", "id"]);
+      const staffId = getCell(row, ["staffid", "staffcode", "employeecode"]) || biometricId;
       const staffName = getCell(row, ["staffname", "employeename", "name"]);
-      const staff = getStaffByIdOrName(staffId, staffName);
+      const staff = getStaffByIdOrName(staffId, staffName) || getStaffByIdOrName(biometricId, staffName);
+      const date = formatDateDDMMYYYY(getCell(row, ["date", "attendancedate"]) || document.getElementById("staffAttendanceDate")?.value || formatDateDDMMYYYY(new Date()));
       const record = {
-        date: formatDateDDMMYYYY(getCell(row, ["date", "attendancedate"]) || document.getElementById("staffAttendanceDate")?.value || formatDateDDMMYYYY(new Date())),
-        staffId: staffId || staff?.staffId || "",
+        id: getCell(row, ["recordid", "attendanceid"]) || `bio-${date.replace(/\D/g, "")}-${String(staff?.staffId || staffId || biometricId || "").replace(/[^a-z0-9]/gi, "")}`,
+        date,
+        staffId: staff?.staffId || staffId || "",
+        biometricId,
         staffName: staffName || staff?.name || "",
         department: staff?.department || getCell(row, ["department", "dept"]),
         designation: staff?.designation || getCell(row, ["designation", "post"]),
@@ -5137,8 +5231,11 @@ function importStaffAttendanceFile(file) {
       };
       if (!record.staffId && !record.staffName) return;
       const existingIndex = staffAttendanceRecords.findIndex(item =>
-        item.date === record.date
-        && String(item.staffId || "").toLowerCase() === String(record.staffId || "").toLowerCase()
+        item.id === record.id
+        || (
+          item.date === record.date
+          && String(item.staffId || item.biometricId || "").toLowerCase() === String(record.staffId || record.biometricId || "").toLowerCase()
+        )
       );
       if (existingIndex >= 0) staffAttendanceRecords[existingIndex] = {...staffAttendanceRecords[existingIndex], ...record};
       else staffAttendanceRecords.unshift(record);
@@ -7116,7 +7213,7 @@ function renderStaffDetails() {
   if (!rows) return;
   rows.innerHTML = staffMembers.map(staff => `
     <tr>
-      <td><strong>${escapeHtml(staff.staffId || "-")}</strong></td>
+      <td><strong>${escapeHtml(staff.staffId || "-")}</strong>${staff.biometricId ? `<br><small>Bio: ${escapeHtml(staff.biometricId)}</small>` : ""}</td>
       <td>
         <div class="staff-table-profile">
           <span class="staff-table-photo">${staff.photo ? `<img src="${staff.photo}" alt="${escapeHtml(staff.name || "Staff")} photo" />` : escapeHtml((staff.name || "ST").split(/\s+/).map(part => part[0]).join("").slice(0, 2).toUpperCase() || "ST")}</span>
@@ -7884,6 +7981,7 @@ function getStaffByIdOrName(staffId = "", staffName = "") {
   const cleanId = String(staffId || "").trim().toLowerCase();
   const cleanName = String(staffName || "").trim().toLowerCase();
   return staffMembers.find(staff => String(staff.staffId || "").trim().toLowerCase() === cleanId)
+    || staffMembers.find(staff => String(staff.biometricId || staff.biometricUserId || "").trim().toLowerCase() === cleanId)
     || staffMembers.find(staff => String(staff.name || "").trim().toLowerCase() === cleanName)
     || null;
 }
@@ -7919,7 +8017,7 @@ function renderStaffAttendance() {
     return `
       <tr>
         <td>${escapeHtml(record.date || "-")}</td>
-        <td>${escapeHtml(record.staffId || staff?.staffId || "-")}</td>
+        <td>${escapeHtml(record.staffId || staff?.staffId || record.biometricId || "-")}</td>
         <td><strong>${escapeHtml(record.staffName || staff?.name || "-")}</strong></td>
         <td>${escapeHtml(record.department || staff?.department || "-")}</td>
         <td>${escapeHtml(record.designation || staff?.designation || "-")}</td>
@@ -7969,17 +8067,20 @@ function renderLeaveApprovalRequests() {
 function renderStaffBiometricDevice() {
   const device = document.getElementById("staffAttendanceDevice");
   const model = document.getElementById("staffAttendanceDeviceModel");
+  const port = document.getElementById("staffAttendanceDevicePort");
   const note = document.getElementById("staffAttendanceDeviceNote");
   const source = document.getElementById("staffAttendanceSource");
-  if (device) device.value = staffBiometricDevice.device || "";
-  if (model) model.value = staffBiometricDevice.model || "";
+  if (device) device.value = staffBiometricDevice.device || "192.168.16.174";
+  if (model) model.value = staffBiometricDevice.model || "TeamOffice TM23C01(W)";
+  if (port) port.value = staffBiometricDevice.port || "5005";
   if (note) note.value = staffBiometricDevice.note || "";
   if (source) source.value = staffBiometricDevice.source || "CSV Import";
 }
 
 function saveStaffBiometricDevice() {
-  staffBiometricDevice.device = document.getElementById("staffAttendanceDevice")?.value || "";
-  staffBiometricDevice.model = document.getElementById("staffAttendanceDeviceModel")?.value || "";
+  staffBiometricDevice.device = document.getElementById("staffAttendanceDevice")?.value || "192.168.16.174";
+  staffBiometricDevice.model = document.getElementById("staffAttendanceDeviceModel")?.value || "TeamOffice TM23C01(W)";
+  staffBiometricDevice.port = document.getElementById("staffAttendanceDevicePort")?.value || "5005";
   staffBiometricDevice.note = document.getElementById("staffAttendanceDeviceNote")?.value || "";
   staffBiometricDevice.source = document.getElementById("staffAttendanceSource")?.value || "CSV Import";
   saveAppState();
@@ -14598,6 +14699,7 @@ classSetupForm.addEventListener("submit", event => {
     customAdmissionClasses.push(className);
   }
   customAdmissionClasses.sort((a, b) => a.localeCompare(b, undefined, {numeric: true}));
+  customAdmissionClassesUpdatedAt = new Date().toISOString();
   if (!saveAppState()) return;
   renderClassSectionSetup();
   renderAdmissionClassOptions();
@@ -14629,6 +14731,7 @@ sectionSetupForm.addEventListener("submit", event => {
     customAdmissionSections.push(sectionName);
   }
   customAdmissionSections.sort((a, b) => a.localeCompare(b, undefined, {numeric: true}));
+  customAdmissionSectionsUpdatedAt = new Date().toISOString();
   if (!saveAppState()) return;
   renderClassSectionSetup();
   renderAdmissionSectionOptions();
@@ -14656,6 +14759,7 @@ subjectSetupForm.addEventListener("submit", event => {
     customSubjects.push(subjectName);
   }
   customSubjects.sort((a, b) => a.localeCompare(b, undefined, {numeric: true}));
+  customSubjectsUpdatedAt = new Date().toISOString();
   if (!saveAppState()) return;
   renderClassSectionSetup();
   renderClassTimetableOptions();
@@ -15265,6 +15369,7 @@ staffDetailsForm.addEventListener("submit", event => {
   const data = new FormData(staffDetailsForm);
   const staff = {
     staffId: String(data.get("staffId") || "").trim(),
+    biometricId: String(data.get("biometricId") || "").trim(),
     name: String(data.get("name") || "").trim(),
     role: String(data.get("role") || "").trim(),
     designation: String(data.get("designation") || "").trim(),
@@ -15283,6 +15388,7 @@ staffDetailsForm.addEventListener("submit", event => {
   const existingIndex = staffMembers.findIndex(item => item.staffId.toLowerCase() === staff.staffId.toLowerCase());
   const existingStaff = existingIndex >= 0 ? staffMembers[existingIndex] : {};
   staff.status = existingStaff.status || "Active";
+  staff.biometricId = staff.biometricId || existingStaff.biometricId || "";
   staff.assignedClass = existingStaff.assignedClass || "";
   staff.assignedClassName = existingStaff.assignedClassName || "";
   staff.assignedSection = existingStaff.assignedSection || "";
@@ -16046,8 +16152,8 @@ document.getElementById("approveAllPendingLeaves")?.addEventListener("click", ()
   showToast(`${pending.length} leave request approved.`);
 });
 
-["staffAttendanceDevice", "staffAttendanceDeviceModel", "staffAttendanceDeviceNote", "staffAttendanceSource"].forEach(id => {
-  document.getElementById(id).addEventListener("input", saveStaffBiometricDevice);
+["staffAttendanceDevice", "staffAttendanceDeviceModel", "staffAttendanceDevicePort", "staffAttendanceDeviceNote", "staffAttendanceSource"].forEach(id => {
+  document.getElementById(id)?.addEventListener("input", saveStaffBiometricDevice);
 });
 
 document.getElementById("staffBiometricSyncBtn").addEventListener("click", () => {
@@ -17053,6 +17159,7 @@ document.body.addEventListener("click", event => {
     const staff = staffMembers.find(item => item.staffId === editStaff.dataset.editStaff);
     if (staff) {
       staffDetailsForm.elements.staffId.value = staff.staffId || "";
+      if (staffDetailsForm.elements.biometricId) staffDetailsForm.elements.biometricId.value = staff.biometricId || staff.biometricUserId || "";
       staffDetailsForm.elements.name.value = staff.name || "";
       setSelectValue(staffDetailsForm.elements.role, staff.role || "");
       setSelectValue(staffDetailsForm.elements.designation, staff.designation || "");
