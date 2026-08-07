@@ -43,6 +43,8 @@ const mobileAppSettings = {
 const rolePermissions = {};
 const rolePermissionAudit = {};
 const staffAttendanceRecords = [];
+const STAFF_ATTENDANCE_RENDER_LIMIT = 250;
+const STAFF_ATTENDANCE_STORAGE_LIMIT = 6000;
 const classTimetableEntries = [];
 const syllabusEntries = [];
 const marksheetEntries = [];
@@ -476,6 +478,7 @@ function getPersistableTimetableEntries() {
 }
 
 function getAppStateSnapshot() {
+  sanitizeStaffAttendanceRecords();
   return {
     students,
     financeSessions,
@@ -1656,6 +1659,7 @@ function applySavedState(saved = {}) {
     designations.sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")));
     if (Array.isArray(saved.staffAttendanceRecords)) {
       staffAttendanceRecords.splice(0, staffAttendanceRecords.length, ...saved.staffAttendanceRecords);
+      sanitizeStaffAttendanceRecords();
     }
     if (Array.isArray(saved.classTimetableEntries)) {
       classTimetableEntries.splice(
@@ -5218,17 +5222,61 @@ function getTeamOfficeBlockValue(row = [], label) {
   return index >= 0 ? String(row[index + 2] || row[index + 1] || "").trim() : "";
 }
 
+function getStaffAttendanceSortValue(date = "") {
+  const match = String(date || "").match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  return match ? `${match[3]}${match[2]}${match[1]}` : String(date || "");
+}
+
+function getStaffAttendanceRecordKey(record = {}) {
+  const staffKey = record.staffId || record.biometricId || record.staffName || "";
+  return `${record.date || ""}|${staffKey}`.toLowerCase();
+}
+
+function normalizeStaffAttendanceRecord(record = {}) {
+  const date = formatTeamOfficeAttendanceDate(record.date || "");
+  if (!/^\d{2}-\d{2}-\d{4}$/.test(date)) return null;
+  const staffId = String(record.staffId || "").trim().slice(0, 40);
+  const biometricId = String(record.biometricId || "").trim().slice(0, 40);
+  const staffName = String(record.staffName || "").trim().slice(0, 90);
+  if (!staffId && !biometricId && !staffName) return null;
+  const staff = getStaffByIdOrName(staffId || biometricId, staffName);
+  return {
+    id: String(record.id || `bio-${date.replace(/\D/g, "")}-${String(staff?.staffId || staffId || biometricId || staffName).replace(/[^a-z0-9]/gi, "")}`).slice(0, 80),
+    date,
+    staffId: staff?.staffId || staffId || biometricId || "",
+    biometricId,
+    staffName: staff?.name || staffName || "",
+    department: String(record.department || staff?.department || "").trim().slice(0, 80),
+    designation: String(record.designation || staff?.designation || "").trim().slice(0, 80),
+    inTime: cleanStaffPunchTime(record.inTime).slice(0, 12),
+    outTime: cleanStaffPunchTime(record.outTime).slice(0, 12),
+    deviceId: String(record.deviceId || "").trim().slice(0, 60),
+    status: String(record.status || "").trim().slice(0, 20)
+  };
+}
+
+function sanitizeStaffAttendanceRecords(limit = STAFF_ATTENDANCE_STORAGE_LIMIT) {
+  const merged = new Map();
+  staffAttendanceRecords.forEach(record => {
+    const normalized = normalizeStaffAttendanceRecord(record);
+    if (!normalized) return;
+    const key = getStaffAttendanceRecordKey(normalized);
+    merged.set(key, {...(merged.get(key) || {}), ...normalized});
+  });
+  const cleaned = [...merged.values()]
+    .sort((a, b) => getStaffAttendanceSortValue(b.date).localeCompare(getStaffAttendanceSortValue(a.date)))
+    .slice(0, limit);
+  staffAttendanceRecords.splice(0, staffAttendanceRecords.length, ...cleaned);
+}
+
 function mergeStaffAttendanceRecord(record) {
-  if (!record || (!record.staffId && !record.staffName && !record.biometricId)) return false;
+  const normalized = normalizeStaffAttendanceRecord(record);
+  if (!normalized) return false;
   const existingIndex = staffAttendanceRecords.findIndex(item =>
-    item.id === record.id
-    || (
-      item.date === record.date
-      && String(item.staffId || item.biometricId || "").toLowerCase() === String(record.staffId || record.biometricId || "").toLowerCase()
-    )
+    item.id === normalized.id || getStaffAttendanceRecordKey(item) === getStaffAttendanceRecordKey(normalized)
   );
-  if (existingIndex >= 0) staffAttendanceRecords[existingIndex] = {...staffAttendanceRecords[existingIndex], ...record};
-  else staffAttendanceRecords.unshift(record);
+  if (existingIndex >= 0) staffAttendanceRecords[existingIndex] = {...staffAttendanceRecords[existingIndex], ...normalized};
+  else staffAttendanceRecords.unshift(normalized);
   return true;
 }
 
@@ -8082,9 +8130,14 @@ function renderStaffAttendance() {
   const visibleRecords = selectedDate
     ? staffAttendanceRecords.filter(record => record.date === selectedDate)
     : staffAttendanceRecords;
-  const present = visibleRecords.filter(record => getStaffAttendanceStatus(record) === "Present").length;
-  const late = visibleRecords.filter(record => getStaffAttendanceStatus(record) === "Late").length;
-  const absent = visibleRecords.filter(record => getStaffAttendanceStatus(record) === "Absent").length;
+  const summary = visibleRecords.reduce((total, record) => {
+    const status = getStaffAttendanceStatus(record);
+    total[status] = (total[status] || 0) + 1;
+    return total;
+  }, {});
+  const present = summary.Present || 0;
+  const late = summary.Late || 0;
+  const absent = summary.Absent || 0;
   const presentCount = document.getElementById("staffPresentCount");
   const lateCount = document.getElementById("staffLateCount");
   const absentCount = document.getElementById("staffAbsentCount");
@@ -8093,7 +8146,11 @@ function renderStaffAttendance() {
   if (lateCount) lateCount.textContent = late;
   if (absentCount) absentCount.textContent = absent;
   if (totalCount) totalCount.textContent = visibleRecords.length;
-  rows.innerHTML = visibleRecords.map(record => {
+  const limitedRecords = visibleRecords.slice(0, STAFF_ATTENDANCE_RENDER_LIMIT);
+  const moreRow = visibleRecords.length > limitedRecords.length
+    ? `<tr><td colspan="9">Showing latest ${limitedRecords.length} of ${visibleRecords.length} records. Select a date to view that day's entries faster.</td></tr>`
+    : "";
+  rows.innerHTML = limitedRecords.map(record => {
     const staff = getStaffByIdOrName(record.staffId, record.staffName);
     const status = getStaffAttendanceStatus(record);
     return `
@@ -8109,7 +8166,7 @@ function renderStaffAttendance() {
         <td><span class="badge ${status === "Absent" ? "red" : status === "Late" ? "amber" : "green"}">${escapeHtml(status)}</span></td>
       </tr>
     `;
-  }).join("") || `<tr><td colspan="9">No biometric staff attendance imported yet.</td></tr>`;
+  }).join("") + moreRow || `<tr><td colspan="9">No biometric staff attendance imported yet.</td></tr>`;
 }
 
 function renderLeaveApprovalRequests() {
