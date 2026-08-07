@@ -4597,6 +4597,27 @@ def merge_staff_biometric_punches(state, payload):
     return {"state": state, "imported": imported, "ignored": ignored}
 
 
+def clear_staff_attendance_records(state, date_text=""):
+    if not isinstance(state, dict):
+        state = {}
+    records = state.get("staffAttendanceRecords")
+    if not isinstance(records, list):
+        state["staffAttendanceRecords"] = []
+        return {"state": state, "removed": 0, "remaining": 0}
+    clean_date = format_date_ddmmyyyy(date_text) if date_text else ""
+    if clean_date:
+        remaining = [
+            record for record in records
+            if not isinstance(record, dict) or str(record.get("date") or "").strip() != clean_date
+        ]
+    else:
+        remaining = []
+    removed = len(records) - len(remaining)
+    state["staffAttendanceRecords"] = remaining
+    state["staffAttendanceClearedAt"] = datetime.now().isoformat(timespec="seconds")
+    return {"state": state, "removed": removed, "remaining": len(remaining), "date": clean_date}
+
+
 class SchoolERPHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
@@ -4825,6 +4846,8 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             return
         if path == "/api/backup":
             return self.json_response(backup_state("manual"))
+        if path == "/api/staff-attendance/clear":
+            return self.clear_staff_attendance_request()
         if path == "/api/clear-backups":
             return self.json_response({"ok": True, **clear_state_backups()})
         if path == "/api/reset-data":
@@ -4892,6 +4915,25 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
                 state = merge_state_without_losing_receipts(current_record.get("state") or {}, state)
             updated_at = write_state(state)
             self.json_response({"ok": True, "updated_at": updated_at, "state": state})
+        except Exception as exc:
+            self.json_response({"ok": False, "error": str(exc)}, status=400)
+
+    def clear_staff_attendance_request(self):
+        length = int(self.headers.get("Content-Length") or "0")
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}") if length else {}
+            date_text = str(payload.get("date") or "").strip() if isinstance(payload, dict) else ""
+            record = read_state_record() or {"state": {}}
+            result = clear_staff_attendance_records(record.get("state") or {}, date_text)
+            updated_at = write_state(result["state"])
+            self.json_response({
+                "ok": True,
+                "updated_at": updated_at,
+                "removed": result["removed"],
+                "remaining": result["remaining"],
+                "date": result.get("date") or "",
+                "state": result["state"],
+            })
         except Exception as exc:
             self.json_response({"ok": False, "error": str(exc)}, status=400)
 

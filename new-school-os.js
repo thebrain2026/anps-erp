@@ -8244,6 +8244,38 @@ function saveStaffBiometricDevice() {
   saveAppState();
 }
 
+async function clearStaffAttendanceRecords(scope = "all") {
+  const dateInput = document.getElementById("staffAttendanceDate");
+  const selectedDate = formatTeamOfficeAttendanceDate(dateInput?.value || "");
+  const useDate = scope === "date" && /^\d{2}-\d{2}-\d{4}$/.test(selectedDate);
+  if (scope === "date" && !useDate) {
+    showToast("Date select kore tarpor Clear Date chapun.", "warning", 4000);
+    return;
+  }
+  const message = useDate
+    ? `${selectedDate} date-er staff attendance delete korben? Fees/student data delete hobe na.`
+    : "Sob imported staff attendance delete korben? Fees/student data delete hobe na.";
+  if (!window.confirm(message)) return;
+  try {
+    const response = await backendFetch("/api/staff-attendance/clear", {
+      method: "POST",
+      headers: backendHeaders({"Content-Type": "application/json"}),
+      body: JSON.stringify({date: useDate ? selectedDate : ""})
+    }, 20000);
+    const result = await response.json();
+    if (!response.ok || !result.ok) throw new Error(result.error || `Clear failed ${response.status}`);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(result.state || getAppStateSnapshot()));
+    applySavedState(result.state || {});
+    backendLastUpdatedAt = result.updated_at || backendLastUpdatedAt;
+    renderStaffAttendance();
+    updateTopbarSystemStatus();
+    showToast(`${Number(result.removed || 0).toLocaleString("en-IN")} staff attendance record deleted.`);
+  } catch (error) {
+    console.warn("Staff attendance clear failed.", error);
+    showToast("Attendance delete holo na. Server connection check korun.", "error", 6000);
+  }
+}
+
 function getNextStaffId() {
   const maxSerial = staffMembers.reduce((max, staff) => {
     const match = String(staff.staffId || "").match(/(\d+)$/);
@@ -16318,6 +16350,9 @@ document.getElementById("staffBiometricSyncBtn").addEventListener("click", () =>
   saveStaffBiometricDevice();
   showToast("Biometric API connection provision ready. Data will sync after connecting the device software or API.");
 });
+
+document.getElementById("clearStaffAttendanceDateBtn")?.addEventListener("click", () => clearStaffAttendanceRecords("date"));
+document.getElementById("clearStaffAttendanceAllBtn")?.addEventListener("click", () => clearStaffAttendanceRecords("all"));
 
 document.getElementById("classSectionReportBtn").addEventListener("click", () => {
   renderClassSectionReport();
