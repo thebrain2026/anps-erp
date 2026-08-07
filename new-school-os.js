@@ -46,6 +46,7 @@ const staffAttendanceRecords = [];
 const STAFF_ATTENDANCE_RENDER_LIMIT = 250;
 const STAFF_ATTENDANCE_STORAGE_LIMIT = 6000;
 let dashboardRenderTimer = null;
+let viewRenderTimer = null;
 const classTimetableEntries = [];
 const syllabusEntries = [];
 const marksheetEntries = [];
@@ -2275,10 +2276,13 @@ function renderActiveView(viewName = document.querySelector(".view.active")?.id 
     renderFeeMasterClassOptions();
   }
   if (viewName === "finance") {
-    renderFinanceSession(true);
+    renderFinanceSession(false);
     renderStudentFeeCounter();
-    renderFeeBookStudentOptions();
-    renderFeeBook(activeLedgerAdmissionNo || activeFeeStudentAdmissionNo);
+    setTimeout(() => {
+      if (document.querySelector(".view.active")?.id !== "finance") return;
+      renderFeeBookStudentOptions();
+      renderFeeBook(activeLedgerAdmissionNo || activeFeeStudentAdmissionNo);
+    }, 80);
   }
   if (viewName === "feeBook") {
     renderFeeBookStudentOptions();
@@ -2355,7 +2359,9 @@ function setView(viewName, options = {}) {
   views.forEach(view => view.classList.toggle("active", view.id === viewName));
   navButtons.forEach(button => button.classList.toggle("active", button.dataset.view === viewName));
   pageTitle.textContent = titleMap[viewName] || "Dashboard";
-  renderActiveView(viewName);
+  const renderSelectedView = () => {
+    if (document.querySelector(".view.active")?.id !== viewName) return;
+    renderActiveView(viewName);
   if (viewName === "admissionEnquiry") {
     renderAdmissionEnquiryModule();
   }
@@ -2443,6 +2449,10 @@ function setView(viewName, options = {}) {
   if (viewName === "smartBusTracking") {
     renderSmartBusTracking();
   }
+  };
+  clearTimeout(viewRenderTimer);
+  if (options.immediateRender) renderSelectedView();
+  else viewRenderTimer = setTimeout(renderSelectedView, 0);
   document.body.classList.remove("nav-open");
 }
 
