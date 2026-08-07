@@ -45,6 +45,7 @@ const rolePermissionAudit = {};
 const staffAttendanceRecords = [];
 const STAFF_ATTENDANCE_RENDER_LIMIT = 250;
 const STAFF_ATTENDANCE_STORAGE_LIMIT = 6000;
+let dashboardRenderTimer = null;
 const classTimetableEntries = [];
 const syllabusEntries = [];
 const marksheetEntries = [];
@@ -2238,14 +2239,28 @@ function updateTopbarSystemStatus() {
   }
 }
 
-function renderDashboardOnly() {
-  renderBars();
+function renderDashboardHeavyParts() {
   renderDailyCashTrendChart();
-  renderTasks();
   renderModules();
   renderSessions();
   renderFinanceSession(false);
   updateTopbarSystemStatus();
+}
+
+function scheduleDashboardHeavyRender() {
+  clearTimeout(dashboardRenderTimer);
+  dashboardRenderTimer = setTimeout(() => {
+    if (document.querySelector(".view.active")?.id !== "dashboard") return;
+    renderDashboardHeavyParts();
+  }, 50);
+}
+
+function renderDashboardOnly(options = {}) {
+  renderBars();
+  renderTasks();
+  updateTopbarSystemStatus();
+  if (options.immediate) renderDashboardHeavyParts();
+  else scheduleDashboardHeavyRender();
 }
 
 function renderActiveView(viewName = document.querySelector(".view.active")?.id || "dashboard") {
@@ -5239,6 +5254,10 @@ function normalizeStaffAttendanceRecord(record = {}) {
   const biometricId = String(record.biometricId || "").trim().slice(0, 40);
   const staffName = String(record.staffName || "").trim().slice(0, 90);
   if (!staffId && !biometricId && !staffName) return null;
+  const inTime = cleanStaffPunchTime(record.inTime).slice(0, 12);
+  const outTime = cleanStaffPunchTime(record.outTime).slice(0, 12);
+  const status = String(record.status || "").trim().slice(0, 20);
+  if (!inTime && !outTime && !status) return null;
   const staff = getStaffByIdOrName(staffId || biometricId, staffName);
   return {
     id: String(record.id || `bio-${date.replace(/\D/g, "")}-${String(staff?.staffId || staffId || biometricId || staffName).replace(/[^a-z0-9]/gi, "")}`).slice(0, 80),
@@ -5248,10 +5267,10 @@ function normalizeStaffAttendanceRecord(record = {}) {
     staffName: staff?.name || staffName || "",
     department: String(record.department || staff?.department || "").trim().slice(0, 80),
     designation: String(record.designation || staff?.designation || "").trim().slice(0, 80),
-    inTime: cleanStaffPunchTime(record.inTime).slice(0, 12),
-    outTime: cleanStaffPunchTime(record.outTime).slice(0, 12),
+    inTime,
+    outTime,
     deviceId: String(record.deviceId || "").trim().slice(0, 60),
-    status: String(record.status || "").trim().slice(0, 20)
+    status
   };
 }
 
