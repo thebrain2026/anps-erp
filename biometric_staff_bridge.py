@@ -37,9 +37,72 @@ def first_value(row, names):
     return ""
 
 
+def clean_punch_time(value):
+    clean = str(value or "").strip()
+    return clean if clean and clean != "--:--" else ""
+
+
+def teamoffice_block_value(row, label):
+    target = normalize_header(label)
+    keys = [normalize_header(cell) for cell in row]
+    if target not in keys:
+        return ""
+    index = keys.index(target)
+    for value in row[index + 1:index + 4]:
+        if str(value or "").strip():
+            return str(value).strip()
+    return ""
+
+
+def load_teamoffice_monthly_csv(rows):
+    punches = []
+    current = {}
+    header = []
+    for row in rows:
+        first = normalize_header(row[0] if row else "")
+        if first == "empcode":
+            current = {
+                "biometricId": teamoffice_block_value(row, "Empcode"),
+                "staffName": teamoffice_block_value(row, "Name"),
+            }
+            header = []
+            continue
+        if first == "date":
+            header = [normalize_header(cell) for cell in row]
+            continue
+        if not current or not header or not row or not row[0].strip():
+            continue
+        if "/" not in row[0] and "-" not in row[0] and "." not in row[0]:
+            continue
+        def by_header(name):
+            key = normalize_header(name)
+            if key not in header:
+                return ""
+            index = header.index(key)
+            return clean_punch_time(row[index] if index < len(row) else "")
+        in_time = by_header("IN")
+        out_time = clean_punch_time(row[-1] if row else "") or by_header("Out")
+        if not in_time and not out_time:
+            continue
+        punches.append({
+            "biometricId": current.get("biometricId", ""),
+            "staffName": current.get("staffName", ""),
+            "date": row[0].strip(),
+            "inTime": in_time,
+            "outTime": out_time,
+        })
+    return punches
+
+
 def load_csv_punches(path):
     with Path(path).open("r", encoding="utf-8-sig", newline="") as handle:
-        reader = csv.DictReader(handle)
+        raw_rows = list(csv.reader(handle))
+        if any(row and normalize_header(row[0]) == "empcode" for row in raw_rows):
+            return load_teamoffice_monthly_csv(raw_rows)
+        if not raw_rows:
+            return []
+        headers = raw_rows[0]
+        reader = [dict(zip(headers, row)) for row in raw_rows[1:]]
         punches = []
         for row in reader:
             date = first_value(row, ["date", "attendance date", "punch date"])

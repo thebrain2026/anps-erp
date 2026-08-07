@@ -5194,6 +5194,91 @@ function normalizeStaffAttendanceHeader(header = "") {
   return String(header || "").trim().toLowerCase().replace(/[\s_-]+/g, "");
 }
 
+function cleanStaffPunchTime(value = "") {
+  const clean = String(value || "").trim();
+  return clean && clean !== "--:--" ? clean : "";
+}
+
+function formatTeamOfficeAttendanceDate(value = "") {
+  const clean = String(value || "").trim();
+  const match = clean.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);
+  if (!match) return formatDateDDMMYYYY(clean);
+  const [, day, month, year] = match;
+  return `${day.padStart(2, "0")}-${month.padStart(2, "0")}-${year}`;
+}
+
+function isTeamOfficeMonthlyReport(rows = []) {
+  return rows.some(row => normalizeStaffAttendanceHeader(row[0]) === "empcode")
+    && rows.some(row => normalizeStaffAttendanceHeader(row[0]) === "date" && normalizeStaffAttendanceHeader(row[3]) === "in");
+}
+
+function getTeamOfficeBlockValue(row = [], label) {
+  const target = normalizeStaffAttendanceHeader(label);
+  const index = row.findIndex(cell => normalizeStaffAttendanceHeader(cell) === target);
+  return index >= 0 ? String(row[index + 2] || row[index + 1] || "").trim() : "";
+}
+
+function mergeStaffAttendanceRecord(record) {
+  if (!record || (!record.staffId && !record.staffName && !record.biometricId)) return false;
+  const existingIndex = staffAttendanceRecords.findIndex(item =>
+    item.id === record.id
+    || (
+      item.date === record.date
+      && String(item.staffId || item.biometricId || "").toLowerCase() === String(record.staffId || record.biometricId || "").toLowerCase()
+    )
+  );
+  if (existingIndex >= 0) staffAttendanceRecords[existingIndex] = {...staffAttendanceRecords[existingIndex], ...record};
+  else staffAttendanceRecords.unshift(record);
+  return true;
+}
+
+function importTeamOfficeMonthlyAttendanceRows(rows = []) {
+  let imported = 0;
+  let currentStaff = null;
+  let header = [];
+  rows.forEach(row => {
+    const first = normalizeStaffAttendanceHeader(row[0]);
+    if (first === "empcode") {
+      const biometricId = getTeamOfficeBlockValue(row, "Empcode");
+      const staffName = getTeamOfficeBlockValue(row, "Name");
+      const staff = getStaffByIdOrName(biometricId, staffName);
+      currentStaff = {biometricId, staffName, staff};
+      header = [];
+      return;
+    }
+    if (first === "date") {
+      header = row.map(normalizeStaffAttendanceHeader);
+      return;
+    }
+    if (!currentStaff || !header.length || !/^\d{1,2}[\/.-]\d{1,2}[\/.-]\d{4}$/.test(String(row[0] || "").trim())) return;
+    const getByHeader = name => {
+      const index = header.findIndex(item => item === normalizeStaffAttendanceHeader(name));
+      return index >= 0 ? cleanStaffPunchTime(row[index]) : "";
+    };
+    const date = formatTeamOfficeAttendanceDate(row[0]);
+    const inTime = cleanStaffPunchTime(getByHeader("IN"));
+    const outTime = cleanStaffPunchTime(row[row.length - 1]) || getByHeader("Out") || getByHeader("Out8") || getByHeader("Out7") || getByHeader("Out6") || getByHeader("Out5") || getByHeader("Out4") || getByHeader("Out3") || getByHeader("Out2") || getByHeader("Out1");
+    if (!inTime && !outTime) return;
+    const staff = currentStaff.staff || getStaffByIdOrName(currentStaff.biometricId, currentStaff.staffName);
+    const staffKey = staff?.staffId || currentStaff.biometricId || currentStaff.staffName || "";
+    const record = {
+      id: `bio-${date.replace(/\D/g, "")}-${String(staffKey).replace(/[^a-z0-9]/gi, "")}`,
+      date,
+      staffId: staff?.staffId || currentStaff.biometricId || "",
+      biometricId: currentStaff.biometricId || "",
+      staffName: staff?.name || currentStaff.staffName || "",
+      department: staff?.department || "",
+      designation: staff?.designation || "",
+      inTime,
+      outTime,
+      deviceId: staffBiometricDevice.device || "192.168.16.174",
+      status: ""
+    };
+    if (mergeStaffAttendanceRecord(record)) imported += 1;
+  });
+  return imported;
+}
+
 function importStaffAttendanceFile(file) {
   if (!file) return;
   saveStaffBiometricDevice();
@@ -5202,6 +5287,13 @@ function importStaffAttendanceFile(file) {
     const rows = parseCsvRows(String(reader.result || ""));
     if (rows.length < 2) {
       showToast("No biometric attendance rows found.");
+      return;
+    }
+    if (isTeamOfficeMonthlyReport(rows)) {
+      const imported = importTeamOfficeMonthlyAttendanceRows(rows);
+      saveAppState();
+      renderStaffAttendance();
+      showToast(`${imported} TeamOffice biometric attendance rows imported.`);
       return;
     }
     const headers = rows[0].map(normalizeStaffAttendanceHeader);
@@ -5229,17 +5321,7 @@ function importStaffAttendanceFile(file) {
         deviceId: getCell(row, ["deviceid", "device", "machineid"]) || staffBiometricDevice.device || "",
         status: getCell(row, ["status", "attendancestatus"])
       };
-      if (!record.staffId && !record.staffName) return;
-      const existingIndex = staffAttendanceRecords.findIndex(item =>
-        item.id === record.id
-        || (
-          item.date === record.date
-          && String(item.staffId || item.biometricId || "").toLowerCase() === String(record.staffId || record.biometricId || "").toLowerCase()
-        )
-      );
-      if (existingIndex >= 0) staffAttendanceRecords[existingIndex] = {...staffAttendanceRecords[existingIndex], ...record};
-      else staffAttendanceRecords.unshift(record);
-      imported += 1;
+      if (mergeStaffAttendanceRecord(record)) imported += 1;
     });
     saveAppState();
     renderStaffAttendance();
