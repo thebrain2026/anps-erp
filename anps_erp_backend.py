@@ -2886,7 +2886,7 @@ def sync_state_tables(conn, state):
             item,
             {
                 "login_id": str(login_id),
-                "full_name": item.get("name") or item.get("fullName") or "",
+                "full_name": item.get("staffName") or item.get("name") or item.get("fullName") or "",
                 "role_name": item.get("role") or item.get("roleName") or "",
                 "account_type": "staff",
                 "linked_id": item.get("staffId") or "",
@@ -3087,6 +3087,10 @@ def hydrate_state_from_normalized_tables(conn, state):
         persist_restored_staff_members(conn, state["staffMembers"])
     if not state.get("studentUserAccounts"):
         state["studentUserAccounts"] = hydrate_student_user_accounts_from_user_table(conn)
+    if not state.get("userAccessAccounts"):
+        state["userAccessAccounts"] = hydrate_staff_user_accounts_from_user_table(conn)
+    if not state.get("rolePermissions"):
+        state["rolePermissions"] = hydrate_role_permissions_from_table(conn)
     state = hydrate_collected_payments_from_fee_tables(conn, state)
     return ensure_state_school(state)
 
@@ -3197,6 +3201,60 @@ def hydrate_student_user_accounts_from_user_table(conn):
             "status": item.get("status") or row["status"] or "Active",
         })
     return accounts
+
+
+def hydrate_staff_user_accounts_from_user_table(conn):
+    try:
+        rows = conn.execute(
+            """
+            SELECT * FROM user_accounts
+            WHERE account_type = 'staff'
+            ORDER BY full_name COLLATE NOCASE, login_id COLLATE NOCASE
+            """
+        ).fetchall()
+    except sqlite3.Error:
+        return []
+    accounts = []
+    for row in rows:
+        try:
+            item = json.loads(row["raw_json"] or "{}")
+        except (TypeError, json.JSONDecodeError):
+            item = {}
+        if not isinstance(item, dict):
+            item = {}
+        accounts.append({
+            **item,
+            "loginId": item.get("loginId") or item.get("id") or item.get("username") or row["login_id"],
+            "staffId": item.get("staffId") or row["linked_id"] or "",
+            "staffName": item.get("staffName") or item.get("name") or row["full_name"] or "",
+            "role": item.get("role") or item.get("roleName") or row["role_name"] or "",
+            "status": item.get("status") or row["status"] or "Active",
+        })
+    return accounts
+
+
+def hydrate_role_permissions_from_table(conn):
+    try:
+        rows = conn.execute(
+            """
+            SELECT role_name, permissions
+            FROM role_permissions
+            ORDER BY role_name COLLATE NOCASE
+            """
+        ).fetchall()
+    except sqlite3.Error:
+        return {}
+    hydrated = {}
+    for row in rows:
+        role_name = str(row["role_name"] or "").strip()
+        if not role_name:
+            continue
+        try:
+            permissions = json.loads(row["permissions"] or "{}")
+        except (TypeError, json.JSONDecodeError):
+            permissions = {}
+        hydrated[role_name] = permissions if isinstance(permissions, dict) else {}
+    return hydrated
 
 
 def persist_restored_staff_members(conn, staff_list):
