@@ -4032,11 +4032,11 @@ function renderDailyCashTrendChart() {
         const dayTotal = Number(row.total || 0);
         const height = Math.max(10, Math.round((dayTotal / maxTotal) * 100));
         return `
-        <div class="daily-cash-bar ${index === rows.length - 1 ? "is-latest" : ""}" title="${escapeHtml(row.date)} | Total ${escapeHtml(formatRs(dayTotal))} | Cash ${escapeHtml(formatRs(cash))} | Bank ${escapeHtml(formatRs(bank))}">
+        <button class="daily-cash-bar ${index === rows.length - 1 ? "is-latest" : ""}" type="button" data-open-daily-cash-date="${encodeURIComponent(row.date)}" aria-label="Open payments collected on ${escapeHtml(row.date)}" title="${escapeHtml(row.date)} | Total ${escapeHtml(formatRs(dayTotal))} | Cash ${escapeHtml(formatRs(cash))} | Bank ${escapeHtml(formatRs(bank))}">
           <strong>${escapeHtml(formatRs(dayTotal).replace("Rs. ", ""))}</strong>
           <span style="height:${height}%"></span>
           <small>${escapeHtml(shortCollectionDateLabel(row.date))}</small>
-        </div>
+        </button>
       `;
       }).join("")}
     </div>
@@ -4151,6 +4151,20 @@ function toggleDailyCollectionDetails(dateLabel = "") {
   }
   activeDailyCollectionDate = activeDailyCollectionDate === dateLabel ? "" : dateLabel;
   renderDailyCollectionReport();
+}
+
+function openDailyCollectionFromDashboard(dateLabel = "") {
+  const reportRow = getDailyCollectionReportRows().find(row => row.date === dateLabel);
+  if (!reportRow) {
+    showToast("No collection details found for this date.");
+    return;
+  }
+  const dateFilter = document.getElementById("dailyCollectionDateFilter");
+  if (dateFilter) dateFilter.value = dateLabel;
+  activeDailyCollectionDate = dateLabel;
+  setView("dailyCollectionReport");
+  renderDailyCollectionReport();
+  showToast(`${dateLabel} payment details opened.`);
 }
 
 function isMobileIssuedPayment(payment = {}) {
@@ -17297,6 +17311,7 @@ document.body.addEventListener("click", event => {
   const paymentReceiptPreview = event.target.closest("[data-preview-payment-receipt]");
   const savedReceiptPreview = event.target.closest("[data-preview-saved-receipt]");
   const selectedPaymentPreview = event.target.closest("[data-preview-selected-payments]");
+  const dailyCashTrendDate = event.target.closest("[data-open-daily-cash-date]");
   const dailyCollectionDate = event.target.closest("[data-open-daily-collection]");
   const classSectionDetail = event.target.closest("[data-view-class-section]");
   const openStudentDetails = event.target.closest("[data-open-student-details]");
@@ -17751,6 +17766,10 @@ document.body.addEventListener("click", event => {
       selectedPaymentPreview.dataset.previewSelectedPayments,
       selectedPaymentPreview.dataset.feeHead || ""
     );
+  }
+  if (dailyCashTrendDate) {
+    openDailyCollectionFromDashboard(decodeURIComponent(dailyCashTrendDate.dataset.openDailyCashDate || ""));
+    return;
   }
   if (dailyCollectionDate) {
     toggleDailyCollectionDetails(decodeURIComponent(dailyCollectionDate.dataset.openDailyCollection || ""));
