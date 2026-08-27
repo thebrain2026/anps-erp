@@ -18,6 +18,7 @@ const homework = [];
 const homeworkDoubts = [];
 const admissionEnquiries = [];
 const complaintRecords = [];
+const studentAbsenceRequests = [];
 
 const staffMembers = [];
 const schools = [{
@@ -297,6 +298,7 @@ const titleMap = {
   studentAdmission: "Student Admission",
   disableStudent: "Disable Student",
   bulkDeleteStudent: "Bulk Delete",
+  studentAbsence: "Student Absence",
   finance: "Collect Fees",
   feeBook: "Fee Book",
   bankBook: "Bank Book",
@@ -370,7 +372,7 @@ const ACCESS_ACTIONS = ["view", "add", "edit", "delete", "print"];
 const ACCESS_PERMISSION_GROUPS = [
   {name: "Dashboard", modules: ["dashboard", "dashboardFeesCollection"]},
   {name: "Front Office", modules: ["admissionEnquiry", "complaintRegister", "complaintsDesk"]},
-  {name: "Student Information", modules: ["students", "studentAdmission", "disableStudent", "bulkDeleteStudent"]},
+  {name: "Student Information", modules: ["students", "studentAdmission", "disableStudent", "bulkDeleteStudent", "studentAbsence"]},
   {name: "Fees Collection", modules: ["finance", "feeBook", "bankBook", "bankReconciliation", "dueFeesSearch", "upiPaymentVerification", "feeMaster", "feeGroup", "addClassSection", "tuitionFineSetup", "feeReminder"]},
   {name: "Human Resources", modules: ["staffDetails", "staffAttendance", "applyLeave", "leaveType", "approveLeave", "teachersRating", "teacherAdvisory", "department", "designation", "disabledStaff"]},
   {name: "Communication", modules: ["noticeBoard", "teacherNoticeRequests", "sendSms"]},
@@ -500,6 +502,7 @@ function getAppStateSnapshot() {
     homeworkDoubts,
     admissionEnquiries,
     complaintRecords,
+    studentAbsenceRequests,
     staffMembers,
     deletedStaff,
     schools,
@@ -1153,6 +1156,7 @@ const EDITABLE_OBJECT_MERGE_RULES = {
   mobileAppActivity: ["loginId", "admissionNo"],
   admissionEnquiries: ["id", "mobile", "studentName"],
   complaintRecords: ["id", "complaintNo", "subject"],
+  studentAbsenceRequests: ["id", "studentId", "absenceDate"],
   staffAttendanceRecords: ["id", "staffId", "date"],
   syllabusEntries: ["id"],
   marksheetEntries: ["id", "studentAdmissionNo", "exam", "subject"],
@@ -1643,6 +1647,9 @@ function applySavedState(saved = {}) {
     }
     if (Array.isArray(saved.complaintRecords)) {
       complaintRecords.splice(0, complaintRecords.length, ...saved.complaintRecords);
+    }
+    if (Array.isArray(saved.studentAbsenceRequests)) {
+      studentAbsenceRequests.splice(0, studentAbsenceRequests.length, ...saved.studentAbsenceRequests);
     }
     if (Array.isArray(saved.staffMembers)) {
       staffMembers.splice(0, staffMembers.length, ...filterDeletedStaff(saved.staffMembers, deletedStaff));
@@ -2318,6 +2325,7 @@ function renderActiveView(viewName = document.querySelector(".view.active")?.id 
     return;
   }
   if (viewName === "students") renderStudents();
+  if (viewName === "studentAbsence") renderStudentAbsence();
   if (viewName === "studentAdmission") {
     renderAdmissionVillageTownOptions();
     renderAdmissionSectionOptions();
@@ -8292,6 +8300,42 @@ function renderLeaveApprovalRequests() {
       </tr>
     `;
   }).join("");
+}
+
+function renderStudentAbsence() {
+  const rows = document.getElementById("studentAbsenceRows");
+  if (!rows) return;
+  const dateFilter = document.getElementById("studentAbsenceDateFilter")?.value || "";
+  const classFilter = document.getElementById("studentAbsenceClassFilter")?.value || "";
+  const search = String(document.getElementById("studentAbsenceSearch")?.value || "").trim().toLowerCase();
+  const classSelect = document.getElementById("studentAbsenceClassFilter");
+  if (classSelect) {
+    const selected = classSelect.value;
+    const classes = [...new Set(studentAbsenceRequests.map(item => String(item.className || "").trim()).filter(Boolean))].sort();
+    classSelect.innerHTML = `<option value="">All Classes</option>${classes.map(name => `<option value="${escapeHtml(name)}">${escapeHtml(name)}</option>`).join("")}`;
+    classSelect.value = classes.includes(selected) ? selected : "";
+  }
+  const filtered = studentAbsenceRequests
+    .filter(item => !dateFilter || String(item.absenceDate || item.date || "") === dateFilter)
+    .filter(item => !classFilter || String(item.className || "") === classFilter)
+    .filter(item => !search || [item.studentName, item.studentId, item.admissionNo, item.className].some(value => String(value || "").toLowerCase().includes(search)))
+    .slice()
+    .sort((a, b) => String(b.absenceDate || b.date || "").localeCompare(String(a.absenceDate || a.date || "")) || String(b.createdAt || "").localeCompare(String(a.createdAt || "")));
+  const count = document.getElementById("studentAbsenceCount");
+  if (count) count.textContent = `${filtered.length} of ${studentAbsenceRequests.length} intimations`;
+  rows.innerHTML = filtered.map(item => {
+    const submitted = item.createdAt ? new Date(item.createdAt).toLocaleString("en-IN") : "-";
+    return `<tr>
+      <td><strong>${escapeHtml(item.absenceDate || item.date || "-")}</strong></td>
+      <td>${escapeHtml(item.studentName || "-")}</td>
+      <td>${escapeHtml(item.admissionNo || item.studentId || "-")}</td>
+      <td>${escapeHtml(item.className || "-")}</td>
+      <td>${escapeHtml(item.reason || "-")}</td>
+      <td>${escapeHtml(item.note || "-")}</td>
+      <td>${escapeHtml(submitted)}</td>
+      <td><span class="badge green">${escapeHtml(item.status || "Intimated")}</span></td>
+    </tr>`;
+  }).join("") || `<tr><td colspan="8">No student absence intimation found for this filter.</td></tr>`;
 }
 
 function renderStaffBiometricDevice() {
@@ -17967,6 +18011,24 @@ document.body.addEventListener("click", event => {
     }
   }
   if (module) showToast(`${module.dataset.module} module opened.`);
+});
+
+document.getElementById("studentAbsenceDateFilter")?.addEventListener("change", renderStudentAbsence);
+document.getElementById("studentAbsenceClassFilter")?.addEventListener("change", renderStudentAbsence);
+document.getElementById("studentAbsenceSearch")?.addEventListener("input", renderStudentAbsence);
+document.getElementById("studentAbsenceToday")?.addEventListener("click", () => {
+  const input = document.getElementById("studentAbsenceDateFilter");
+  if (input) input.value = toDateInputValue(new Date());
+  renderStudentAbsence();
+});
+document.getElementById("studentAbsenceClear")?.addEventListener("click", () => {
+  const date = document.getElementById("studentAbsenceDateFilter");
+  const klass = document.getElementById("studentAbsenceClassFilter");
+  const search = document.getElementById("studentAbsenceSearch");
+  if (date) date.value = "";
+  if (klass) klass.value = "";
+  if (search) search.value = "";
+  renderStudentAbsence();
 });
 
 loadAppState();

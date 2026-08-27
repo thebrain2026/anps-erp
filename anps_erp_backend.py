@@ -1884,6 +1884,7 @@ EDITABLE_OBJECT_MERGE_RULES = {
     "designations": ["name"],
     "userAccessAccounts": ["loginId", "id", "username"],
     "studentUserAccounts": ["loginId", "admissionNo"],
+    "studentAbsenceRequests": ["id", "studentId", "absenceDate"],
     "mobileAppActivity": ["loginId", "admissionNo"],
     "admissionEnquiries": ["id", "mobile", "studentName"],
     "complaintRecords": ["id", "complaintNo", "subject"],

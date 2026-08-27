@@ -46,6 +46,7 @@
             <button data-view="studentAdmission" type="button">Student Admission</button>
             <button data-view="disableStudent" type="button">Disable Student</button>
             <button data-view="bulkDeleteStudent" type="button">Bulk Delete</button>
+            <button data-view="studentAbsence" type="button">Student Absence</button>
           </div>
         </div>
         <div class="nav-group" id="feesNavGroup">
@@ -483,6 +484,37 @@
             <article><div><strong>Rejected Applications</strong><small>No rejected applications entered yet</small></div><span class="status-pill stable">Empty</span></article>
             <article><div><strong>Imported Records</strong><small>No imported rows available</small></div><span class="status-pill stable">Empty</span></article>
             <article><div><strong>Audit Backup</strong><small>Backup required before final delete</small></div><span class="status-pill stable">Required</span></article>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="studentAbsence">
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Student mobile app</p>
+              <h2>Student Absence</h2>
+            </div>
+            <strong id="studentAbsenceCount">0 intimations</strong>
+          </div>
+          <div class="fee-filter-bar">
+            <label>Date
+              <input id="studentAbsenceDateFilter" type="date" />
+            </label>
+            <label>Class
+              <select id="studentAbsenceClassFilter"><option value="">All Classes</option></select>
+            </label>
+            <label>Search Student
+              <input id="studentAbsenceSearch" type="search" placeholder="Name or admission no." />
+            </label>
+            <button class="ghost-action" id="studentAbsenceToday" type="button">Today</button>
+            <button class="ghost-action" id="studentAbsenceClear" type="button">Show All</button>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Date</th><th>Student</th><th>Admission No.</th><th>Class</th><th>Reason</th><th>Parent Note</th><th>Submitted</th><th>Status</th></tr></thead>
+              <tbody id="studentAbsenceRows"><tr><td colspan="8">No student absence intimation received yet.</td></tr></tbody>
+            </table>
           </div>
         </div>
       </section>

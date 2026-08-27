@@ -2320,7 +2320,7 @@
         </section>
 
         <section class="view" id="leaveView">
-          <div class="section-title"><h2>Apply Leave</h2><span id="leaveTotal"></span></div>
+          <div class="section-title"><h2 id="leaveTitle">Apply Leave</h2><span id="leaveTotal"></span></div>
           <div class="stack" id="leaveFormHost"></div>
           <div class="stack" id="leaveList"></div>
         </section>
@@ -3059,6 +3059,7 @@
         results: "marksheetEntries",
         ratings: "teacherRatings",
         leaves: "teacherLeaves",
+        studentAbsence: "studentAbsenceRequests",
         timetable: "classTimetableEntries",
         advisories: "teacherAdvisories",
         homeworkDoubts: "homeworkDoubts"
@@ -3365,6 +3366,9 @@
         complaints: (erpState.complaintRecords || []).filter(item => normalizeAdmission(item.studentId) === normalizeAdmission(student.admissionNo)),
         dueSummary,
         mobileAppSettings: {...(erpState.mobileAppSettings || {})},
+        absenceRequests: (erpState.studentAbsenceRequests || []).filter(item =>
+          normalizeAdmission(item.studentId || item.admissionNo) === normalizeAdmission(student.admissionNo)
+        ),
         subjects: []
       };
     }
@@ -3507,6 +3511,7 @@
       { id: "calendar", label: "Academic Calendar", icon: "AC" },
       { id: "holidayReport", label: "Holiday Report", icon: "HR" },
       { id: "attendance", label: "Attendance", icon: "AT" },
+      { id: "leave", label: "School Absence", icon: leaveLogo },
       { id: "rating", label: "Teacher Rating", icon: "★" },
       { id: "complaints", label: "Academic Complaint", icon: "!" },
       { id: "teacherComplaint", label: "Teacher Complaint", icon: "TC" }
@@ -5453,8 +5458,13 @@
       $("#teacherComplaintList").innerHTML = ws.teacherComplaints.length
         ? ws.teacherComplaints.map(item => card({ title: `${item.type} | ${item.status || "Review"}`, meta: `${item.date} | Reviewed teacher complaint`, body: `${item.note || item.details || "-"}${complaintBengaliBlock(item)}${complaintStudentStatusBar(item)}`, badge: "Teacher", status: complaintStatusTone(item.status) })).join("")
         : card({ title: "No Teacher Complaint", meta: "Nothing raised by teachers.", body: "Homework, classwork or behaviour complaints raised by teachers will appear here.", badge: "Clear" });
-      $("#leaveFormHost").innerHTML = "";
-      $("#leaveList").innerHTML = "";
+      const tomorrow = new Date(Date.now() + 86400000).toISOString().slice(0, 10);
+      $("#leaveTitle").textContent = "School Absence Intimation";
+      $("#leaveTotal").textContent = `${(ws.absenceRequests || []).length} intimations`;
+      $("#leaveFormHost").innerHTML = `<article class="card"><form class="form-grid" id="studentAbsenceForm"><label>Absent Date<input id="studentAbsenceDate" type="date" min="${todayIso}" value="${tomorrow}" required /></label><label>Reason<select id="studentAbsenceReason"><option>Sick / Unwell</option><option>Family Programme</option><option>Medical Appointment</option><option>Out of Station</option><option>Emergency</option><option>Other</option></select></label><label>Parent Note<textarea id="studentAbsenceNote" placeholder="Why the student will not attend school" required></textarea></label><button class="primary" id="studentAbsenceSubmit" type="submit">Send Absence Intimation</button><small id="studentAbsenceStatus">The school office will see this in Main ERP.</small></form></article>`;
+      $("#leaveList").innerHTML = (ws.absenceRequests || []).length
+        ? ws.absenceRequests.slice().sort((a, b) => String(b.absenceDate || "").localeCompare(String(a.absenceDate || ""))).map(item => card({ title: `${item.absenceDate || item.date} | ${item.status || "Intimated"}`, meta: item.reason || "Student absence", body: item.note || "-", badge: item.status || "Sent", status: "ok" })).join("")
+        : card({ title: "No absence intimation sent", meta: "Use this card before the student misses school.", body: "Select the date and send a note to the school office.", badge: "Ready", status: "ok" });
       bindLanguageControls();
       bindStudentForms();
       scheduleDueAccessPopup();
@@ -5643,6 +5653,7 @@
         ...ws.ratings.map(item => card({ title: `${stars(item.rating)} ${item.rating}/5`, meta: item.date, body: item.comment || "No comment", badge: "Anonymous" }))
       ].join("");
       $("#leaveTotal").textContent = `${ws.leaves.length} applications`;
+      $("#leaveTitle").textContent = "Apply Leave";
       $("#leaveFormHost").innerHTML = `<article class="card"><form class="form-grid" id="leaveForm"><label>Leave Type<select id="leaveType"><option>Casual Leave</option><option>Sick Leave</option><option>Emergency Leave</option><option>Half Day</option></select></label><label>From<input id="leaveFrom" type="date" value="${todayIso}" required /></label><label>To<input id="leaveTo" type="date" value="${todayIso}" required /></label><label>Reason<textarea id="leaveReason" placeholder="Reason for leave" required></textarea></label><label>Attachment<input id="leaveAttachment" type="file" accept=".pdf,.doc,.docx,.jpg,.jpeg,.png,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,image/jpeg,image/png" /><small>Optional: PDF, DOC, DOCX, JPG, or PNG within 10 MB.</small></label><button class="primary" id="leaveSubmitBtn" type="submit">Apply Leave</button><small id="leaveSubmitStatus"></small></form></article>`;
       $("#leaveList").innerHTML = ws.leaves.map(item => {
         const rejectNote = item.rejectionReason ? `\nReject reason: ${item.rejectionReason}` : "";
@@ -5916,6 +5927,41 @@
     }
 
     function bindStudentForms() {
+      $("#studentAbsenceForm")?.addEventListener("submit", async event => {
+        event.preventDefault();
+        const button = $("#studentAbsenceSubmit");
+        const status = $("#studentAbsenceStatus");
+        if (button?.disabled) return;
+        if (button) {
+          button.disabled = true;
+          button.textContent = "Sending...";
+        }
+        if (status) status.textContent = "Saving absence intimation to Main ERP...";
+        try {
+          await AppApi.create("studentAbsence", {
+            studentId: state.user.id,
+            admissionNo: state.user.id,
+            studentName: state.user.name,
+            className: state.user.className,
+            absenceDate: $("#studentAbsenceDate").value,
+            reason: $("#studentAbsenceReason").value,
+            note: $("#studentAbsenceNote").value.trim(),
+            source: "Student App",
+            status: "Intimated"
+          });
+          state.workspace = await AppApi.workspace("student", state.user.id);
+          renderStudentViews();
+          openView("leave");
+          toast("Absence intimation sent to school");
+        } catch (error) {
+          if (button) {
+            button.disabled = false;
+            button.textContent = "Send Absence Intimation";
+          }
+          if (status) status.textContent = "Could not save. Please try again.";
+          toast(error.message || "Absence intimation could not be sent.");
+        }
+      });
       document.querySelectorAll("[data-bengali-homework]").forEach(button => {
         button.addEventListener("click", () => {
           const target = button.nextElementSibling;
