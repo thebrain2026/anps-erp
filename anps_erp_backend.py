@@ -7,6 +7,7 @@ import os
 import re
 import secrets
 import sqlite3
+import threading
 import urllib.error
 import urllib.request
 from datetime import datetime, timedelta
@@ -66,6 +67,7 @@ ALLOWED_ORIGINS = [
 ]
 STATE_KEY = "anps_erp_state_v1"
 MAX_BODY = 20 * 1024 * 1024
+MAX_REQUEST_WORKERS = max(2, int(os.environ.get("ANPS_MAX_REQUEST_WORKERS", "4") or "4"))
 DB_SCHEMA_VERSION = 4
 BACKUP_RETENTION_DAYS = int(os.environ.get("ANPS_BACKUP_RETENTION_DAYS", "90") or "90")
 DB_BACKUP_MINUTES = int(os.environ.get("ANPS_DB_BACKUP_MINUTES", "15") or "15")
@@ -74,6 +76,7 @@ DEFAULT_SCHOOL_NAME = os.environ.get("ANPS_DEFAULT_SCHOOL_NAME", "Alfred Nobel P
 SESSION_TTL_DAYS = 7
 EMERGENCY_STAFF_RESTORE_ENABLED = os.environ.get("ANPS_EMERGENCY_STAFF_RESTORE_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
 AUTO_STAFF_BACKUP_RESTORE_ENABLED = os.environ.get("ANPS_AUTO_STAFF_BACKUP_RESTORE_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
+STATE_IO_LOCK = threading.RLock()
 EMERGENCY_STAFF_RESTORE_SEED = []
 TENANT_TABLES = {
     "students",
@@ -3027,6 +3030,14 @@ def read_state():
     return record["state"] if record else None
 
 
+def serialized_state_io(function):
+    def wrapped(*args, **kwargs):
+        with STATE_IO_LOCK:
+            return function(*args, **kwargs)
+    return wrapped
+
+
+@serialized_state_io
 def read_state_record():
     with connect() as conn:
         row = conn.execute("SELECT value, updated_at FROM app_state WHERE key = ?", (STATE_KEY,)).fetchone()
@@ -3494,6 +3505,7 @@ def verify_login(username, password):
     return None
 
 
+@serialized_state_io
 def write_state(value):
     value = ensure_state_school(value)
     raw = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
@@ -4646,6 +4658,29 @@ def clear_staff_attendance_records(state, date_text=""):
     return {"state": state, "removed": removed, "remaining": len(remaining), "date": clean_date}
 
 
+class BoundedThreadingHTTPServer(ThreadingHTTPServer):
+    daemon_threads = True
+    allow_reuse_address = True
+
+    def __init__(self, server_address, request_handler_class):
+        self._request_slots = threading.BoundedSemaphore(MAX_REQUEST_WORKERS)
+        super().__init__(server_address, request_handler_class)
+
+    def process_request(self, request, client_address):
+        self._request_slots.acquire()
+        try:
+            super().process_request(request, client_address)
+        except Exception:
+            self._request_slots.release()
+            raise
+
+    def process_request_thread(self, request, client_address):
+        try:
+            super().process_request_thread(request, client_address)
+        finally:
+            self._request_slots.release()
+
+
 class SchoolERPHandler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(ROOT), **kwargs)
@@ -5235,7 +5270,7 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
 
 def main():
     init_db()
-    server = ThreadingHTTPServer((HOST, PORT), SchoolERPHandler)
+    server = BoundedThreadingHTTPServer((HOST, PORT), SchoolERPHandler)
     print(f"School ERP backend running at http://{HOST}:{PORT}/")
     print(f"SQLite database: {DB_PATH}")
     server.serve_forever()

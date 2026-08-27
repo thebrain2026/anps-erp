@@ -141,6 +141,7 @@ let backendSaveInFlight = false;
 let backendQueuedSnapshot = null;
 let backendQueuedRollbackRawState = "";
 let backendAutoSyncTimer = null;
+let backendPullInFlight = false;
 let backendReconnectTimer = null;
 let backendSyncReady = false;
 let backendHydrating = false;
@@ -150,7 +151,7 @@ let transportBackendSavePending = false;
 let backendNetworkFailCount = 0;
 let backendLastHealthOkAt = 0;
 const BACKEND_SAVE_DEBOUNCE_MS = 250;
-const BACKEND_AUTO_SYNC_INTERVAL_MS = 3000;
+const BACKEND_AUTO_SYNC_INTERVAL_MS = 15000;
 const BACKEND_LOCAL_SAVE_GUARD_MS = 5000;
 const BACKEND_OFFLINE_FAIL_THRESHOLD = 5;
 const BACKEND_HEALTH_GRACE_MS = 60000;
@@ -14062,7 +14063,8 @@ function isBackendAutoSyncPaused() {
 }
 
 async function pullBackendStateIfChanged(showMessage = false) {
-  if (!backendSyncReady || isBackendAutoSyncPaused()) return;
+  if (!backendSyncReady || isBackendAutoSyncPaused() || backendPullInFlight) return;
+  backendPullInFlight = true;
   try {
     setTopbarNetworkStatus(navigator.onLine ? "checking" : "offline");
     const hasToken = await ensureBackendToken();
@@ -14100,6 +14102,7 @@ async function pullBackendStateIfChanged(showMessage = false) {
     console.warn("Backend auto-sync skipped.", error);
   } finally {
     backendHydrating = false;
+    backendPullInFlight = false;
   }
 }
 
