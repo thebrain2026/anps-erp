@@ -105,6 +105,7 @@ const viewHistoryStack = [];
 const collectedPayments = {};
 const deletedPaymentReceipts = {};
 const deletedStudents = {};
+const deletedStaff = {};
 const deletedTransportRecords = {
   routes: {},
   vehicles: {},
@@ -499,6 +500,7 @@ function getAppStateSnapshot() {
     admissionEnquiries,
     complaintRecords,
     staffMembers,
+    deletedStaff,
     schools,
     school_id: activeSchoolId,
     schoolId: activeSchoolId,
@@ -737,6 +739,39 @@ function mergeStudentList(remoteList = [], localList = [], deletedMap = deletedS
     merged[index] = mergeStudentRecord(merged[index], student);
   });
   return merged;
+}
+
+function normalizeStaffDeleteKey(value = "") {
+  return String(value || "").trim().toLowerCase();
+}
+
+function getDeletedStaffMap(...maps) {
+  const merged = {};
+  maps.forEach(map => {
+    if (!map || typeof map !== "object") return;
+    Object.entries(map).forEach(([staffId, deletedAt]) => {
+      const key = normalizeStaffDeleteKey(staffId);
+      if (key) merged[key] = deletedAt || new Date().toISOString();
+    });
+  });
+  return merged;
+}
+
+function filterDeletedStaff(staffList = [], deletedMap = deletedStaff) {
+  return (Array.isArray(staffList) ? staffList : []).filter(staff => {
+    const key = normalizeStaffDeleteKey(staff?.staffId || staff?.id || staff?.staff_id);
+    return !key || !deletedMap?.[key];
+  });
+}
+
+function markStaffDeleted(staffId = "") {
+  const key = normalizeStaffDeleteKey(staffId);
+  if (key) deletedStaff[key] = new Date().toISOString();
+}
+
+function clearStaffDeletedMark(staffId = "") {
+  const key = normalizeStaffDeleteKey(staffId);
+  if (key) delete deletedStaff[key];
 }
 
 function createPaymentId() {
@@ -1170,6 +1205,7 @@ function mergeClassTimetableEntries(remoteEntries = [], localEntries = []) {
 function mergeStateSnapshots(remoteState = {}, localState = {}) {
   const merged = {...remoteState, ...localState};
   merged.deletedStudents = getDeletedStudentMap(remoteState.deletedStudents, localState.deletedStudents);
+  merged.deletedStaff = getDeletedStaffMap(remoteState.deletedStaff, localState.deletedStaff);
   merged.deletedTransportRecords = mergeDeletedTransportRecords(remoteState.deletedTransportRecords, localState.deletedTransportRecords);
   const primitiveKeys = [
     "customAdmissionClasses",
@@ -1188,6 +1224,7 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
   });
   merged.students = mergeStudentList(remoteState.students || [], localState.students || [], merged.deletedStudents);
   Object.assign(merged, mergeEditableObjectLists(remoteState, localState));
+  merged.staffMembers = filterDeletedStaff(merged.staffMembers, merged.deletedStaff);
   merged.transportRoutes = mergeObjectListByCompositeKey(remoteState.transportRoutes || [], localState.transportRoutes || [], ["routeName"])
     .filter(route => !merged.deletedTransportRecords.routes[String(route.routeName || "").trim().toLowerCase()]);
   merged.transportVehicles = mergeObjectListByCompositeKey(remoteState.transportVehicles || [], localState.transportVehicles || [], ["vehicleNo"])
@@ -1226,6 +1263,7 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
 function mergeSetupSafeState(backendState = {}, localSnapshot = {}) {
   const deletedMap = getDeletedPaymentReceiptMap(backendState.deletedPaymentReceipts, localSnapshot.deletedPaymentReceipts);
   const deletedTransportMap = mergeDeletedTransportRecords(backendState.deletedTransportRecords, localSnapshot.deletedTransportRecords);
+  const deletedStaffMap = getDeletedStaffMap(backendState.deletedStaff, localSnapshot.deletedStaff);
   return {
     ...backendState,
     customAdmissionClasses: mergePrimitiveSetupList(backendState, localSnapshot, "customAdmissionClasses"),
@@ -1248,8 +1286,13 @@ function mergeSetupSafeState(backendState = {}, localSnapshot = {}) {
     transportVillageFees: mergeTransportVillageFees(backendState.transportVillageFees || {}, localSnapshot.transportVillageFees || {}),
     transportFineSetup: {...(backendState.transportFineSetup || {}), ...(localSnapshot.transportFineSetup || {})},
     deletedTransportRecords: deletedTransportMap,
+    deletedStaff: deletedStaffMap,
     students: mergeStudentList(backendState.students || [], localSnapshot.students || [], getDeletedStudentMap(backendState.deletedStudents, localSnapshot.deletedStudents)),
     ...mergeEditableObjectLists(backendState, localSnapshot),
+    staffMembers: filterDeletedStaff(
+      mergeObjectListByKey(backendState.staffMembers || [], localSnapshot.staffMembers || [], EDITABLE_OBJECT_MERGE_RULES.staffMembers),
+      deletedStaffMap
+    ),
     classTimetableEntries: mergeClassTimetableEntries(backendState.classTimetableEntries, localSnapshot.classTimetableEntries),
     rolePermissions: {...(backendState.rolePermissions || {}), ...(localSnapshot.rolePermissions || {})},
     rolePermissionAudit: {...(backendState.rolePermissionAudit || {}), ...(localSnapshot.rolePermissionAudit || {})},
@@ -1541,6 +1584,10 @@ function saveAppState() {
 
 function applySavedState(saved = {}) {
   try {
+    if (saved.deletedStaff && typeof saved.deletedStaff === "object") {
+      Object.keys(deletedStaff).forEach(staffId => delete deletedStaff[staffId]);
+      Object.assign(deletedStaff, getDeletedStaffMap(saved.deletedStaff));
+    }
     if (saved.deletedStudents && typeof saved.deletedStudents === "object") {
       Object.keys(deletedStudents).forEach(admissionNo => delete deletedStudents[admissionNo]);
       Object.assign(deletedStudents, getDeletedStudentMap(saved.deletedStudents));
@@ -1597,7 +1644,7 @@ function applySavedState(saved = {}) {
       complaintRecords.splice(0, complaintRecords.length, ...saved.complaintRecords);
     }
     if (Array.isArray(saved.staffMembers)) {
-      staffMembers.splice(0, staffMembers.length, ...saved.staffMembers);
+      staffMembers.splice(0, staffMembers.length, ...filterDeletedStaff(saved.staffMembers, deletedStaff));
     }
     if (Array.isArray(saved.schools)) {
       schools.splice(0, schools.length, ...saved.schools);
@@ -15608,6 +15655,7 @@ staffDetailsForm.addEventListener("submit", event => {
   staff.assignedSection = existingStaff.assignedSection || "";
   if (existingIndex >= 0) staffMembers[existingIndex] = staff;
   else staffMembers.unshift(staff);
+  clearStaffDeletedMark(staff.staffId);
   saveAppState();
   renderStaffDetails();
   renderHrSetup();
@@ -17411,6 +17459,7 @@ document.body.addEventListener("click", event => {
     const index = staffMembers.findIndex(item => item.staffId === deleteStaff.dataset.deleteStaff);
     if (index >= 0 && confirm(`Delete staff ${staffMembers[index].name}?`)) {
       const [removed] = staffMembers.splice(index, 1);
+      markStaffDeleted(removed.staffId);
       userAccessAccounts.forEach(account => {
         if (account.staffId === removed.staffId) {
           account.staffId = "";

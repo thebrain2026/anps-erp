@@ -1852,6 +1852,27 @@ def merge_deleted_transport_records(*maps):
     return merged
 
 
+def deleted_staff_map(*maps):
+    merged = {}
+    for map_value in maps:
+        if not isinstance(map_value, dict):
+            continue
+        for staff_id, deleted_at in map_value.items():
+            key = str(staff_id or "").strip().lower()
+            if key:
+                merged[key] = deleted_at or datetime.now().isoformat(timespec="seconds")
+    return merged
+
+
+def filter_deleted_staff(staff_list, deleted_map):
+    deleted_map = deleted_map if isinstance(deleted_map, dict) else {}
+    return [
+        staff for staff in (staff_list if isinstance(staff_list, list) else [])
+        if isinstance(staff, dict)
+        and not deleted_map.get(str(staff.get("staffId") or staff.get("id") or staff.get("staff_id") or "").strip().lower())
+    ]
+
+
 EDITABLE_OBJECT_MERGE_RULES = {
     "disabledStudents": ["admissionNo", "name"],
     "staffMembers": ["staffId", "email", "phone", "mobile", "name"],
@@ -1975,6 +1996,10 @@ def merge_state_without_losing_receipts(server_state, incoming_state):
     if not isinstance(incoming_state, dict):
         incoming_state = {}
     merged = dict(incoming_state)
+    merged["deletedStaff"] = deleted_staff_map(
+        server_state.get("deletedStaff"),
+        incoming_state.get("deletedStaff"),
+    )
     merged["students"] = merge_student_lists(
         server_state.get("students") or [],
         incoming_state.get("students") or [],
@@ -2002,6 +2027,7 @@ def merge_state_without_losing_receipts(server_state, incoming_state):
     )
     for key, fields in EDITABLE_OBJECT_MERGE_RULES.items():
         merged[key] = merge_object_lists(server_state.get(key) or [], incoming_state.get(key) or [], fields)
+    merged["staffMembers"] = filter_deleted_staff(merged.get("staffMembers"), merged["deletedStaff"])
     merged["rolePermissions"] = {
         **(server_state.get("rolePermissions") if isinstance(server_state.get("rolePermissions"), dict) else {}),
         **(incoming_state.get("rolePermissions") if isinstance(incoming_state.get("rolePermissions"), dict) else {}),
@@ -3018,6 +3044,7 @@ def read_state_record():
 def hydrate_state_from_normalized_tables(conn, state):
     if not isinstance(state, dict):
         state = {}
+    deleted_staff = deleted_staff_map(state.get("deletedStaff"))
     if not state.get("staffMembers"):
         state["staffMembers"] = table_json_rows(
             conn,
@@ -3037,6 +3064,7 @@ def hydrate_state_from_normalized_tables(conn, state):
                 "status": item.get("status") or row["status"] or "Active",
             },
         )
+    state["staffMembers"] = filter_deleted_staff(state.get("staffMembers"), deleted_staff)
     if AUTO_STAFF_BACKUP_RESTORE_ENABLED:
         state = hydrate_staff_from_recent_state_backups(conn, state)
         state = hydrate_staff_from_disk_backups(conn, state)
@@ -3190,7 +3218,7 @@ def persist_restored_staff_members(conn, staff_list):
 def apply_staff_restore_candidate(conn, state, candidate):
     if not candidate:
         return state
-    staff = candidate.get("staffMembers")
+    staff = filter_deleted_staff(candidate.get("staffMembers"), deleted_staff_map(state.get("deletedStaff")))
     current_staff = state.get("staffMembers") if isinstance(state.get("staffMembers"), list) else []
     if not isinstance(staff, list) or len(staff) <= len(current_staff):
         return state
