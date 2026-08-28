@@ -1,0 +1,3 @@
+google-auth
+requests
+rfc8785==0.1.4

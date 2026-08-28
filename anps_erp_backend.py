@@ -15,6 +15,8 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse
 
+from anps_bsfv_outbox import IntegrationConfig, capture_state_changes, initialize_outbox
+
 try:
     from google.auth.transport.requests import Request as GoogleAuthRequest
     from google.oauth2 import service_account
@@ -68,7 +70,7 @@ ALLOWED_ORIGINS = [
 STATE_KEY = "anps_erp_state_v1"
 MAX_BODY = 20 * 1024 * 1024
 MAX_REQUEST_WORKERS = max(2, int(os.environ.get("ANPS_MAX_REQUEST_WORKERS", "4") or "4"))
-DB_SCHEMA_VERSION = 4
+DB_SCHEMA_VERSION = 5
 BACKUP_RETENTION_DAYS = int(os.environ.get("ANPS_BACKUP_RETENTION_DAYS", "90") or "90")
 DB_BACKUP_MINUTES = int(os.environ.get("ANPS_DB_BACKUP_MINUTES", "15") or "15")
 DEFAULT_SCHOOL_ID = os.environ.get("ANPS_DEFAULT_SCHOOL_ID", "anps").strip() or "anps"
@@ -1651,6 +1653,7 @@ def init_db():
         )
         ensure_default_school_row(conn)
         ensure_tenant_columns(conn)
+        initialize_outbox(conn)
         conn.execute(
             """
             INSERT INTO schema_meta (key, value, updated_at)
@@ -3611,6 +3614,8 @@ def write_state(value):
     value = ensure_state_school(value)
     raw = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
     with connect() as conn:
+        previous_row = conn.execute("SELECT value FROM app_state WHERE key = ?", (STATE_KEY,)).fetchone()
+        previous_state = json.loads(previous_row["value"]) if previous_row else {}
         conn.execute(
             "INSERT INTO state_backups (reason, value) VALUES (?, ?)",
             (f"auto-save {datetime.now().isoformat(timespec='seconds')}", raw),
@@ -3636,6 +3641,7 @@ def write_state(value):
             (STATE_KEY, raw),
         )
         sync_state_tables(conn, value)
+        capture_state_changes(conn, previous_state, value, IntegrationConfig.from_env())
         state_row = conn.execute("SELECT updated_at FROM app_state WHERE key = ?", (STATE_KEY,)).fetchone()
         conn.execute(
             """

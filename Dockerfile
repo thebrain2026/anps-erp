@@ -8,12 +8,14 @@ ENV ANPS_ERP_DATA_DIR=/data
 ENV ANPS_ERP_DB=/data/anps_erp.db
 ENV ANPS_ERP_BACKUP_DIR=/data/backups
 ENV ANPS_ERP_UPLOAD_DIR=/data/uploads
+ENV ANPS_BSFV_INTEGRATION_ENABLED=false
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir google-auth requests
+COPY requirements.txt ./
+RUN pip install --no-cache-dir -r requirements.txt
 
-COPY anps-erp.html anps-mobile-app.html anps-payment-policies.html new-school-os.css new-school-os.js anps_erp_backend.py ./
+COPY anps-erp.html anps-mobile-app.html anps-payment-policies.html new-school-os.css new-school-os.js anps_erp_backend.py anps_bsfv_outbox.py ./
 COPY assets ./assets
 
 RUN useradd --system --create-home --home-dir /home/anps anps \

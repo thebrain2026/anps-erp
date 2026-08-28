@@ -24,6 +24,8 @@ services:
         value: /data/uploads
       - key: ANPS_ERP_ALLOWED_ORIGINS
         value: "*"
+      - key: ANPS_BSFV_INTEGRATION_ENABLED
+        value: "false"
       - key: ANPS_ERP_API_TOKEN
         sync: false
       - key: ANPS_FIREBASE_SERVICE_ACCOUNT_JSON
