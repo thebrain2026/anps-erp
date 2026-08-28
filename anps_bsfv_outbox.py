@@ -112,6 +112,7 @@ class IntegrationConfig:
     school_id: str
     session_map: dict[str, str]
     source_system: str = "anps"
+    secret_provider: str = "disabled"
 
     @classmethod
     def from_env(cls):
@@ -121,7 +122,7 @@ class IntegrationConfig:
         except json.JSONDecodeError:
             session_map = {}
         return cls(
-            enabled=os.environ.get("ANPS_BSFV_INTEGRATION_ENABLED", "false").lower() in {"1", "true", "yes", "on"},
+            enabled=os.environ.get("ANPS_BSFV_INTEGRATION_ENABLED", "false").lower() == "true",
             endpoint=os.environ.get("ANPS_BSFV_ENDPOINT", "").strip(),
             approved_endpoints=tuple(filter(None, (item.strip() for item in os.environ.get("ANPS_BSFV_APPROVED_ENDPOINTS", "").split(",")))),
             key_id=os.environ.get("ANPS_BSFV_KEY_ID", "").strip(),
@@ -129,11 +130,14 @@ class IntegrationConfig:
             school_id=os.environ.get("ANPS_BSFV_SCHOOL_ID", "").strip(),
             session_map=session_map if isinstance(session_map, dict) else {},
             source_system=os.environ.get("ANPS_BSFV_SOURCE_SYSTEM", "anps").strip() or "anps",
+            secret_provider=os.environ.get("ANPS_BSFV_SECRET_PROVIDER", "disabled").strip().lower(),
         )
 
     def refusal_code(self):
         if not self.enabled:
             return "integration_disabled"
+        if self.secret_provider not in {"external", "synthetic"}:
+            return "secret_provider_unavailable"
         if not self.endpoint or self.endpoint not in self.approved_endpoints:
             return "endpoint_not_approved"
         if not self.endpoint.startswith("https://"):

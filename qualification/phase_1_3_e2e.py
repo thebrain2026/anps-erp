@@ -195,7 +195,12 @@ def qualify(args):
     from app.main import app
     from app.models.expense import Expense
     from app.models.finance import JournalTransaction
-    from app.models.integration import IntegrationEvent, IntegrationSource
+    from app.models.integration import (
+        IntegrationEvent,
+        IntegrationKey,
+        IntegrationKeyState,
+        IntegrationSource,
+    )
     from app.models.payroll import PayrollRecord
     from app.models.treasury import TreasuryTransaction
 
@@ -208,13 +213,14 @@ def qualify(args):
         secret,
         SCHOOL_ID,
         {SOURCE_SESSION: SESSION_ID},
+        secret_provider="synthetic",
     )
     engine = create_async_engine(args.database_url, poolclass=NullPool)
     maker = async_sessionmaker(engine, expire_on_commit=False)
 
     async def prepare():
         async with maker() as session:
-            session.add(IntegrationSource(
+            source = IntegrationSource(
                 source_system="anps",
                 school_id=SCHOOL_ID,
                 environment="test",
@@ -223,6 +229,17 @@ def qualify(args):
                 accepted_session_ids=[SESSION_ID],
                 key_ids=[KEY_ID],
                 created_at=utcnow(),
+                updated_at=utcnow(),
+            )
+            session.add(source)
+            await session.flush()
+            session.add(IntegrationKey(
+                source_id=source.id,
+                key_id=KEY_ID,
+                state=IntegrationKeyState.ACTIVE,
+                activated_at=utcnow(),
+                retire_after=None,
+                revoked_at=None,
                 updated_at=utcnow(),
             ))
             await session.commit()
@@ -235,6 +252,10 @@ def qualify(args):
 
     app.dependency_overrides[get_session] = override_session
     settings.integration_hmac_keys = {KEY_ID: SecretStr(secret)}
+    settings.integration_ingestion_enabled = True
+    settings.integration_domain_processing_enabled = False
+    settings.integration_mode = "shadow"
+    settings.integration_secret_provider = "synthetic"
     sender_dir = tempfile.TemporaryDirectory(prefix="anps-phase13-synthetic-")
     sender_path = Path(sender_dir.name) / "anps-synthetic.db"
     sender = sqlite3.connect(sender_path, check_same_thread=False)
@@ -281,7 +302,7 @@ def qualify(args):
             assert conflict_response.status_code == 409
             report["duplicates"] = {"exact": 200, "conflicting": 409}
 
-            # Version gap, controlled v2 arrival, and stale version under frozen policy.
+            # Version gap, automatic recovery, and deterministic true stale rejection.
             gap_v1 = make_envelope(first_document, aggregate_id="PAY-GAP-SYNTHETIC", event_id="gap-synthetic-v1", version=1)
             assert send(client, INGESTION_PATH, gap_v1, config).status_code == 202
             gap_v3 = make_envelope(gap_v1, aggregate_id="PAY-GAP-SYNTHETIC", event_id="gap-synthetic-v3", version=3, event_type="anps.fee_collection.corrected")
@@ -290,11 +311,12 @@ def qualify(args):
             gap_v2 = make_envelope(gap_v1, aggregate_id="PAY-GAP-SYNTHETIC", event_id="gap-synthetic-v2", version=2, event_type="anps.fee_collection.corrected")
             gap_v2["data"]["reason"] = "Synthetic late version two"
             late_v2 = send(client, INGESTION_PATH, gap_v2, config)
-            assert late_v2.status_code == 409
+            assert late_v2.status_code == 202
+            assert late_v2.json()["re_evaluated_event_ids"] == ["gap-synthetic-v3"]
             stale = make_envelope(gap_v1, aggregate_id="PAY-GAP-SYNTHETIC", event_id="gap-synthetic-stale", version=1)
             stale["data"]["receipt_no"] = "SYN/STALE"
             assert send(client, INGESTION_PATH, stale, config).status_code == 409
-            report["version_policy"] = "v3 quarantined; later v2 and distinct v1 rejected stale under frozen max-evidence policy"
+            report["version_policy"] = "v3 quarantined; later v2 accepted; v3 auto-promoted; distinct v1 rejected stale"
 
             # Clock skew and security matrix use unique synthetic aggregates.
             clock_ok = make_envelope(first_document, aggregate_id="PAY-CLOCK-OK", event_id="clock-phase13-ok-0001", version=1)
@@ -430,6 +452,75 @@ def qualify(args):
                 "p95_latency_ms": round(sorted(latencies)[int(len(latencies) * 0.95) - 1], 2),
             }
 
+            # Receiver-wide kill switch returns retryable 503 without storing evidence.
+            kill_event = make_envelope(
+                first_document,
+                aggregate_id="PAY-KILL-SWITCH",
+                event_id="kill-switch-phase14-0001",
+                version=1,
+            )
+            settings.integration_ingestion_enabled = False
+            assert send(client, INGESTION_PATH, kill_event, config).status_code == 503
+            settings.integration_ingestion_enabled = True
+            assert not asyncio.run(integration_rows(
+                maker, IntegrationEvent, ["kill-switch-phase14-0001"]
+            ))
+            report["kill_switch"] = "503 retryable; no receiver evidence lost or created"
+
+            # Synthetic key rotation with overlap followed by deterministic revocation.
+            key_b_id = "phase14-synthetic-key-b"
+            key_b_secret = secrets.token_urlsafe(48)
+            key_b_config = IntegrationConfig(
+                True,
+                config.endpoint,
+                config.approved_endpoints,
+                key_b_id,
+                key_b_secret,
+                SCHOOL_ID,
+                config.session_map,
+                secret_provider="synthetic",
+            )
+
+            async def rotate_to_b():
+                async with maker() as session:
+                    source = await session.scalar(select(IntegrationSource))
+                    key_a = await session.scalar(
+                        select(IntegrationKey).where(IntegrationKey.key_id == KEY_ID)
+                    )
+                    key_a.state = IntegrationKeyState.RETIRING
+                    session.add(IntegrationKey(
+                        source_id=source.id,
+                        key_id=key_b_id,
+                        state=IntegrationKeyState.ACTIVE,
+                        activated_at=utcnow(),
+                        retire_after=None,
+                        revoked_at=None,
+                        updated_at=utcnow(),
+                    ))
+                    await session.commit()
+
+            asyncio.run(rotate_to_b())
+            settings.integration_hmac_keys[key_b_id] = SecretStr(key_b_secret)
+            overlap_a = make_envelope(first_document, aggregate_id="PAY-ROTATE-A", event_id="rotate-a-phase14-0001", version=1)
+            overlap_b = make_envelope(first_document, aggregate_id="PAY-ROTATE-B", event_id="rotate-b-phase14-0001", version=1)
+            assert send(client, INGESTION_PATH, overlap_a, config).status_code == 202
+            assert send(client, INGESTION_PATH, overlap_b, key_b_config).status_code == 202
+
+            async def revoke_a():
+                async with maker() as session:
+                    key_a = await session.scalar(
+                        select(IntegrationKey).where(IntegrationKey.key_id == KEY_ID)
+                    )
+                    key_a.state = IntegrationKeyState.REVOKED
+                    key_a.revoked_at = utcnow()
+                    key_a.updated_at = utcnow()
+                    await session.commit()
+
+            asyncio.run(revoke_a())
+            revoked_a = make_envelope(first_document, aggregate_id="PAY-ROTATE-A-REVOKED", event_id="rotate-a-revoked-phase14-0001", version=1)
+            assert send(client, INGESTION_PATH, revoked_a, config).status_code == 401
+            report["key_rotation"] = "A retiring + B active overlap accepted; A revoked rejected"
+
             counts = asyncio.run(database_counts(
                 maker,
                 (IntegrationEvent, JournalTransaction, Expense, PayrollRecord, TreasuryTransaction),
@@ -440,6 +531,10 @@ def qualify(args):
     finally:
         app.dependency_overrides.clear()
         settings.integration_hmac_keys = {}
+        settings.integration_ingestion_enabled = False
+        settings.integration_domain_processing_enabled = False
+        settings.integration_mode = "disabled"
+        settings.integration_secret_provider = "disabled"
         try:
             sender.close()
         except Exception:

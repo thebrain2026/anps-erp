@@ -25,6 +25,7 @@ def config(enabled=False):
         secret="synthetic-secret-not-production",
         school_id="school-synthetic",
         session_map={"2026-27": "session-synthetic"},
+        secret_provider="synthetic",
     )
 
 
@@ -194,14 +195,25 @@ class OutboxTest(unittest.TestCase):
     def test_enable_conditions_reject_missing_or_non_tls_configuration(self):
         base = config(True)
         cases = [
-            IntegrationConfig(True, "", (), base.key_id, base.secret, base.school_id, base.session_map),
-            IntegrationConfig(True, "http://unsafe", ("http://unsafe",), base.key_id, base.secret, base.school_id, base.session_map),
-            IntegrationConfig(True, base.endpoint, base.approved_endpoints, "", base.secret, base.school_id, base.session_map),
-            IntegrationConfig(True, base.endpoint, base.approved_endpoints, base.key_id, "", base.school_id, base.session_map),
+            IntegrationConfig(True, "", (), base.key_id, base.secret, base.school_id, base.session_map, secret_provider="synthetic"),
+            IntegrationConfig(True, "http://unsafe", ("http://unsafe",), base.key_id, base.secret, base.school_id, base.session_map, secret_provider="synthetic"),
+            IntegrationConfig(True, base.endpoint, base.approved_endpoints, "", base.secret, base.school_id, base.session_map, secret_provider="synthetic"),
+            IntegrationConfig(True, base.endpoint, base.approved_endpoints, base.key_id, "", base.school_id, base.session_map, secret_provider="synthetic"),
         ]
         self.assertEqual([item.refusal_code() for item in cases], [
             "endpoint_not_approved", "tls_required", "key_id_missing", "hmac_secret_missing"
         ])
+
+    def test_environment_enablement_and_secret_provider_fail_closed(self):
+        import os
+        from unittest.mock import patch
+
+        with patch.dict(os.environ, {"ANPS_BSFV_INTEGRATION_ENABLED": "yes"}, clear=True):
+            self.assertEqual(IntegrationConfig.from_env().refusal_code(), "integration_disabled")
+        with patch.dict(os.environ, {"ANPS_BSFV_INTEGRATION_ENABLED": "true"}, clear=True):
+            self.assertEqual(
+                IntegrationConfig.from_env().refusal_code(), "secret_provider_unavailable"
+            )
 
     def test_clean_and_existing_schema_migration_are_idempotent(self):
         initialize_outbox(self.conn)
