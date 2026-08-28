@@ -35,6 +35,7 @@ const userAccessAccounts = [];
 const studentUserAccounts = [];
 const mobileAppActivity = [];
 const upiPaymentRequests = [];
+const feeReminderHistory = [];
 const mobileAppSettings = {
   duePopupEnabled: true,
   dueLockEnabled: true,
@@ -516,6 +517,7 @@ function getAppStateSnapshot() {
     studentUserAccounts,
     mobileAppActivity,
     upiPaymentRequests,
+    feeReminderHistory,
     mobileAppSettings,
     rolePermissions,
     rolePermissionAudit,
@@ -1154,6 +1156,7 @@ const EDITABLE_OBJECT_MERGE_RULES = {
   userAccessAccounts: ["loginId", "id", "username"],
   studentUserAccounts: ["loginId", "admissionNo"],
   mobileAppActivity: ["loginId", "admissionNo"],
+  feeReminderHistory: ["id"],
   admissionEnquiries: ["id", "mobile", "studentName"],
   complaintRecords: ["id", "complaintNo", "subject"],
   studentAbsenceRequests: ["id", "studentId", "absenceDate"],
@@ -1680,6 +1683,9 @@ function applySavedState(saved = {}) {
     }
     if (Array.isArray(saved.upiPaymentRequests)) {
       upiPaymentRequests.splice(0, upiPaymentRequests.length, ...saved.upiPaymentRequests);
+    }
+    if (Array.isArray(saved.feeReminderHistory)) {
+      feeReminderHistory.splice(0, feeReminderHistory.length, ...saved.feeReminderHistory);
     }
     if (saved.mobileAppSettings && typeof saved.mobileAppSettings === "object") {
       mobileAppSettings.duePopupEnabled = saved.mobileAppSettings.duePopupEnabled !== false;
@@ -2858,6 +2864,70 @@ function renderStudentDueAccessSettings() {
       <small>The student app unlocks automatically after the payment is cleared and the app is synced or reopened.</small>
     `;
   }
+  renderIndividualFeeReminder();
+}
+
+function getIndividualFeeReminderDue(student) {
+  if (!student) return {amount: 0, heads: []};
+  const rows = getLedgerRows(student).filter(row => Number(row.due || 0) > 0);
+  return {
+    amount: rows.reduce((sum, row) => sum + Number(row.due || 0), 0),
+    heads: rows.map(row => row.name).filter(Boolean)
+  };
+}
+
+function feeReminderDefaultMessage(student, due) {
+  const guardian = student?.guardian || student?.fatherName || student?.motherName || "Parent";
+  return `Dear ${guardian}, ${student?.name || "the student"}'s school fee due is ${formatRs(due.amount)}. Please clear the pending fee at your earliest convenience. - Alfred Nobel Public School`;
+}
+
+function renderFeeReminderStudentOptions() {
+  const select = document.getElementById("feeReminderStudent");
+  if (!select) return;
+  const selected = select.value;
+  const query = String(document.getElementById("feeReminderStudentSearch")?.value || "").trim();
+  const visible = getActiveStudents().filter(student => dueFeesStudentMatchesSearch(student, query)).slice(0, 250);
+  select.innerHTML = `<option value="">Select one student</option>${visible.map(student => `<option value="${escapeHtml(student.admissionNo || student.id || "")}">${escapeHtml(student.name || "Student")} | ${escapeHtml(student.admissionNo || "-")} | ${escapeHtml(student.klass || "-")}</option>`).join("")}`;
+  if ([...select.options].some(option => option.value === selected)) select.value = selected;
+}
+
+function updateFeeReminderStudentPreview(resetMessage = true) {
+  const admissionNo = document.getElementById("feeReminderStudent")?.value || "";
+  const student = findActiveStudentByAdmissionNo(admissionNo);
+  const preview = document.getElementById("feeReminderStudentPreview");
+  const message = document.getElementById("feeReminderMessage");
+  if (!student) {
+    if (preview) preview.innerHTML = `<strong>Select a student</strong><small>Due amount and mobile registration status will appear here.</small>`;
+    if (resetMessage && message) message.value = "";
+    return;
+  }
+  const due = getIndividualFeeReminderDue(student);
+  if (preview) preview.innerHTML = `
+    <strong>${escapeHtml(student.name || "Student")}</strong>
+    <span>${escapeHtml(student.admissionNo || "-")}</span>
+    <span>${escapeHtml(student.klass || "-")}</span>
+    <span>Due ${escapeHtml(formatRs(due.amount))}</span>
+    <small>${due.heads.length ? escapeHtml([...new Set(due.heads)].join(", ")) : "No current fee due found"}. Device registration will be checked securely when sending.</small>
+  `;
+  if (resetMessage && message) message.value = feeReminderDefaultMessage(student, due);
+}
+
+function renderFeeReminderHistory() {
+  const rows = document.getElementById("feeReminderHistoryRows");
+  const count = document.getElementById("feeReminderHistoryCount");
+  if (count) count.textContent = `${feeReminderHistory.length} sent`;
+  if (!rows) return;
+  rows.innerHTML = feeReminderHistory.slice(0, 50).map(item => {
+    const status = item.status || "Sent";
+    const badge = status === "Sent" ? "green" : status === "No Device" ? "amber" : "red";
+    return `<tr><td>${escapeHtml(item.sentAt ? new Date(item.sentAt).toLocaleString("en-IN") : "-")}</td><td>${escapeHtml(item.studentName || "-")}</td><td>${escapeHtml(item.admissionNo || "-")}</td><td>${escapeHtml(formatRs(item.dueAmount || 0))}</td><td>${escapeHtml(String(item.sentDevices ?? item.targetDevices ?? 0))}</td><td><span class="badge ${badge}">${escapeHtml(status)}</span></td></tr>`;
+  }).join("") || `<tr><td colspan="6">No individual fee reminder sent yet.</td></tr>`;
+}
+
+function renderIndividualFeeReminder() {
+  renderFeeReminderStudentOptions();
+  updateFeeReminderStudentPreview(false);
+  renderFeeReminderHistory();
 }
 
 function renderStudentAppGlobalControls() {
@@ -6874,6 +6944,17 @@ async function sendTeacherAdvisoryPushNotification(advisory = {}) {
     console.warn("Teacher advisory push notification failed.", error);
     showToast("Advisory saved, but push notification could not be sent.");
   }
+}
+
+async function sendIndividualFeeReminderNotification(reminder = {}) {
+  const response = await backendFetch("/api/notifications/fee-reminder", {
+    method: "POST",
+    headers: backendHeaders({"Content-Type": "application/json"}),
+    body: JSON.stringify({reminder})
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok && result.configured !== false) throw new Error(result.error || "Fee reminder notification failed.");
+  return result;
 }
 
 function renderNoticeAudienceOptions() {
@@ -17104,8 +17185,67 @@ document.getElementById("topbarLogout")?.addEventListener("click", () => {
   showToast(`${roleName} logged out.`);
 });
 
-document.getElementById("sendFeeReminder").addEventListener("click", () => {
-  showToast("Fee reminder campaign queued.");
+document.getElementById("feeReminderStudentSearch")?.addEventListener("input", renderFeeReminderStudentOptions);
+document.getElementById("feeReminderStudent")?.addEventListener("change", () => updateFeeReminderStudentPreview(true));
+document.getElementById("individualFeeReminderForm")?.addEventListener("submit", async event => {
+  event.preventDefault();
+  const admissionNo = document.getElementById("feeReminderStudent")?.value || "";
+  const student = findActiveStudentByAdmissionNo(admissionNo);
+  if (!student) {
+    showToast("Please select one student first.");
+    return;
+  }
+  const button = document.getElementById("sendFeeReminder");
+  const statusBox = document.getElementById("feeReminderSendStatus");
+  const due = getIndividualFeeReminderDue(student);
+  const reminder = {
+    id: `fee-reminder-${Date.now()}`,
+    admissionNo: student.admissionNo || admissionNo,
+    studentId: student.admissionNo || admissionNo,
+    studentName: student.name || "Student",
+    className: student.klass || "",
+    dueAmount: due.amount,
+    title: String(document.getElementById("feeReminderTitle")?.value || "School Fee Reminder").trim(),
+    message: String(document.getElementById("feeReminderMessage")?.value || "").trim(),
+    sentAt: new Date().toISOString()
+  };
+  if (!reminder.message) {
+    showToast("Please write the reminder message.");
+    return;
+  }
+  if (button) {
+    button.disabled = true;
+    button.textContent = "Sending...";
+  }
+  if (statusBox) statusBox.textContent = `Sending only to ${student.name || admissionNo}...`;
+  try {
+    const result = await sendIndividualFeeReminderNotification(reminder);
+    const targetDevices = Number(result.targetDeviceCount || 0);
+    const sentDevices = Number(result.sent || 0);
+    const status = !result.configured ? "Not Configured" : !targetDevices ? "No Device" : result.ok && sentDevices > 0 ? "Sent" : "Failed";
+    feeReminderHistory.unshift({...reminder, targetDevices, sentDevices, status, error: result.error || ""});
+    if (feeReminderHistory.length > 200) feeReminderHistory.length = 200;
+    saveAppState();
+    renderFeeReminderHistory();
+    if (!result.configured) {
+      showToast("Reminder logged, but Firebase Cloud Messaging is not configured.");
+    } else if (!targetDevices) {
+      showToast(`No registered mobile device found for ${student.name || admissionNo}.`);
+    } else if (sentDevices > 0) {
+      showToast(`Fee reminder sent only to ${student.name || admissionNo} (${sentDevices} device).`);
+    } else {
+      showToast(result.error || "The selected device did not receive the notification.");
+    }
+    if (statusBox) statusBox.textContent = `${status}: ${sentDevices}/${targetDevices} device(s).`;
+  } catch (error) {
+    if (statusBox) statusBox.textContent = error.message || "Fee reminder could not be sent.";
+    showToast(error.message || "Fee reminder could not be sent.");
+  } finally {
+    if (button) {
+      button.disabled = false;
+      button.textContent = "Send to This Student";
+    }
+  }
 });
 
 document.getElementById("studentDueAccessForm")?.addEventListener("submit", event => {

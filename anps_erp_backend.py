@@ -787,6 +787,47 @@ def send_birthday_push(payload, user):
     )
 
 
+def send_individual_fee_reminder_push(payload):
+    reminder = payload.get("reminder") if isinstance(payload.get("reminder"), dict) else payload
+    admission_no = str(reminder.get("admissionNo") or reminder.get("studentId") or "").strip()
+    if not admission_no:
+        return {"ok": False, "configured": fcm_is_configured(), "sent": 0, "error": "Student admission number is required."}
+    state = read_state() or {}
+    wanted = normalize_admission_no(admission_no)
+    matched_records = []
+    tokens = []
+    for item in state.get("mobilePushTokens", []) or []:
+        if not isinstance(item, dict) or not item.get("token"):
+            continue
+        if str(item.get("enabled", "true")).lower() in {"false", "0", "no", "disabled"}:
+            continue
+        if str(item.get("role") or "").strip().lower() != "student":
+            continue
+        if normalize_admission_no(item.get("userId") or "") != wanted:
+            continue
+        tokens.append(item.get("token"))
+        matched_records.append(item)
+    unique_tokens = list(dict.fromkeys(tokens))
+    title = str(reminder.get("title") or "School Fee Reminder").strip()[:60]
+    body = shorten_push_body(reminder.get("message"), "Your school fee is pending. Please open the Fees page for details.")
+    result = send_fcm_notifications(
+        unique_tokens,
+        title,
+        body,
+        {
+            "type": "fee_reminder",
+            "reminderId": str(reminder.get("id") or ""),
+            "admissionNo": admission_no,
+            "dueAmount": str(reminder.get("dueAmount") or 0),
+            "openView": "fees",
+        },
+    )
+    result["targetDeviceCount"] = len(unique_tokens)
+    result["matchedUserCount"] = len(matched_records)
+    result["admissionNo"] = admission_no
+    return result
+
+
 def send_teacher_advisory_push(payload):
     advisory = payload.get("advisory") if isinstance(payload.get("advisory"), dict) else payload
     state = read_state() or {}
@@ -1886,6 +1927,7 @@ EDITABLE_OBJECT_MERGE_RULES = {
     "studentUserAccounts": ["loginId", "admissionNo"],
     "studentAbsenceRequests": ["id", "studentId", "absenceDate"],
     "mobileAppActivity": ["loginId", "admissionNo"],
+    "feeReminderHistory": ["id"],
     "admissionEnquiries": ["id", "mobile", "studentName"],
     "complaintRecords": ["id", "complaintNo", "subject"],
     "staffAttendanceRecords": ["id", "staffId", "date"],
@@ -4996,6 +5038,8 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             return self.homework_doubt_reply_push_request()
         if path == "/api/notifications/birthday":
             return self.birthday_push_request()
+        if path == "/api/notifications/fee-reminder":
+            return self.fee_reminder_push_request()
         if path == "/api/notifications/teacher-advisory":
             return self.teacher_advisory_push_request()
         if path == "/api/payments/icici/create":
@@ -5252,6 +5296,18 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
             token = self.headers.get("Authorization", "").replace("Bearer ", "", 1).strip()
             result = send_birthday_push(payload, get_session_user(token) or {})
+            self.json_response(result, status=200 if result.get("ok") or not result.get("configured") else 400)
+        except Exception as exc:
+            self.json_response({"ok": False, "error": str(exc)}, status=400)
+
+    def fee_reminder_push_request(self):
+        length = int(self.headers.get("Content-Length") or "0")
+        if length > MAX_BODY:
+            self.send_error(413, "Request body too large")
+            return
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+            result = send_individual_fee_reminder_push(payload)
             self.json_response(result, status=200 if result.get("ok") or not result.get("configured") else 400)
         except Exception as exc:
             self.json_response({"ok": False, "error": str(exc)}, status=400)

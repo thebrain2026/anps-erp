@@ -1112,23 +1112,42 @@
           <section class="panel">
             <div class="panel-head">
               <div>
-                <p class="eyebrow">Communication</p>
-                <h2>Fee Reminder</h2>
+                <p class="eyebrow">Direct mobile notification</p>
+                <h2>Individual Student Fee Reminder</h2>
+                <small>Send a private reminder only to the selected student's registered mobile device.</small>
               </div>
-              <button class="primary-action" id="sendFeeReminder" type="button">Send Reminder</button>
             </div>
-            <div class="fee-form reminder-form">
-              <label>Audience
-                <select><option>All Due Parents</option><option>Overdue Only</option><option>Promise to Pay</option></select>
+            <form id="individualFeeReminderForm" class="student-due-access-form">
+              <label>Find Student
+                <input id="feeReminderStudentSearch" type="search" placeholder="Type name, admission no. or mobile" autocomplete="off" />
               </label>
-              <label>Channel
-                <select><option>SMS + App</option><option>WhatsApp</option><option>Email</option></select>
+              <label>Select Student
+                <select id="feeReminderStudent" required><option value="">Select one student</option></select>
               </label>
-              <label>Due Before
-                <input type="text" placeholder="DD-MM-YYYY" />
+              <div class="student-due-access-preview" id="feeReminderStudentPreview">
+                <strong>Select a student</strong><small>Due amount and mobile registration status will appear here.</small>
+              </div>
+              <label>Notification Title
+                <input id="feeReminderTitle" maxlength="60" value="School Fee Reminder" required />
               </label>
+              <label>Message
+                <textarea id="feeReminderMessage" maxlength="320" rows="5" required></textarea>
+              </label>
+              <div class="student-due-access-bottom">
+                <small id="feeReminderSendStatus">Only the selected student's active device will receive this notification.</small>
+                <button class="primary-action" id="sendFeeReminder" type="submit">Send to This Student</button>
+              </div>
+            </form>
+            <div class="panel-head">
+              <div><p class="eyebrow">Delivery log</p><h3>Recent Individual Reminders</h3></div>
+              <strong id="feeReminderHistoryCount">0 sent</strong>
             </div>
-            <div class="receipt">Draft: Dear Parent, school fee is pending. Please clear dues before the due date to avoid late fee.</div>
+            <div class="table-wrap compact-table">
+              <table>
+                <thead><tr><th>Time</th><th>Student</th><th>Admission No.</th><th>Due</th><th>Devices</th><th>Status</th></tr></thead>
+                <tbody id="feeReminderHistoryRows"><tr><td colspan="6">No individual fee reminder sent yet.</td></tr></tbody>
+              </table>
+            </div>
           </section>
           <section class="panel student-due-control-panel">
             <div class="panel-head">
