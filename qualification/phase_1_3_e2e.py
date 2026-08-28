@@ -181,7 +181,10 @@ def reset_delivery(conn, outbox_id, attempts=0):
 
 
 def qualify(args):
-    if "phase13" not in args.database_url.lower() or "localhost" not in args.database_url.lower():
+    database_scope = args.database_url.lower()
+    if not any(marker in database_scope for marker in ("phase13", "phase15")) or not any(
+        host in database_scope for host in ("localhost", "127.0.0.1")
+    ):
         raise SystemExit("Refusing non-disposable or non-local BSFV database URL")
     os.environ["BSFV_DATABASE_URL"] = args.database_url
     os.environ["BSFV_ENVIRONMENT"] = "test"
@@ -203,6 +206,7 @@ def qualify(args):
     )
     from app.models.payroll import PayrollRecord
     from app.models.treasury import TreasuryTransaction
+    from app.services.rate_limit import integration_rate_limiter
 
     secret = secrets.token_urlsafe(48)
     config = IntegrationConfig(
@@ -256,6 +260,8 @@ def qualify(args):
     settings.integration_domain_processing_enabled = False
     settings.integration_mode = "shadow"
     settings.integration_secret_provider = "synthetic"
+    settings.integration_rate_limit = max(args.performance_events + 100, 1000)
+    integration_rate_limiter.reset()
     sender_dir = tempfile.TemporaryDirectory(prefix="anps-phase13-synthetic-")
     sender_path = Path(sender_dir.name) / "anps-synthetic.db"
     sender = sqlite3.connect(sender_path, check_same_thread=False)
@@ -535,6 +541,8 @@ def qualify(args):
         settings.integration_domain_processing_enabled = False
         settings.integration_mode = "disabled"
         settings.integration_secret_provider = "disabled"
+        settings.integration_rate_limit = 120
+        integration_rate_limiter.reset()
         try:
             sender.close()
         except Exception:

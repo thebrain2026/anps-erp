@@ -11,12 +11,16 @@ import hmac
 import json
 import os
 import random
+import re
+import stat
 import urllib.error
 import urllib.request
 import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
+from pathlib import Path
+from urllib.parse import urlsplit
 
 import rfc8785
 
@@ -121,16 +125,23 @@ class IntegrationConfig:
             session_map = json.loads(raw_map) if raw_map else {}
         except json.JSONDecodeError:
             session_map = {}
+        provider = os.environ.get("ANPS_BSFV_SECRET_PROVIDER", "disabled").strip().lower()
+        key_id = os.environ.get("ANPS_BSFV_KEY_ID", "").strip()
+        secret = ""
+        if provider == "synthetic":
+            secret = os.environ.get("ANPS_BSFV_HMAC_SECRET", "").strip()
+        elif provider == "external":
+            secret = _read_external_secret(os.environ.get("ANPS_BSFV_HMAC_SECRET_FILE", ""), key_id)
         return cls(
             enabled=os.environ.get("ANPS_BSFV_INTEGRATION_ENABLED", "false").lower() == "true",
             endpoint=os.environ.get("ANPS_BSFV_ENDPOINT", "").strip(),
             approved_endpoints=tuple(filter(None, (item.strip() for item in os.environ.get("ANPS_BSFV_APPROVED_ENDPOINTS", "").split(",")))),
-            key_id=os.environ.get("ANPS_BSFV_KEY_ID", "").strip(),
-            secret=os.environ.get("ANPS_BSFV_HMAC_SECRET", "").strip(),
+            key_id=key_id,
+            secret=secret,
             school_id=os.environ.get("ANPS_BSFV_SCHOOL_ID", "").strip(),
             session_map=session_map if isinstance(session_map, dict) else {},
             source_system=os.environ.get("ANPS_BSFV_SOURCE_SYSTEM", "anps").strip() or "anps",
-            secret_provider=os.environ.get("ANPS_BSFV_SECRET_PROVIDER", "disabled").strip().lower(),
+            secret_provider=provider,
         )
 
     def refusal_code(self):
@@ -140,7 +151,16 @@ class IntegrationConfig:
             return "secret_provider_unavailable"
         if not self.endpoint or self.endpoint not in self.approved_endpoints:
             return "endpoint_not_approved"
-        if not self.endpoint.startswith("https://"):
+        parsed = urlsplit(self.endpoint)
+        if (
+            parsed.scheme != "https"
+            or not parsed.hostname
+            or parsed.username
+            or parsed.password
+            or parsed.query
+            or parsed.fragment
+            or parsed.path != INGESTION_PATH
+        ):
             return "tls_required"
         if not self.key_id:
             return "key_id_missing"
@@ -149,6 +169,25 @@ class IntegrationConfig:
         if not self.school_id:
             return "school_mapping_missing"
         return None
+
+
+def _read_external_secret(filename, expected_key_id):
+    """Read a secret file projected by an external manager; fail closed on unsafe files."""
+    if not filename or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", expected_key_id):
+        return ""
+    path = Path(filename)
+    try:
+        if not path.is_absolute() or path.is_symlink() or not path.is_file():
+            return ""
+        if path.name != expected_key_id:
+            return ""
+        metadata = path.stat()
+        if metadata.st_size > 4096 or stat.S_IMODE(metadata.st_mode) & 0o077:
+            return ""
+        value = path.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeError):
+        return ""
+    return value if len(value) >= 32 else ""
 
 
 def utc_now():

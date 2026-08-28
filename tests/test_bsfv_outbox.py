@@ -1,4 +1,5 @@
 import json
+import os
 import sqlite3
 import tempfile
 import unittest
@@ -205,7 +206,6 @@ class OutboxTest(unittest.TestCase):
         ])
 
     def test_environment_enablement_and_secret_provider_fail_closed(self):
-        import os
         from unittest.mock import patch
 
         with patch.dict(os.environ, {"ANPS_BSFV_INTEGRATION_ENABLED": "yes"}, clear=True):
@@ -214,6 +214,33 @@ class OutboxTest(unittest.TestCase):
             self.assertEqual(
                 IntegrationConfig.from_env().refusal_code(), "secret_provider_unavailable"
             )
+
+    def test_external_secret_file_and_endpoint_validation_fail_closed(self):
+        from unittest.mock import patch
+
+        secret_file = Path(self.temp.name) / "key-a"
+        secret_file.write_text("synthetic-external-secret-at-least-32-characters")
+        secret_file.chmod(0o600)
+        environment = {
+            "ANPS_BSFV_INTEGRATION_ENABLED": "true",
+            "ANPS_BSFV_SECRET_PROVIDER": "external",
+            "ANPS_BSFV_HMAC_SECRET_FILE": str(secret_file),
+            "ANPS_BSFV_KEY_ID": "key-a",
+            "ANPS_BSFV_ENDPOINT": "https://anpsfinance.thebrainerp.com/api/v1/integrations/anps/events",
+            "ANPS_BSFV_APPROVED_ENDPOINTS": "https://anpsfinance.thebrainerp.com/api/v1/integrations/anps/events",
+            "ANPS_BSFV_SCHOOL_ID": "school-synthetic",
+            "ANPS_BSFV_SESSION_MAP": '{"2026-27":"session-synthetic"}',
+        }
+        with patch.dict(os.environ, environment, clear=True):
+            assert IntegrationConfig.from_env().refusal_code() is None
+        secret_file.chmod(0o644)
+        with patch.dict(os.environ, environment, clear=True):
+            assert IntegrationConfig.from_env().refusal_code() == "hmac_secret_missing"
+        unsafe = dict(environment)
+        unsafe["ANPS_BSFV_ENDPOINT"] += "?redirect=https://example.invalid"
+        unsafe["ANPS_BSFV_APPROVED_ENDPOINTS"] = unsafe["ANPS_BSFV_ENDPOINT"]
+        with patch.dict(os.environ, unsafe, clear=True):
+            assert IntegrationConfig.from_env().refusal_code() == "tls_required"
 
     def test_clean_and_existing_schema_migration_are_idempotent(self):
         initialize_outbox(self.conn)
