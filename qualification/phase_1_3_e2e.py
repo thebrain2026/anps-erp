@@ -182,7 +182,8 @@ def reset_delivery(conn, outbox_id, attempts=0):
 
 def qualify(args):
     database_scope = args.database_url.lower()
-    if not any(marker in database_scope for marker in ("phase13", "phase15", "phase16")) or not any(
+    disposable_markers = ("phase13", "phase15", "phase16", "phase17")
+    if not any(marker in database_scope for marker in disposable_markers) or not any(
         host in database_scope for host in ("localhost", "127.0.0.1")
     ):
         raise SystemExit("Refusing non-disposable or non-local BSFV database URL")
