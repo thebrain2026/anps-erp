@@ -117,6 +117,8 @@ class IntegrationConfig:
     session_map: dict[str, str]
     source_system: str = "anps"
     secret_provider: str = "disabled"
+    access_client_id: str = ""
+    access_client_secret: str = ""
 
     @classmethod
     def from_env(cls):
@@ -132,6 +134,16 @@ class IntegrationConfig:
             secret = os.environ.get("ANPS_BSFV_HMAC_SECRET", "").strip()
         elif provider == "external":
             secret = _read_external_secret(os.environ.get("ANPS_BSFV_HMAC_SECRET_FILE", ""), key_id)
+        access_client_id = _read_secret_file(
+            os.environ.get("ANPS_BSFV_CF_ACCESS_CLIENT_ID_FILE", ""),
+            "cf-access-client-id",
+            16,
+        ) if provider == "external" else ""
+        access_client_secret = _read_secret_file(
+            os.environ.get("ANPS_BSFV_CF_ACCESS_CLIENT_SECRET_FILE", ""),
+            "cf-access-client-secret",
+            32,
+        ) if provider == "external" else ""
         return cls(
             enabled=os.environ.get("ANPS_BSFV_INTEGRATION_ENABLED", "false").lower() == "true",
             endpoint=os.environ.get("ANPS_BSFV_ENDPOINT", "").strip(),
@@ -142,6 +154,8 @@ class IntegrationConfig:
             session_map=session_map if isinstance(session_map, dict) else {},
             source_system=os.environ.get("ANPS_BSFV_SOURCE_SYSTEM", "anps").strip() or "anps",
             secret_provider=provider,
+            access_client_id=access_client_id,
+            access_client_secret=access_client_secret,
         )
 
     def refusal_code(self):
@@ -166,20 +180,24 @@ class IntegrationConfig:
             return "key_id_missing"
         if not self.secret:
             return "hmac_secret_missing"
+        if self.secret_provider == "external" and (
+            not self.access_client_id or not self.access_client_secret
+        ):
+            return "edge_service_credentials_missing"
         if not self.school_id:
             return "school_mapping_missing"
         return None
 
 
-def _read_external_secret(filename, expected_key_id):
-    """Read a secret file projected by an external manager; fail closed on unsafe files."""
-    if not filename or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", expected_key_id):
+def _read_secret_file(filename, expected_name, minimum_length):
+    """Read one exact external secret file and fail closed on unsafe metadata."""
+    if not filename or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", expected_name):
         return ""
     path = Path(filename)
     try:
         if not path.is_absolute() or path.is_symlink() or not path.is_file():
             return ""
-        if path.name != expected_key_id:
+        if path.name != expected_name:
             return ""
         metadata = path.stat()
         if metadata.st_size > 4096 or stat.S_IMODE(metadata.st_mode) & 0o077:
@@ -187,7 +205,12 @@ def _read_external_secret(filename, expected_key_id):
         value = path.read_text(encoding="utf-8").strip()
     except (OSError, UnicodeError):
         return ""
-    return value if len(value) >= 32 else ""
+    return value if len(value) >= minimum_length else ""
+
+
+def _read_external_secret(filename, expected_key_id):
+    """Read the HMAC file whose basename must equal its approved key ID."""
+    return _read_secret_file(filename, expected_key_id, 32)
 
 
 def utc_now():
@@ -211,7 +234,7 @@ def sign_headers(document, config, signed_at=None):
     digest = payload_digest(canonical_bytes(document))
     signing_input = f"POST\n{INGESTION_PATH}\n{config.key_id}\n{signed_at}\n{document['event_id']}\n{digest}\n".encode()
     signature = b64url(hmac.new(config.secret.encode(), signing_input, hashlib.sha256).digest())
-    return {
+    headers = {
         "Content-Type": "application/json",
         "X-ANPS-Key-ID": config.key_id,
         "X-ANPS-Signed-At": signed_at,
@@ -219,6 +242,10 @@ def sign_headers(document, config, signed_at=None):
         "X-ANPS-Payload-SHA256": digest,
         "X-ANPS-Signature": f"v1={signature}",
     }
+    if config.access_client_id and config.access_client_secret:
+        headers["CF-Access-Client-Id"] = config.access_client_id
+        headers["CF-Access-Client-Secret"] = config.access_client_secret
+    return headers
 
 
 def initialize_outbox(conn):

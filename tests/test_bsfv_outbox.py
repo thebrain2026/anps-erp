@@ -221,6 +221,12 @@ class OutboxTest(unittest.TestCase):
         secret_file = Path(self.temp.name) / "key-a"
         secret_file.write_text("synthetic-external-secret-at-least-32-characters")
         secret_file.chmod(0o600)
+        access_id_file = Path(self.temp.name) / "cf-access-client-id"
+        access_id_file.write_text("synthetic-access-client-id")
+        access_id_file.chmod(0o600)
+        access_secret_file = Path(self.temp.name) / "cf-access-client-secret"
+        access_secret_file.write_text("synthetic-access-client-secret-at-least-32")
+        access_secret_file.chmod(0o600)
         environment = {
             "ANPS_BSFV_INTEGRATION_ENABLED": "true",
             "ANPS_BSFV_SECRET_PROVIDER": "external",
@@ -230,6 +236,8 @@ class OutboxTest(unittest.TestCase):
             "ANPS_BSFV_APPROVED_ENDPOINTS": "https://anpsfinance.thebrainerp.com/api/v1/integrations/anps/events",
             "ANPS_BSFV_SCHOOL_ID": "school-synthetic",
             "ANPS_BSFV_SESSION_MAP": '{"2026-27":"session-synthetic"}',
+            "ANPS_BSFV_CF_ACCESS_CLIENT_ID_FILE": str(access_id_file),
+            "ANPS_BSFV_CF_ACCESS_CLIENT_SECRET_FILE": str(access_secret_file),
         }
         with patch.dict(os.environ, environment, clear=True):
             assert IntegrationConfig.from_env().refusal_code() is None
@@ -241,6 +249,23 @@ class OutboxTest(unittest.TestCase):
         unsafe["ANPS_BSFV_APPROVED_ENDPOINTS"] = unsafe["ANPS_BSFV_ENDPOINT"]
         with patch.dict(os.environ, unsafe, clear=True):
             assert IntegrationConfig.from_env().refusal_code() == "tls_required"
+
+        secret_file.chmod(0o600)
+        missing_edge = dict(environment)
+        missing_edge.pop("ANPS_BSFV_CF_ACCESS_CLIENT_SECRET_FILE")
+        with patch.dict(os.environ, missing_edge, clear=True):
+            assert IntegrationConfig.from_env().refusal_code() == "edge_service_credentials_missing"
+
+    def test_service_credentials_are_added_only_when_both_are_present(self):
+        base = config()
+        configured = IntegrationConfig(
+            **{**base.__dict__, "access_client_id": "client-id", "access_client_secret": "client-secret"}
+        )
+        capture_state_changes(self.conn, {}, fee_state(), configured)
+        document = json.loads(self.rows()[0]["payload"])
+        headers = sign_headers(document, configured, "2026-08-28T12:00:00Z")
+        self.assertEqual(headers["CF-Access-Client-Id"], "client-id")
+        self.assertEqual(headers["CF-Access-Client-Secret"], "client-secret")
 
     def test_clean_and_existing_schema_migration_are_idempotent(self):
         initialize_outbox(self.conn)

@@ -26,6 +26,26 @@ services:
         value: "*"
       - key: ANPS_BSFV_INTEGRATION_ENABLED
         value: "false"
+      - key: ANPS_BSFV_SECRET_PROVIDER
+        value: external
+      - key: ANPS_BSFV_ENDPOINT
+        value: https://npsf.thebrainerp.com/api/v1/integrations/anps/events
+      - key: ANPS_BSFV_APPROVED_ENDPOINTS
+        value: https://npsf.thebrainerp.com/api/v1/integrations/anps/events
+      - key: ANPS_BSFV_KEY_ID
+        value: anps-bsfv-prod-2026-08-a
+      - key: ANPS_BSFV_HMAC_SECRET_FILE
+        value: /etc/secrets/anps-bsfv-prod-2026-08-a
+      - key: ANPS_BSFV_CF_ACCESS_CLIENT_ID_FILE
+        value: /etc/secrets/cf-access-client-id
+      - key: ANPS_BSFV_CF_ACCESS_CLIENT_SECRET_FILE
+        value: /etc/secrets/cf-access-client-secret
+      - key: ANPS_BSFV_SCHOOL_ID
+        value: anps
+      - key: ANPS_BSFV_SESSION_MAP
+        value: '{"2026-27":"2026-27"}'
+      - key: ANPS_BSFV_SOURCE_SYSTEM
+        value: anps
       - key: ANPS_ERP_API_TOKEN
         sync: false
       - key: ANPS_FIREBASE_SERVICE_ACCOUNT_JSON
