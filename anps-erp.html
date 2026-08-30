@@ -55,6 +55,7 @@
             <button data-view="finance" type="button">Collect Fees</button>
             <button data-view="feeBook" type="button">Fee Book</button>
             <button data-view="bankBook" type="button">Bank Book</button>
+            <button data-view="cashBook" type="button">Cash Book</button>
             <button data-view="bankReconciliation" type="button">Bank Reconciliation</button>
             <button data-view="dueFeesSearch" type="button">Search Due Fees</button>
             <button data-view="upiPaymentVerification" type="button">UPI Verification</button>
@@ -579,7 +580,7 @@
                 <label>Payment Received</label>
                 <div class="split-payment-box">
                   <label for="feeBankAmount">
-                    <span>Bank Payment</span>
+                    <span>Bank / UPI Payment</span>
                     <input id="feeBankAmount" name="bankAmount" type="number" min="0" placeholder="0" />
                   </label>
                   <label for="feeBankAccount">
@@ -735,7 +736,7 @@
             <div>
               <p class="eyebrow">Fees Collection</p>
               <h2>Bank Book</h2>
-              <small>Bank mode fee receipts will appear here for reconciliation.</small>
+              <small>Bank and UPI fee collections appear here for account-wise tracking and reconciliation.</small>
             </div>
           </div>
           <section class="bank-account-manager">
@@ -794,6 +795,37 @@
               <tbody id="bankBookRows">
                 <tr><td colspan="12">No bank payment found yet.</td></tr>
               </tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="cashBook">
+        <div class="panel bank-book-panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Fees Collection</p>
+              <h2>Cash Book</h2>
+              <small>All cash fee collections appear here automatically.</small>
+            </div>
+          </div>
+          <div class="bank-book-summary" id="cashBookSummary"></div>
+          <div class="bank-book-filter">
+            <label>Date
+              <input id="cashBookDateFilter" type="date" />
+            </label>
+            <label>Fee Head
+              <select id="cashBookFeeHeadFilter"><option value="">All Fee Heads</option></select>
+            </label>
+            <label>Search Student / Receipt / Remarks
+              <input id="cashBookSearchInput" type="search" placeholder="Search cash payment" />
+            </label>
+            <button class="ghost-action" id="cashBookClearFilters" type="button">Clear</button>
+          </div>
+          <div class="report-table-panel table-wrap bank-book-table">
+            <table>
+              <thead><tr><th>Date</th><th>Receipt No.</th><th>Student</th><th>Admission No.</th><th>Class</th><th>Fee Head</th><th>Month</th><th>Cash Amount</th><th>Fine</th><th>Total Paid</th><th>Remarks</th><th>Collected By</th></tr></thead>
+              <tbody id="cashBookRows"><tr><td colspan="12">No cash payment found yet.</td></tr></tbody>
             </table>
           </div>
         </div>
@@ -3923,7 +3955,7 @@
           <label>Receipt No.
             <input name="receiptNo" readonly />
           </label>
-          <label>Bank Payment
+          <label>Bank / UPI Payment
             <input name="bankAmount" type="number" min="0" placeholder="0" />
           </label>
           <label>Deposit To

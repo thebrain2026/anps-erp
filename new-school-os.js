@@ -2357,6 +2357,7 @@ function renderActiveView(viewName = document.querySelector(".view.active")?.id 
     renderFeeBook();
   }
   if (viewName === "bankBook") renderBankBook();
+  if (viewName === "cashBook") renderCashBook();
   if (viewName === "bankReconciliation") renderBankReconciliation([]);
   if (viewName === "dueFeesSearch") renderDueFeesSearch();
   if (viewName === "upiPaymentVerification") renderUpiPaymentVerification();
@@ -3853,6 +3854,91 @@ function renderBankBook() {
       <td>${escapeHtml(row.role || "-")}</td>
     </tr>
   `).join("") || `<tr><td colspan="12">No bank payment found for the selected filter.</td></tr>`;
+}
+
+function getCashBookRows() {
+  const sessionPayments = collectedPayments[activeSession] || {};
+  const rows = [];
+  Object.entries(sessionPayments).forEach(([admissionNo, payments]) => {
+    const student = findStudentByAdmissionNo(admissionNo);
+    (payments || []).forEach(payment => {
+      const total = Number(payment.amount || 0);
+      const split = getPaymentSplitForAmount(payment, total);
+      const cashAmount = Number(payment.cashAmount || split.cash || 0);
+      if (cashAmount <= 0) return;
+      const allocations = Array.isArray(payment.allocations) ? payment.allocations : [];
+      const feeHeads = [...new Set(allocations.map(item => item.head).filter(Boolean))];
+      const feeMonths = [...new Set(allocations.map(item => item.month).filter(Boolean))];
+      const fine = allocations.filter(item => /fine/i.test(String(item.head || ""))).reduce((sum, item) => sum + Number(item.amount || 0), 0);
+      rows.push({
+        date: formatDateDDMMYYYY(payment.date),
+        receipt: payment.receipt || "-",
+        studentName: student?.name || payment.studentName || "-",
+        admissionNo,
+        className: student ? [student.className || student.class || student.klass, student.section].filter(Boolean).join(" ") || "-" : "-",
+        feeHead: feeHeads.join(", ") || payment.feeHead || "-",
+        feeMonth: feeMonths.join(", ") || payment.feeMonth || "-",
+        cashAmount,
+        fine,
+        total: total || cashAmount + Number(payment.bankAmount || split.bank || 0),
+        remarks: payment.remarks || "-",
+        role: payment.by || payment.entryRole || payment.role || "-"
+      });
+    });
+  });
+  return rows.sort((a, b) => {
+    const dateDiff = parseDateDDMMYYYY(b.date) - parseDateDDMMYYYY(a.date);
+    return dateDiff || String(b.receipt || "").localeCompare(String(a.receipt || ""), undefined, {numeric: true});
+  });
+}
+
+function populateCashBookFeeHeadFilter(rows = getCashBookRows()) {
+  const select = document.getElementById("cashBookFeeHeadFilter");
+  if (!select) return;
+  const current = select.value;
+  const heads = [...new Set(rows.flatMap(row => String(row.feeHead || "").split(",").map(item => item.trim()).filter(Boolean)).filter(head => head !== "-"))]
+    .sort((a, b) => a.localeCompare(b, undefined, {numeric: true}));
+  select.innerHTML = `<option value="">All Fee Heads</option>${heads.map(head => `<option value="${escapeHtml(head)}">${escapeHtml(head)}</option>`).join("")}`;
+  if (heads.includes(current)) select.value = current;
+}
+
+function renderCashBook() {
+  const summary = document.getElementById("cashBookSummary");
+  const body = document.getElementById("cashBookRows");
+  if (!summary || !body) return;
+  const allRows = getCashBookRows();
+  populateCashBookFeeHeadFilter(allRows);
+  const selectedDate = document.getElementById("cashBookDateFilter")?.value || "";
+  const selectedDateLabel = selectedDate ? formatDateDDMMYYYY(selectedDate) : "";
+  const selectedHead = String(document.getElementById("cashBookFeeHeadFilter")?.value || "").trim();
+  const search = String(document.getElementById("cashBookSearchInput")?.value || "").trim().toLowerCase();
+  const rows = allRows.filter(row => {
+    const matchesDate = !selectedDateLabel || row.date === selectedDateLabel;
+    const matchesHead = !selectedHead || String(row.feeHead || "").split(",").map(item => item.trim()).includes(selectedHead);
+    const haystack = [row.receipt, row.studentName, row.admissionNo, row.className, row.feeHead, row.feeMonth, row.remarks, row.role].join(" ").toLowerCase();
+    return matchesDate && matchesHead && (!search || haystack.includes(search));
+  });
+  const totals = rows.reduce((sum, row) => {
+    sum.cash += Number(row.cashAmount || 0);
+    sum.receipts += 1;
+    sum.students.add(row.admissionNo);
+    return sum;
+  }, {cash: 0, receipts: 0, students: new Set()});
+  summary.innerHTML = `
+    <article><span>Cash Receipts</span><strong>${totals.receipts}</strong></article>
+    <article><span>Students</span><strong>${totals.students.size}</strong></article>
+    <article><span>Cash Collected</span><strong>${formatRs(totals.cash)}</strong></article>
+  `;
+  body.innerHTML = rows.map(row => `
+    <tr>
+      <td>${escapeHtml(row.date || "-")}</td><td><strong>${escapeHtml(row.receipt || "-")}</strong></td>
+      <td>${escapeHtml(row.studentName || "-")}</td><td>${escapeHtml(row.admissionNo || "-")}</td>
+      <td>${escapeHtml(row.className || "-")}</td><td>${escapeHtml(row.feeHead || "-")}</td>
+      <td>${escapeHtml(row.feeMonth || "-")}</td><td><strong>${formatRs(row.cashAmount || 0)}</strong></td>
+      <td>${formatRs(row.fine || 0)}</td><td>${formatRs(row.total || 0)}</td>
+      <td>${escapeHtml(row.remarks || "-")}</td><td>${escapeHtml(row.role || "-")}</td>
+    </tr>
+  `).join("") || `<tr><td colspan="12">No cash payment found for the selected filter.</td></tr>`;
 }
 
 function parseBankCsv(text = "") {
@@ -16533,6 +16619,19 @@ document.getElementById("bankBookClearFilters")?.addEventListener("click", () =>
   if (account) account.value = "";
   if (search) search.value = "";
   renderBankBook();
+});
+
+document.getElementById("cashBookDateFilter")?.addEventListener("change", renderCashBook);
+document.getElementById("cashBookFeeHeadFilter")?.addEventListener("change", renderCashBook);
+document.getElementById("cashBookSearchInput")?.addEventListener("input", renderCashBook);
+document.getElementById("cashBookClearFilters")?.addEventListener("click", () => {
+  const date = document.getElementById("cashBookDateFilter");
+  const feeHead = document.getElementById("cashBookFeeHeadFilter");
+  const search = document.getElementById("cashBookSearchInput");
+  if (date) date.value = "";
+  if (feeHead) feeHead.value = "";
+  if (search) search.value = "";
+  renderCashBook();
 });
 
 document.getElementById("bankAccountForm")?.addEventListener("submit", event => {
