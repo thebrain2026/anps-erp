@@ -6992,6 +6992,27 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   background: #fff;
 }
 
+.split-payment-box select {
+  min-height: 34px;
+  width: 100%;
+  border: 1px solid #cfd8e5;
+  border-radius: 6px;
+  background: #fff;
+  color: var(--ink);
+  padding: 0 8px;
+  font-weight: 850;
+}
+
+.bank-account-manager {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 16px;
+  border: 1px solid #d9e5ec;
+  border-radius: 12px;
+  background: #f8fbfd;
+}
+
 .collection-module .primary-action {
   width: min(220px, 100%);
   margin-left: 172px;

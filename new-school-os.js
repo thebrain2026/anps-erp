@@ -36,6 +36,7 @@ const studentUserAccounts = [];
 const mobileAppActivity = [];
 const upiPaymentRequests = [];
 const feeReminderHistory = [];
+const bankAccounts = [];
 const mobileAppSettings = {
   duePopupEnabled: true,
   dueLockEnabled: true,
@@ -518,6 +519,7 @@ function getAppStateSnapshot() {
     mobileAppActivity,
     upiPaymentRequests,
     feeReminderHistory,
+    bankAccounts,
     mobileAppSettings,
     rolePermissions,
     rolePermissionAudit,
@@ -1157,6 +1159,7 @@ const EDITABLE_OBJECT_MERGE_RULES = {
   studentUserAccounts: ["loginId", "admissionNo"],
   mobileAppActivity: ["loginId", "admissionNo"],
   feeReminderHistory: ["id"],
+  bankAccounts: ["id", "bankName", "accountLast4"],
   admissionEnquiries: ["id", "mobile", "studentName"],
   complaintRecords: ["id", "complaintNo", "subject"],
   studentAbsenceRequests: ["id", "studentId", "absenceDate"],
@@ -1686,6 +1689,9 @@ function applySavedState(saved = {}) {
     }
     if (Array.isArray(saved.feeReminderHistory)) {
       feeReminderHistory.splice(0, feeReminderHistory.length, ...saved.feeReminderHistory);
+    }
+    if (Array.isArray(saved.bankAccounts)) {
+      bankAccounts.splice(0, bankAccounts.length, ...saved.bankAccounts);
     }
     if (saved.mobileAppSettings && typeof saved.mobileAppSettings === "object") {
       mobileAppSettings.duePopupEnabled = saved.mobileAppSettings.duePopupEnabled !== false;
@@ -3720,6 +3726,8 @@ function getBankBookRows() {
         className: student ? [student.className || student.class || student.klass, student.section].filter(Boolean).join(" ") || "-" : "-",
         feeHead: feeHeads.join(", ") || payment.feeHead || "-",
         feeMonth: feeMonths.join(", ") || payment.feeMonth || "-",
+        bankAccountId: String(payment.bankAccountId || ""),
+        bankAccountName: String(bankAccounts.find(account => account.id === payment.bankAccountId) ? getBankAccountLabel(bankAccounts.find(account => account.id === payment.bankAccountId)) : payment.bankAccountName || "Unspecified Bank"),
         bankAmount,
         cashAmount: Number(payment.cashAmount || split.cash || 0),
         total: total || bankAmount + Number(payment.cashAmount || split.cash || 0),
@@ -3733,6 +3741,52 @@ function getBankBookRows() {
     if (dateDiff) return dateDiff;
     return String(b.receipt || "").localeCompare(String(a.receipt || ""), undefined, {numeric: true});
   });
+}
+
+function getActiveBankAccounts() {
+  return bankAccounts.filter(account => account && account.active !== false);
+}
+
+function getBankAccountLabel(account = {}) {
+  return [account.bankName, account.accountLast4 ? `•••• ${account.accountLast4}` : ""].filter(Boolean).join(" — ") || "Unnamed Bank";
+}
+
+function populateBankAccountSelect(select, includeAll = false) {
+  if (!select) return;
+  const current = select.value;
+  const options = getActiveBankAccounts().map(account => `<option value="${escapeHtml(account.id)}">${escapeHtml(getBankAccountLabel(account))}</option>`).join("");
+  select.innerHTML = `<option value="">${includeAll ? "All Bank Accounts" : "Select bank account"}</option>${options}`;
+  if ([...select.options].some(option => option.value === current)) select.value = current;
+}
+
+function refreshBankAccountSelectors() {
+  populateBankAccountSelect(document.getElementById("feeBankAccount"));
+  populateBankAccountSelect(combinedCollectionForm?.elements?.bankAccountId);
+  populateBankAccountSelect(document.getElementById("bankBookAccountFilter"), true);
+}
+
+function resetBankAccountForm() {
+  const form = document.getElementById("bankAccountForm");
+  if (!form) return;
+  form.reset();
+  form.elements.id.value = "";
+  form.querySelector("button[type='submit']").textContent = "Save Bank Account";
+}
+
+function renderBankAccounts() {
+  refreshBankAccountSelectors();
+  const body = document.getElementById("bankAccountRows");
+  if (!body) return;
+  body.innerHTML = bankAccounts.map(account => `
+    <tr>
+      <td><strong>${escapeHtml(account.bankName || "-")}</strong></td>
+      <td>${escapeHtml(account.accountName || "-")}</td>
+      <td>•••• ${escapeHtml(account.accountLast4 || "-")}</td>
+      <td>${escapeHtml(account.accountType || "-")}</td>
+      <td>${account.active === false ? "Inactive" : "Active"}</td>
+      <td><button class="mini" type="button" data-edit-bank-account="${escapeHtml(account.id)}">Edit</button> <button class="mini" type="button" data-toggle-bank-account="${escapeHtml(account.id)}">${account.active === false ? "Activate" : "Deactivate"}</button></td>
+    </tr>
+  `).join("") || `<tr><td colspan="6">No bank account added yet.</td></tr>`;
 }
 
 function populateBankBookFeeHeadFilter(rows = getBankBookRows()) {
@@ -3749,17 +3803,20 @@ function renderBankBook() {
   const summary = document.getElementById("bankBookSummary");
   const body = document.getElementById("bankBookRows");
   if (!summary || !body) return;
+  renderBankAccounts();
   const allRows = getBankBookRows();
   populateBankBookFeeHeadFilter(allRows);
   const selectedDate = document.getElementById("bankBookDateFilter")?.value || "";
   const selectedDateLabel = selectedDate ? formatDateDDMMYYYY(selectedDate) : "";
   const selectedHead = String(document.getElementById("bankBookFeeHeadFilter")?.value || "").trim();
+  const selectedAccount = String(document.getElementById("bankBookAccountFilter")?.value || "").trim();
   const search = String(document.getElementById("bankBookSearchInput")?.value || "").trim().toLowerCase();
   const rows = allRows.filter(row => {
     const matchesDate = !selectedDateLabel || row.date === selectedDateLabel;
     const matchesHead = !selectedHead || String(row.feeHead || "").split(",").map(item => item.trim()).includes(selectedHead);
-    const haystack = [row.receipt, row.studentName, row.admissionNo, row.className, row.feeHead, row.feeMonth, row.remarks, row.role].join(" ").toLowerCase();
-    return matchesDate && matchesHead && (!search || haystack.includes(search));
+    const matchesAccount = !selectedAccount || row.bankAccountId === selectedAccount;
+    const haystack = [row.receipt, row.studentName, row.admissionNo, row.className, row.feeHead, row.feeMonth, row.bankAccountName, row.remarks, row.role].join(" ").toLowerCase();
+    return matchesDate && matchesHead && matchesAccount && (!search || haystack.includes(search));
   });
   const totals = rows.reduce((sum, row) => {
     sum.bank += Number(row.bankAmount || 0);
@@ -3769,11 +3826,16 @@ function renderBankBook() {
     sum.students.add(row.admissionNo);
     return sum;
   }, {bank: 0, cash: 0, total: 0, receipts: 0, students: new Set()});
+  const accountTotals = rows.reduce((map, row) => {
+    const label = row.bankAccountName || "Unspecified Bank";
+    map.set(label, (map.get(label) || 0) + Number(row.bankAmount || 0));
+    return map;
+  }, new Map());
   summary.innerHTML = `
     <article><span>Bank Receipts</span><strong>${totals.receipts}</strong></article>
     <article><span>Students</span><strong>${totals.students.size}</strong></article>
     <article><span>Bank Amount</span><strong>${formatRs(totals.bank)}</strong></article>
-    <article><span>Total Paid</span><strong>${formatRs(totals.total)}</strong></article>
+    ${[...accountTotals.entries()].map(([label, amount]) => `<article><span>${escapeHtml(label)}</span><strong>${formatRs(amount)}</strong></article>`).join("")}
   `;
   body.innerHTML = rows.map(row => `
     <tr>
@@ -3784,12 +3846,13 @@ function renderBankBook() {
       <td>${escapeHtml(row.className || "-")}</td>
       <td>${escapeHtml(row.feeHead || "-")}</td>
       <td>${escapeHtml(row.feeMonth || "-")}</td>
+      <td>${escapeHtml(row.bankAccountName || "Unspecified Bank")}</td>
       <td><strong>${formatRs(row.bankAmount || 0)}</strong></td>
       <td>${formatRs(row.total || 0)}</td>
       <td>${escapeHtml(row.remarks || "-")}</td>
       <td>${escapeHtml(row.role || "-")}</td>
     </tr>
-  `).join("") || `<tr><td colspan="11">No bank payment found for the selected filter.</td></tr>`;
+  `).join("") || `<tr><td colspan="12">No bank payment found for the selected filter.</td></tr>`;
 }
 
 function parseBankCsv(text = "") {
@@ -9617,6 +9680,7 @@ function getStudentFeeItems(student) {
 }
 
 function renderStudentFeeCounter(admissionNo = activeFeeStudentAdmissionNo, requestedAmount = null, requestedHead = "", requestedFine = 0, requestedMonth = "") {
+  refreshBankAccountSelectors();
   const activeStudents = getActiveStudents();
   const student = findActiveStudentByAdmissionNo(admissionNo) || activeStudents[0];
   if (!student) {
@@ -12076,6 +12140,8 @@ function collectStudentPayment(student, amount, date, mode, preferredHead = "", 
     remarks: String(paymentBreakdown.remarks || "").trim(),
     bankAmount: Number(paymentBreakdown.bankAmount || 0),
     cashAmount: Number(paymentBreakdown.cashAmount || 0),
+    bankAccountId: String(paymentBreakdown.bankAccountId || ""),
+    bankAccountName: String(paymentBreakdown.bankAccountName || ""),
     allocations
   };
   getSessionPayments(student.admissionNo).unshift(payment);
@@ -12122,6 +12188,8 @@ function collectCombinedStudentPayment(student, items, date, receiptNo = "", pay
     remarks: String(paymentBreakdown.remarks || "").trim(),
     bankAmount,
     cashAmount,
+    bankAccountId: String(paymentBreakdown.bankAccountId || ""),
+    bankAccountName: String(paymentBreakdown.bankAccountName || ""),
     allocations
   };
   getSessionPayments(student.admissionNo).unshift(payment);
@@ -12393,6 +12461,7 @@ function openCombinedCollectionPopup(admissionNo, month, options = {}) {
     return;
   }
   combinedCollectionForm.reset();
+  refreshBankAccountSelectors();
   delete combinedCollectionForm.dataset.editPaymentReceipt;
   delete combinedCollectionForm.dataset.singleCollection;
   combinedCollectionForm.dataset.includePriorTuitionDue = options.includePriorTuitionDue ? "1" : "";
@@ -12422,6 +12491,7 @@ function openSingleCollectionPopup(admissionNo, feeHead, amount = 0, fine = 0) {
     return;
   }
   combinedCollectionForm.reset();
+  refreshBankAccountSelectors();
   delete combinedCollectionForm.dataset.editPaymentReceipt;
   delete combinedCollectionForm.dataset.includePriorTuitionDue;
   combinedCollectionForm.dataset.singleCollection = "1";
@@ -12453,6 +12523,8 @@ function openCombinedCollectionEditPopup(student, payment) {
   combinedCollectionForm.elements.date.value = formatDateDDMMYYYY(payment.date);
   combinedCollectionForm.elements.receiptNo.value = payment.receipt || "";
   combinedCollectionForm.elements.bankAmount.value = Number(payment.bankAmount || 0) || "";
+  refreshBankAccountSelectors();
+  combinedCollectionForm.elements.bankAccountId.value = payment.bankAccountId || "";
   combinedCollectionForm.elements.cashAmount.value = Number(payment.cashAmount || 0) || "";
   combinedCollectionForm.elements.discountAmount.value = Number(payment.discountAmount || 0) || "";
   combinedCollectionForm.elements.remarks.value = payment.remarks || "";
@@ -16449,15 +16521,79 @@ document.getElementById("upiPaymentRows")?.addEventListener("click", event => {
 
 document.getElementById("bankBookDateFilter")?.addEventListener("change", renderBankBook);
 document.getElementById("bankBookFeeHeadFilter")?.addEventListener("change", renderBankBook);
+document.getElementById("bankBookAccountFilter")?.addEventListener("change", renderBankBook);
 document.getElementById("bankBookSearchInput")?.addEventListener("input", renderBankBook);
 document.getElementById("bankBookClearFilters")?.addEventListener("click", () => {
   const date = document.getElementById("bankBookDateFilter");
   const feeHead = document.getElementById("bankBookFeeHeadFilter");
+  const account = document.getElementById("bankBookAccountFilter");
   const search = document.getElementById("bankBookSearchInput");
   if (date) date.value = "";
   if (feeHead) feeHead.value = "";
+  if (account) account.value = "";
   if (search) search.value = "";
   renderBankBook();
+});
+
+document.getElementById("bankAccountForm")?.addEventListener("submit", event => {
+  event.preventDefault();
+  const form = event.currentTarget;
+  const data = new FormData(form);
+  const bankName = String(data.get("bankName") || "").trim();
+  const accountName = String(data.get("accountName") || "").trim();
+  const accountLast4 = String(data.get("accountLast4") || "").replace(/\D/g, "").slice(-4);
+  if (!bankName || !accountName || accountLast4.length !== 4) {
+    showToast("Enter bank name, account name and exactly 4 account digits.");
+    return;
+  }
+  const editingId = String(data.get("id") || "");
+  const duplicate = bankAccounts.find(account => account.id !== editingId && String(account.bankName || "").toLowerCase() === bankName.toLowerCase() && String(account.accountLast4 || "") === accountLast4);
+  if (duplicate) {
+    showToast("This bank account is already added.");
+    return;
+  }
+  const existing = bankAccounts.find(account => account.id === editingId);
+  const record = {
+    id: existing?.id || `bank-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    bankName,
+    accountName,
+    accountLast4,
+    accountType: String(data.get("accountType") || "Other"),
+    active: existing?.active !== false,
+    createdAt: existing?.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+  if (existing) Object.assign(existing, record); else bankAccounts.push(record);
+  saveAppState();
+  resetBankAccountForm();
+  renderBankBook();
+  showToast(`${getBankAccountLabel(record)} saved.`);
+});
+
+document.getElementById("cancelBankAccountEdit")?.addEventListener("click", resetBankAccountForm);
+document.getElementById("bankAccountRows")?.addEventListener("click", event => {
+  const edit = event.target.closest("[data-edit-bank-account]");
+  const toggle = event.target.closest("[data-toggle-bank-account]");
+  const id = edit?.dataset.editBankAccount || toggle?.dataset.toggleBankAccount || "";
+  const account = bankAccounts.find(item => item.id === id);
+  if (!account) return;
+  if (edit) {
+    const form = document.getElementById("bankAccountForm");
+    form.elements.id.value = account.id;
+    form.elements.bankName.value = account.bankName || "";
+    form.elements.accountName.value = account.accountName || "";
+    form.elements.accountLast4.value = account.accountLast4 || "";
+    form.elements.accountType.value = account.accountType || "Other";
+    form.querySelector("button[type='submit']").textContent = "Update Bank Account";
+    form.elements.bankName.focus();
+  }
+  if (toggle) {
+    account.active = account.active === false;
+    account.updatedAt = new Date().toISOString();
+    saveAppState();
+    renderBankBook();
+    showToast(`${getBankAccountLabel(account)} ${account.active ? "activated" : "deactivated"}.`);
+  }
 });
 
 document.getElementById("bankReconRunBtn")?.addEventListener("click", () => {
@@ -17047,6 +17183,7 @@ combinedCollectionForm.addEventListener("submit", event => {
   const total = selected.reduce((sum, item) => sum + item.total, 0);
   let bankAmount = Number(form.elements.bankAmount.value || 0);
   let cashAmount = Number(form.elements.cashAmount.value || 0);
+  const bankAccount = bankAccounts.find(account => account.id === String(form.elements.bankAccountId?.value || "") && account.active !== false);
   const discountAmount = Math.min(Number(form.elements.discountAmount?.value || 0), total);
   const payableAmount = Math.max(total - discountAmount, 0);
   if (!student || !selected.length || total <= 0) {
@@ -17059,6 +17196,11 @@ combinedCollectionForm.addEventListener("submit", event => {
   }
   if (bankAmount + cashAmount > payableAmount) {
     showToast(`Payment cannot be more than ${formatRs(payableAmount)} after discount.`);
+    return;
+  }
+  if (bankAmount > 0 && !bankAccount) {
+    showToast("Select the bank account receiving this payment.");
+    form.elements.bankAccountId?.focus();
     return;
   }
   const editingReceipt = form.dataset.editPaymentReceipt || "";
@@ -17075,6 +17217,8 @@ combinedCollectionForm.addEventListener("submit", event => {
     cashAmount,
     discountAmount,
     remarks: form.elements.remarks?.value || "",
+    bankAccountId: bankAccount?.id || "",
+    bankAccountName: bankAccount ? getBankAccountLabel(bankAccount) : "",
     paymentId: editingPaymentId || undefined
   });
   if (!payment) {
@@ -17104,6 +17248,7 @@ document.getElementById("feeForm").addEventListener("submit", event => {
   const date = formatDateDDMMYYYY(data.get("date") || new Date());
   const bankAmount = Number(data.get("bankAmount") || 0);
   const cashAmount = Number(data.get("cashAmount") || 0);
+  const bankAccount = bankAccounts.find(account => account.id === String(data.get("bankAccountId") || "") && account.active !== false);
   const rawAmount = bankAmount + cashAmount;
   const mode = bankAmount > 0 && cashAmount > 0 ? "Bank + Cash" : bankAmount > 0 ? "Bank" : "Cash";
   const feeHead = event.currentTarget.dataset.feeHead || "";
@@ -17118,8 +17263,13 @@ document.getElementById("feeForm").addEventListener("submit", event => {
     showToast("Enter bank or cash payment amount.");
     return;
   }
+  if (bankAmount > 0 && !bankAccount) {
+    showToast("Select the bank account receiving this payment.");
+    event.currentTarget.elements.bankAccountId?.focus();
+    return;
+  }
   if (editingReceipt) deletePaymentByReceipt(student.admissionNo, editingReceipt, editingPaymentId);
-  const payment = collectStudentPayment(student, rawAmount, date, mode, feeHead, fineAmount, feeMonth, receiptNo, {bankAmount, cashAmount, paymentId: editingPaymentId || undefined});
+  const payment = collectStudentPayment(student, rawAmount, date, mode, feeHead, fineAmount, feeMonth, receiptNo, {bankAmount, cashAmount, bankAccountId: bankAccount?.id || "", bankAccountName: bankAccount ? getBankAccountLabel(bankAccount) : "", paymentId: editingPaymentId || undefined});
   if (!payment) {
     showToast("Payment could not be saved.");
     return;
@@ -18172,6 +18322,7 @@ document.getElementById("studentAbsenceClear")?.addEventListener("click", () => 
 });
 
 loadAppState();
+refreshBankAccountSelectors();
 applyProductionCleanSeedOnce();
 setNextReceiptNo();
 const initialHashView = String(window.location.hash || "").replace(/^#/, "").trim();

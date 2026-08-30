@@ -1937,6 +1937,7 @@ EDITABLE_OBJECT_MERGE_RULES = {
     "studentAbsenceRequests": ["id", "studentId", "absenceDate"],
     "mobileAppActivity": ["loginId", "admissionNo"],
     "feeReminderHistory": ["id"],
+    "bankAccounts": ["id", "bankName", "accountLast4"],
     "admissionEnquiries": ["id", "mobile", "studentName"],
     "complaintRecords": ["id", "complaintNo", "subject"],
     "staffAttendanceRecords": ["id", "staffId", "date"],
