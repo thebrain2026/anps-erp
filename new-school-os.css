@@ -8954,7 +8954,7 @@ body.modal-open {
 
 .combined-entry-grid {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 10px;
 }
 
@@ -8975,6 +8975,58 @@ body.modal-open {
   padding: 8px 10px;
   color: var(--ink);
   font-weight: 850;
+}
+
+.combined-entry-grid input:focus,
+.combined-entry-grid select:focus {
+  border-color: #14798b;
+  box-shadow: 0 0 0 3px rgba(20, 121, 139, .14);
+  outline: 0;
+}
+
+.combined-bank-select-field {
+  position: relative;
+  overflow: hidden;
+  border-color: #9bcbd2 !important;
+  background: linear-gradient(145deg, #f2fcfd, #e9f7f8) !important;
+  box-shadow: 0 8px 20px rgba(20, 121, 139, .08);
+}
+
+.combined-bank-select-field > span {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  color: #0f5f6c;
+}
+
+.combined-bank-select-field small {
+  color: #5f7b82;
+  font-size: .62rem;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
+.combined-bank-select-field select {
+  width: 100%;
+  min-height: 42px;
+  appearance: none;
+  border: 1px solid #8fc4cc;
+  border-radius: 8px;
+  background:
+    linear-gradient(45deg, transparent 50%, #14798b 50%) calc(100% - 17px) 18px / 6px 6px no-repeat,
+    linear-gradient(135deg, #14798b 50%, transparent 50%) calc(100% - 11px) 18px / 6px 6px no-repeat,
+    #fff;
+  color: #183b45;
+  padding: 8px 38px 8px 12px;
+  font-weight: 950;
+  cursor: pointer;
+}
+
+.combined-bank-select-field select:hover {
+  border-color: #14798b;
+  background-color: #fbffff;
 }
 
 .calendar-input-shell {
