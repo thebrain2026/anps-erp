@@ -215,7 +215,16 @@ class OutboxTest(unittest.TestCase):
         item["date"] = "30-08-2026"
         capture_state_changes(self.conn, {}, fee_state(item), config())
         original = self.rows()[0]
-        original_payload = original["payload"]
+        legacy_document = json.loads(original["payload"])
+        legacy_document["occurred_at"] = "30-08-2026T00:00:00Z"
+        legacy_document["data"]["payment_date"] = "30-08-2026"
+        original_payload = anps_bsfv_outbox.canonical_bytes(legacy_document).decode()
+        self.conn.execute("DROP TRIGGER bsfv_outbox_events_no_update")
+        self.conn.execute(
+            "UPDATE bsfv_outbox_events SET payload=?,occurred_at=? WHERE outbox_id=?",
+            (original_payload, legacy_document["occurred_at"], original["outbox_id"]),
+        )
+        initialize_outbox(self.conn)
         self.conn.execute(
             "UPDATE bsfv_outbox_delivery SET delivery_status='DEAD_LETTER',"
             "attempt_count=1,failure_code='http_400',dead_letter_at=? WHERE outbox_id=?",

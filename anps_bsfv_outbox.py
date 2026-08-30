@@ -416,7 +416,12 @@ def _parse_business_datetime(value):
         if not text:
             return datetime.now(UTC)
         parsed = None
-        for pattern in ("%d-%m-%YT%H:%M:%S", "%d-%m-%Y %H:%M:%S", "%d-%m-%Y"):
+        for pattern in (
+            "%d-%m-%YT%H:%M:%SZ",
+            "%d-%m-%YT%H:%M:%S",
+            "%d-%m-%Y %H:%M:%S",
+            "%d-%m-%Y",
+        ):
             try:
                 parsed = datetime.strptime(text, pattern)
                 break
