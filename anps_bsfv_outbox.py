@@ -119,6 +119,8 @@ class IntegrationConfig:
     secret_provider: str = "disabled"
     access_client_id: str = ""
     access_client_secret: str = ""
+    allowed_event_types: tuple[str, ...] = ()
+    pilot_not_before: str = ""
 
     @classmethod
     def from_env(cls):
@@ -156,6 +158,20 @@ class IntegrationConfig:
             secret_provider=provider,
             access_client_id=access_client_id,
             access_client_secret=access_client_secret,
+            allowed_event_types=tuple(
+                filter(
+                    None,
+                    (
+                        item.strip()
+                        for item in os.environ.get(
+                            "ANPS_BSFV_ALLOWED_EVENT_TYPES", ""
+                        ).split(",")
+                    ),
+                )
+            ),
+            pilot_not_before=_canonical_utc_timestamp(
+                os.environ.get("ANPS_BSFV_PILOT_NOT_BEFORE", "")
+            ),
         )
 
     def refusal_code(self):
@@ -186,7 +202,23 @@ class IntegrationConfig:
             return "edge_service_credentials_missing"
         if not self.school_id:
             return "school_mapping_missing"
+        if not self.allowed_event_types or any(
+            event_type not in EVENT_TYPES for event_type in self.allowed_event_types
+        ):
+            return "event_type_allowlist_missing_or_invalid"
+        if not self.pilot_not_before:
+            return "pilot_activation_cutoff_missing_or_invalid"
         return None
+
+
+def _canonical_utc_timestamp(value):
+    try:
+        parsed = datetime.fromisoformat(str(value).strip().replace("Z", "+00:00"))
+    except ValueError:
+        return ""
+    if parsed.tzinfo is None:
+        return ""
+    return parsed.astimezone(UTC).isoformat().replace("+00:00", "Z")
 
 
 def _read_secret_file(filename, expected_name, minimum_length):
@@ -522,9 +554,16 @@ def dispatch_once(conn, config=None, opener=None):
     if refusal:
         return {"attempted": 0, "refused": refusal}
     initialize_outbox(conn)
+    placeholders = ",".join("?" for _ in config.allowed_event_types)
     row = conn.execute(
-        "SELECT e.*,d.attempt_count FROM bsfv_outbox_events e JOIN bsfv_outbox_delivery d USING(outbox_id) WHERE d.delivery_status='PENDING' AND (d.next_attempt_at IS NULL OR d.next_attempt_at<=?) ORDER BY e.created_at LIMIT 1",
-        (utc_now(),),
+        "SELECT e.*,d.attempt_count FROM bsfv_outbox_events e "
+        "JOIN bsfv_outbox_delivery d USING(outbox_id) "
+        "WHERE d.delivery_status='PENDING' "
+        "AND (d.next_attempt_at IS NULL OR d.next_attempt_at<=?) "
+        "AND e.created_at>=? "
+        f"AND e.event_type IN ({placeholders}) "
+        "ORDER BY e.created_at LIMIT 1",
+        (utc_now(), config.pilot_not_before, *config.allowed_event_types),
     ).fetchone()
     if not row:
         return {"attempted": 0, "refused": None}
@@ -575,3 +614,66 @@ def safe_metrics(conn):
     counts.setdefault("delivered", 0)
     counts.setdefault("dead_letter", 0)
     return counts
+
+
+def pilot_metrics(conn, config=None):
+    """Return PII-free sender evidence for the explicitly configured pilot window."""
+    config = config or IntegrationConfig.from_env()
+    initialize_outbox(conn)
+    if not config.allowed_event_types or not config.pilot_not_before:
+        return {
+            "scope_ready": False,
+            "refused": config.refusal_code(),
+            "allowed_event_types": list(config.allowed_event_types),
+            "pilot_not_before": config.pilot_not_before or None,
+            "generated": 0,
+            "delivered": 0,
+            "pending": 0,
+            "blocked": 0,
+            "dead_letter": 0,
+            "failed_attempts": 0,
+            "generated_amount": "0.00",
+            "delivered_amount": "0.00",
+        }
+    placeholders = ",".join("?" for _ in config.allowed_event_types)
+    rows = conn.execute(
+        "SELECT e.payload,e.created_at,d.delivery_status,d.attempt_count,"
+        "d.failure_code,d.delivered_at FROM bsfv_outbox_events e "
+        "JOIN bsfv_outbox_delivery d USING(outbox_id) "
+        f"WHERE e.created_at>=? AND e.event_type IN ({placeholders})",
+        (config.pilot_not_before, *config.allowed_event_types),
+    ).fetchall()
+    counts = {"delivered": 0, "pending": 0, "blocked": 0, "dead_letter": 0}
+    generated_amount = Decimal("0.00")
+    delivered_amount = Decimal("0.00")
+    failed_attempts = 0
+    latest_created_at = None
+    latest_delivered_at = None
+    for row in rows:
+        status = str(row[2]).lower()
+        if status in counts:
+            counts[status] += 1
+        if row[4]:
+            failed_attempts += int(row[3] or 0)
+        try:
+            amount = Decimal(str(json.loads(row[0]).get("data", {}).get("net_paid", "0.00")))
+        except (InvalidOperation, TypeError, ValueError, json.JSONDecodeError):
+            amount = Decimal("0.00")
+        generated_amount += amount
+        if status == "delivered":
+            delivered_amount += amount
+        latest_created_at = max(filter(None, (latest_created_at, row[1])), default=None)
+        latest_delivered_at = max(filter(None, (latest_delivered_at, row[5])), default=None)
+    return {
+        "scope_ready": True,
+        "refused": config.refusal_code(),
+        "allowed_event_types": list(config.allowed_event_types),
+        "pilot_not_before": config.pilot_not_before,
+        "generated": len(rows),
+        **counts,
+        "failed_attempts": failed_attempts,
+        "generated_amount": f"{generated_amount:.2f}",
+        "delivered_amount": f"{delivered_amount:.2f}",
+        "latest_created_at": latest_created_at,
+        "latest_delivered_at": latest_delivered_at,
+    }

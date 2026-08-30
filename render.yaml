@@ -46,6 +46,10 @@ services:
         value: '{"2026-27":"2026-27"}'
       - key: ANPS_BSFV_SOURCE_SYSTEM
         value: anps
+      - key: ANPS_BSFV_ALLOWED_EVENT_TYPES
+        value: anps.fee_collection.created
+      - key: ANPS_BSFV_PILOT_NOT_BEFORE
+        value: ""
       - key: ANPS_ERP_API_TOKEN
         sync: false
       - key: ANPS_FIREBASE_SERVICE_ACCOUNT_JSON

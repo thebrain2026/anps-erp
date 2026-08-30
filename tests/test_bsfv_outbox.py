@@ -12,6 +12,7 @@ from anps_bsfv_outbox import (
     dispatch_once,
     initialize_outbox,
     payload_digest,
+    pilot_metrics,
     safe_metrics,
     sign_headers,
 )
@@ -27,6 +28,8 @@ def config(enabled=False):
         school_id="school-synthetic",
         session_map={"2026-27": "session-synthetic"},
         secret_provider="synthetic",
+        allowed_event_types=("anps.fee_collection.created",),
+        pilot_not_before="2026-01-01T00:00:00Z",
     )
 
 
@@ -215,6 +218,27 @@ class OutboxTest(unittest.TestCase):
                 IntegrationConfig.from_env().refusal_code(), "secret_provider_unavailable"
             )
 
+    def test_pilot_scope_and_activation_cutoff_fail_closed(self):
+        base = config(True)
+        missing_scope = IntegrationConfig(
+            **{**base.__dict__, "allowed_event_types": ()}
+        )
+        invalid_scope = IntegrationConfig(
+            **{**base.__dict__, "allowed_event_types": ("anps.staff.unknown",)}
+        )
+        missing_cutoff = IntegrationConfig(
+            **{**base.__dict__, "pilot_not_before": ""}
+        )
+        self.assertEqual(
+            missing_scope.refusal_code(), "event_type_allowlist_missing_or_invalid"
+        )
+        self.assertEqual(
+            invalid_scope.refusal_code(), "event_type_allowlist_missing_or_invalid"
+        )
+        self.assertEqual(
+            missing_cutoff.refusal_code(), "pilot_activation_cutoff_missing_or_invalid"
+        )
+
     def test_external_secret_file_and_endpoint_validation_fail_closed(self):
         from unittest.mock import patch
 
@@ -238,6 +262,8 @@ class OutboxTest(unittest.TestCase):
             "ANPS_BSFV_SESSION_MAP": '{"2026-27":"session-synthetic"}',
             "ANPS_BSFV_CF_ACCESS_CLIENT_ID_FILE": str(access_id_file),
             "ANPS_BSFV_CF_ACCESS_CLIENT_SECRET_FILE": str(access_secret_file),
+            "ANPS_BSFV_ALLOWED_EVENT_TYPES": "anps.fee_collection.created",
+            "ANPS_BSFV_PILOT_NOT_BEFORE": "2026-08-30T00:00:00Z",
         }
         with patch.dict(os.environ, environment, clear=True):
             assert IntegrationConfig.from_env().refusal_code() is None
@@ -266,6 +292,39 @@ class OutboxTest(unittest.TestCase):
         headers = sign_headers(document, configured, "2026-08-28T12:00:00Z")
         self.assertEqual(headers["CF-Access-Client-Id"], "client-id")
         self.assertEqual(headers["CF-Access-Client-Secret"], "client-secret")
+
+    def test_dispatcher_enforces_event_allowlist_and_activation_cutoff(self):
+        configured = config(True)
+        capture_state_changes(self.conn, {}, {**fee_state(), **staff_state()}, configured)
+        first = dispatch_once(self.conn, configured, lambda request, timeout: Response(202))
+        second = dispatch_once(self.conn, configured, lambda request, timeout: Response(202))
+        self.assertEqual(first["status"], "DELIVERED")
+        self.assertEqual(second, {"attempted": 0, "refused": None})
+        pending = self.conn.execute(
+            "SELECT e.event_type FROM bsfv_outbox_events e "
+            "JOIN bsfv_outbox_delivery d USING(outbox_id) "
+            "WHERE d.delivery_status='PENDING'"
+        ).fetchall()
+        self.assertEqual([row[0] for row in pending], ["anps.staff.created"])
+
+        later_payment = payment()
+        later_payment["id"] = "pay-synthetic-2"
+        capture_state_changes(self.conn, {}, fee_state(later_payment), configured)
+        future = IntegrationConfig(
+            **{**configured.__dict__, "pilot_not_before": "2099-01-01T00:00:00Z"}
+        )
+        self.assertEqual(
+            dispatch_once(self.conn, future, lambda request, timeout: Response(202)),
+            {"attempted": 0, "refused": None},
+        )
+
+        metrics = pilot_metrics(self.conn, configured)
+        self.assertTrue(metrics["scope_ready"])
+        self.assertEqual(metrics["generated"], 2)
+        self.assertEqual(metrics["delivered"], 1)
+        self.assertEqual(metrics["pending"], 1)
+        self.assertEqual(metrics["generated_amount"], "200.00")
+        self.assertEqual(metrics["delivered_amount"], "100.00")
 
     def test_clean_and_existing_schema_migration_are_idempotent(self):
         initialize_outbox(self.conn)

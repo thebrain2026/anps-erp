@@ -15,7 +15,12 @@ from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlparse
 
-from anps_bsfv_outbox import IntegrationConfig, capture_state_changes, initialize_outbox
+from anps_bsfv_outbox import (
+    IntegrationConfig,
+    capture_state_changes,
+    initialize_outbox,
+    pilot_metrics,
+)
 
 try:
     from google.auth.transport.requests import Request as GoogleAuthRequest
@@ -4909,6 +4914,13 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             if not self.authorized():
                 return
             return self.json_response({"ok": True, "readiness": readiness_report()})
+        if path == "/api/integration/bsfv/monitor":
+            if not self.authorized():
+                return
+            with connect() as conn:
+                return self.json_response(
+                    {"ok": True, "integration": pilot_metrics(conn)}
+                )
         if path == "/api/audit-log":
             if not self.authorized():
                 return
