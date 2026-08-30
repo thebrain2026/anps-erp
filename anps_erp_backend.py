@@ -18,6 +18,7 @@ from urllib.parse import parse_qs, urlencode, urlparse
 from anps_bsfv_outbox import (
     IntegrationConfig,
     capture_state_changes,
+    dispatcher_loop,
     initialize_outbox,
     pilot_metrics,
 )
@@ -5403,6 +5404,15 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
 
 def main():
     init_db()
+    integration_config = IntegrationConfig.from_env()
+    if integration_config.enabled:
+        dispatcher_stop_event = threading.Event()
+        threading.Thread(
+            target=dispatcher_loop,
+            args=(dispatcher_stop_event, connect),
+            name="anps-bsfv-dispatcher",
+            daemon=True,
+        ).start()
     server = BoundedThreadingHTTPServer((HOST, PORT), SchoolERPHandler)
     print(f"School ERP backend running at http://{HOST}:{PORT}/")
     print(f"SQLite database: {DB_PATH}")

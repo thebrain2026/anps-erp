@@ -10,6 +10,7 @@ from anps_bsfv_outbox import (
     IntegrationConfig,
     capture_state_changes,
     dispatch_once,
+    dispatcher_loop,
     initialize_outbox,
     payload_digest,
     pilot_metrics,
@@ -62,6 +63,34 @@ class Response:
         return self.code
 
 
+class StopAfterWaits:
+    def __init__(self, limit):
+        self.limit = limit
+        self.waits = 0
+
+    def is_set(self):
+        return self.waits >= self.limit
+
+    def wait(self, _seconds):
+        self.waits += 1
+
+
+class FakeConnection:
+    def __init__(self):
+        self.commits = 0
+        self.rollbacks = 0
+        self.closed = 0
+
+    def commit(self):
+        self.commits += 1
+
+    def rollback(self):
+        self.rollbacks += 1
+
+    def close(self):
+        self.closed += 1
+
+
 class OutboxTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -76,6 +105,43 @@ class OutboxTest(unittest.TestCase):
 
     def rows(self):
         return self.conn.execute("SELECT * FROM bsfv_outbox_events ORDER BY source_version").fetchall()
+
+    def test_runtime_dispatcher_is_off_without_enable_flag(self):
+        dispatcher_loop(
+            StopAfterWaits(1),
+            lambda: self.fail("disabled dispatcher opened the database"),
+            config_factory=lambda: config(False),
+            dispatcher=lambda _conn, config: self.fail("disabled dispatcher attempted delivery"),
+            idle_seconds=0,
+        )
+
+    def test_runtime_dispatcher_failure_is_isolated_and_loop_continues(self):
+        connections = []
+        calls = []
+
+        def connection_factory():
+            connection = FakeConnection()
+            connections.append(connection)
+            return connection
+
+        def dispatcher(_conn, config):
+            calls.append(config.enabled)
+            if len(calls) == 1:
+                raise OSError("synthetic BSFV unavailable")
+            return {"attempted": 0, "refused": None}
+
+        dispatcher_loop(
+            StopAfterWaits(2),
+            connection_factory,
+            config_factory=lambda: config(True),
+            dispatcher=dispatcher,
+            idle_seconds=0,
+        )
+
+        self.assertEqual(calls, [True, True])
+        self.assertEqual([item.rollbacks for item in connections], [1, 0])
+        self.assertEqual([item.commits for item in connections], [0, 1])
+        self.assertEqual([item.closed for item in connections], [1, 1])
 
     def test_fee_lifecycle_is_ordered_immutable_and_exact_once(self):
         capture_state_changes(self.conn, {}, fee_state(), config())

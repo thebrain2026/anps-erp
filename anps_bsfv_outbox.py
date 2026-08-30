@@ -603,6 +603,34 @@ def dispatch_once(conn, config=None, opener=None):
     return {"attempted": 1, "status": delivery_status, "response_class": f"{status // 100}xx"}
 
 
+def dispatcher_loop(
+    stop_event,
+    connection_factory,
+    config_factory=IntegrationConfig.from_env,
+    dispatcher=dispatch_once,
+    idle_seconds=5,
+):
+    """Deliver eligible outbox events without affecting the ANPS request path."""
+    while not stop_event.is_set():
+        config = config_factory()
+        if not config.enabled:
+            return
+        conn = None
+        attempted = 0
+        try:
+            conn = connection_factory()
+            result = dispatcher(conn, config=config)
+            conn.commit()
+            attempted = int(result.get("attempted", 0))
+        except Exception:
+            if conn is not None:
+                conn.rollback()
+        finally:
+            if conn is not None:
+                conn.close()
+        stop_event.wait(1 if attempted else idle_seconds)
+
+
 def safe_metrics(conn):
     initialize_outbox(conn)
     counts = {row[0].lower(): row[1] for row in conn.execute("SELECT delivery_status,COUNT(*) FROM bsfv_outbox_delivery GROUP BY delivery_status")}
