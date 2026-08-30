@@ -21,6 +21,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from urllib.parse import urlsplit
+from zoneinfo import ZoneInfo
 
 import rfc8785
 
@@ -44,6 +45,7 @@ MAX_ATTEMPTS = 12
 BACKOFF_SECONDS = (5, 30, 120, 600, 3600, 21600, 43200, 86400)
 INGESTION_PATH = "/api/v1/integrations/anps/events"
 RENDER_SECRETS_DIR = Path("/etc/secrets")
+ANPS_TIMEZONE = ZoneInfo("Asia/Kolkata")
 
 
 SCHEMA_SQL = """
@@ -103,6 +105,35 @@ END;
 CREATE TRIGGER IF NOT EXISTS bsfv_outbox_events_no_delete
 BEFORE DELETE ON bsfv_outbox_events BEGIN
     SELECT RAISE(ABORT, 'immutable_outbox_event');
+END;
+CREATE TABLE IF NOT EXISTS bsfv_outbox_recovery_events (
+    recovery_id TEXT PRIMARY KEY,
+    original_outbox_id TEXT NOT NULL UNIQUE REFERENCES bsfv_outbox_events(outbox_id) ON DELETE RESTRICT,
+    event_id TEXT NOT NULL UNIQUE,
+    payload TEXT NOT NULL,
+    payload_hash TEXT NOT NULL,
+    created_at TEXT NOT NULL
+);
+CREATE TABLE IF NOT EXISTS bsfv_outbox_recovery_delivery (
+    recovery_id TEXT PRIMARY KEY REFERENCES bsfv_outbox_recovery_events(recovery_id) ON DELETE RESTRICT,
+    delivery_status TEXT NOT NULL CHECK(delivery_status IN ('PENDING','IN_FLIGHT','DELIVERED','DEAD_LETTER')),
+    attempt_count INTEGER NOT NULL DEFAULT 0 CHECK(attempt_count >= 0),
+    next_attempt_at TEXT,
+    last_attempt_at TEXT,
+    delivered_at TEXT,
+    dead_letter_at TEXT,
+    failure_code TEXT,
+    response_class TEXT,
+    delivery_latency_ms INTEGER,
+    updated_at TEXT NOT NULL
+);
+CREATE TRIGGER IF NOT EXISTS bsfv_outbox_recovery_events_no_update
+BEFORE UPDATE ON bsfv_outbox_recovery_events BEGIN
+    SELECT RAISE(ABORT, 'immutable_recovery_event');
+END;
+CREATE TRIGGER IF NOT EXISTS bsfv_outbox_recovery_events_no_delete
+BEFORE DELETE ON bsfv_outbox_recovery_events BEGIN
+    SELECT RAISE(ABORT, 'immutable_recovery_event');
 END;
 """
 
@@ -376,15 +407,41 @@ def _stable(value):
     return json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
 
 
+def _parse_business_datetime(value):
+    """Parse ANPS business time without treating India-local values as UTC."""
+    if isinstance(value, datetime):
+        parsed = value
+    else:
+        text = str(value or "").strip()
+        if not text:
+            return datetime.now(UTC)
+        parsed = None
+        for pattern in ("%d-%m-%YT%H:%M:%S", "%d-%m-%Y %H:%M:%S", "%d-%m-%Y"):
+            try:
+                parsed = datetime.strptime(text, pattern)
+                break
+            except ValueError:
+                pass
+        if parsed is None:
+            try:
+                parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+            except ValueError as exc:
+                raise ValueError("invalid_business_datetime") from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=ANPS_TIMEZONE)
+    return parsed
+
+
+def _rfc3339(value):
+    return _parse_business_datetime(value).isoformat(timespec="seconds")
+
+
+def _business_date(value):
+    return _parse_business_datetime(value).astimezone(ANPS_TIMEZONE).date().isoformat()
+
+
 def _occurred_at(value):
-    text = str(value or "").strip()
-    if not text:
-        return utc_now()
-    if len(text) == 10:
-        return f"{text}T00:00:00Z"
-    if text.endswith("Z") or "+" in text[10:]:
-        return text
-    return f"{text}Z"
+    return _rfc3339(value)
 
 
 def _fee_payload(payment_id, session, admission_no, payment, reason=None):
@@ -416,7 +473,7 @@ def _fee_payload(payment_id, session, admission_no, payment, reason=None):
         "payment_id": payment_id,
         "receipt_no": str(payment.get("receipt") or "").strip(),
         "admission_no": admission_no,
-        "payment_date": str(payment.get("date") or "")[:10],
+        "payment_date": _business_date(payment.get("date")),
         "currency": "INR",
         "net_paid": net_paid,
         "discount": discount,
@@ -578,12 +635,103 @@ def _retry_at(attempt):
     return (datetime.now(UTC) + timedelta(seconds=random.uniform(0, cap))).isoformat().replace("+00:00", "Z")
 
 
+def prepare_dead_letter_recovery(conn, original_outbox_id):
+    """Create immutable replacement evidence without changing the dead letter."""
+    initialize_outbox(conn)
+    row = conn.execute(
+        "SELECT e.*,d.delivery_status,d.failure_code FROM bsfv_outbox_events e "
+        "JOIN bsfv_outbox_delivery d USING(outbox_id) WHERE e.outbox_id=?",
+        (original_outbox_id,),
+    ).fetchone()
+    if not row or row["delivery_status"] != "DEAD_LETTER":
+        raise ValueError("recovery_requires_dead_letter")
+    if row["failure_code"] != "http_400" or row["event_type"] != "anps.fee_collection.created":
+        raise ValueError("recovery_scope_not_approved")
+    existing = conn.execute(
+        "SELECT recovery_id FROM bsfv_outbox_recovery_events WHERE original_outbox_id=?",
+        (original_outbox_id,),
+    ).fetchone()
+    if existing:
+        return existing[0]
+    document = json.loads(row["payload"])
+    document["event_id"] = uuid.uuid4().hex
+    document["occurred_at"] = _rfc3339(document["occurred_at"])
+    document["data"]["payment_date"] = _business_date(document["data"]["payment_date"])
+    now = utc_now()
+    document["created_at"] = now
+    document["published_at"] = now
+    canonical = canonical_bytes(document)
+    recovery_id = uuid.uuid4().hex
+    conn.execute(
+        "INSERT INTO bsfv_outbox_recovery_events VALUES (?,?,?,?,?,?)",
+        (recovery_id, original_outbox_id, document["event_id"], canonical.decode(),
+         payload_digest(canonical), now),
+    )
+    conn.execute(
+        "INSERT INTO bsfv_outbox_recovery_delivery"
+        "(recovery_id,delivery_status,next_attempt_at,updated_at) VALUES (?,?,?,?)",
+        (recovery_id, "PENDING", now, now),
+    )
+    return recovery_id
+
+
+def _dispatch_recovery_once(conn, config, opener=None):
+    placeholders = ",".join("?" for _ in config.allowed_event_types)
+    row = conn.execute(
+        "SELECT r.*,d.attempt_count,e.event_type,e.created_at AS original_created_at "
+        "FROM bsfv_outbox_recovery_events r "
+        "JOIN bsfv_outbox_recovery_delivery d USING(recovery_id) "
+        "JOIN bsfv_outbox_events e ON e.outbox_id=r.original_outbox_id "
+        "WHERE d.delivery_status='PENDING' "
+        "AND (d.next_attempt_at IS NULL OR d.next_attempt_at<=?) "
+        "AND e.created_at>=? "
+        f"AND e.event_type IN ({placeholders}) ORDER BY r.created_at LIMIT 1",
+        (utc_now(), config.pilot_not_before, *config.allowed_event_types),
+    ).fetchone()
+    if not row:
+        return None
+    document = json.loads(row["payload"])
+    request = urllib.request.Request(
+        config.endpoint,
+        data=canonical_bytes(document),
+        headers=sign_headers(document, config),
+        method="POST",
+    )
+    attempt = row["attempt_count"] + 1
+    started = datetime.now(UTC)
+    try:
+        status = (opener or urllib.request.urlopen)(request, timeout=10).getcode()
+    except urllib.error.HTTPError as exc:
+        status = exc.code
+    except (TimeoutError, urllib.error.URLError, OSError):
+        status = 503
+    latency = int((datetime.now(UTC) - started).total_seconds() * 1000)
+    now = utc_now()
+    if status in {200, 202}:
+        state, failure, next_at, delivered, dead = "DELIVERED", None, None, now, None
+    elif status in RETRYABLE_HTTP and attempt < MAX_ATTEMPTS:
+        state, failure, next_at, delivered, dead = "PENDING", f"http_{status}", _retry_at(attempt), None, None
+    else:
+        state, failure, next_at, delivered, dead = "DEAD_LETTER", f"http_{status or 'network'}", None, None, now
+    conn.execute(
+        "UPDATE bsfv_outbox_recovery_delivery SET delivery_status=?,attempt_count=?,"
+        "next_attempt_at=?,last_attempt_at=?,delivered_at=?,dead_letter_at=?,failure_code=?,"
+        "response_class=?,delivery_latency_ms=?,updated_at=? WHERE recovery_id=?",
+        (state, attempt, next_at, now, delivered, dead, failure,
+         f"{status // 100}xx" if status else "network", latency, now, row["recovery_id"]),
+    )
+    return {"attempted": 1, "status": state, "response_class": f"{status // 100}xx", "recovery": True}
+
+
 def dispatch_once(conn, config=None, opener=None):
     config = config or IntegrationConfig.from_env()
     refusal = config.refusal_code()
     if refusal:
         return {"attempted": 0, "refused": refusal}
     initialize_outbox(conn)
+    recovery = _dispatch_recovery_once(conn, config, opener)
+    if recovery:
+        return recovery
     placeholders = ",".join("?" for _ in config.allowed_event_types)
     row = conn.execute(
         "SELECT e.*,d.attempt_count FROM bsfv_outbox_events e "

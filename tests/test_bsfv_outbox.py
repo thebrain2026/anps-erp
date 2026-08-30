@@ -4,6 +4,7 @@ import sqlite3
 import tempfile
 import unittest
 import urllib.error
+from datetime import UTC, datetime
 from pathlib import Path
 from unittest.mock import patch
 
@@ -161,6 +162,91 @@ class OutboxTest(unittest.TestCase):
             self.conn.execute("UPDATE bsfv_outbox_events SET event_type='changed'")
         with self.assertRaises(sqlite3.DatabaseError):
             self.conn.execute("DELETE FROM bsfv_outbox_events")
+
+    def test_india_display_date_is_rfc3339_without_utc_reinterpretation(self):
+        item = payment()
+        item["date"] = "30-08-2026"
+        capture_state_changes(self.conn, {}, fee_state(item), config())
+        document = json.loads(self.rows()[0]["payload"])
+        self.assertEqual(document["occurred_at"], "2026-08-30T00:00:00+05:30")
+        self.assertEqual(document["data"]["payment_date"], "2026-08-30")
+
+    def test_month_day_ambiguity_uses_day_month_year(self):
+        self.assertEqual(
+            anps_bsfv_outbox._occurred_at("02-03-2026"),
+            "2026-03-02T00:00:00+05:30",
+        )
+
+    def test_utc_and_offset_aware_values_remain_absolute(self):
+        self.assertEqual(
+            anps_bsfv_outbox._occurred_at("2026-08-30T01:02:03Z"),
+            "2026-08-30T01:02:03+00:00",
+        )
+        self.assertEqual(
+            anps_bsfv_outbox._occurred_at(datetime(2026, 8, 30, 1, 2, 3, tzinfo=UTC)),
+            "2026-08-30T01:02:03+00:00",
+        )
+
+    def test_midnight_boundary_and_invalid_date(self):
+        self.assertEqual(
+            anps_bsfv_outbox._occurred_at("01-01-2027"),
+            "2027-01-01T00:00:00+05:30",
+        )
+        with self.assertRaisesRegex(ValueError, "invalid_business_datetime"):
+            anps_bsfv_outbox._occurred_at("31-02-2026")
+
+    def test_rapid_consecutive_events_have_valid_transport_timestamps(self):
+        first = payment()
+        second = payment()
+        second["id"] = "pay-synthetic-2"
+        second["receipt"] = "SYN/2"
+        second["date"] = "30-08-2026 23:59:59"
+        capture_state_changes(self.conn, {}, fee_state(first), config())
+        capture_state_changes(self.conn, {}, fee_state(second), config())
+        documents = [json.loads(row["payload"]) for row in self.rows()]
+        self.assertEqual(len(documents), 2)
+        for document in documents:
+            self.assertIsNotNone(datetime.fromisoformat(document["occurred_at"]))
+            self.assertIsNotNone(datetime.fromisoformat(document["created_at"].replace("Z", "+00:00")))
+            self.assertIsNotNone(datetime.fromisoformat(document["published_at"].replace("Z", "+00:00")))
+
+    def test_dead_letter_recovery_preserves_original_and_republishes_same_version(self):
+        item = payment()
+        item["date"] = "30-08-2026"
+        capture_state_changes(self.conn, {}, fee_state(item), config())
+        original = self.rows()[0]
+        original_payload = original["payload"]
+        self.conn.execute(
+            "UPDATE bsfv_outbox_delivery SET delivery_status='DEAD_LETTER',"
+            "attempt_count=1,failure_code='http_400',dead_letter_at=? WHERE outbox_id=?",
+            ("2026-08-30T03:38:10Z", original["outbox_id"]),
+        )
+        recovery_id = anps_bsfv_outbox.prepare_dead_letter_recovery(
+            self.conn, original["outbox_id"]
+        )
+        replacement = self.conn.execute(
+            "SELECT * FROM bsfv_outbox_recovery_events WHERE recovery_id=?", (recovery_id,)
+        ).fetchone()
+        replacement_document = json.loads(replacement["payload"])
+        self.assertEqual(self.rows()[0]["payload"], original_payload)
+        self.assertNotEqual(replacement_document["event_id"], original["event_id"])
+        self.assertEqual(replacement_document["source_version"], original["source_version"])
+        self.assertEqual(replacement_document["aggregate_id"], original["aggregate_id"])
+        self.assertEqual(
+            replacement_document["occurred_at"], "2026-08-30T00:00:00+05:30"
+        )
+        self.assertEqual(
+            anps_bsfv_outbox.prepare_dead_letter_recovery(self.conn, original["outbox_id"]),
+            recovery_id,
+        )
+        result = dispatch_once(self.conn, config(True), lambda request, timeout: Response(202))
+        self.assertTrue(result["recovery"])
+        self.assertEqual(result["status"], "DELIVERED")
+        delivery = self.conn.execute(
+            "SELECT * FROM bsfv_outbox_delivery WHERE outbox_id=?", (original["outbox_id"],)
+        ).fetchone()
+        self.assertEqual(delivery["delivery_status"], "DEAD_LETTER")
+        self.assertEqual(delivery["failure_code"], "http_400")
 
     def test_staff_lifecycle_and_payload_minimization(self):
         capture_state_changes(self.conn, {}, staff_state(), config())
@@ -421,7 +507,7 @@ class OutboxTest(unittest.TestCase):
         existing = sqlite3.connect(Path(self.temp.name) / "existing.db")
         existing.execute("CREATE TABLE app_state(key TEXT PRIMARY KEY,value TEXT NOT NULL)")
         initialize_outbox(existing)
-        self.assertEqual(existing.execute("SELECT COUNT(*) FROM sqlite_master WHERE name LIKE 'bsfv_%'").fetchone()[0], 6)
+        self.assertEqual(existing.execute("SELECT COUNT(*) FROM sqlite_master WHERE name LIKE 'bsfv_%'").fetchone()[0], 10)
         existing.close()
 
 
