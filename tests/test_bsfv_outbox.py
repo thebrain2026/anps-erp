@@ -5,6 +5,9 @@ import tempfile
 import unittest
 import urllib.error
 from pathlib import Path
+from unittest.mock import patch
+
+import anps_bsfv_outbox
 
 from anps_bsfv_outbox import (
     IntegrationConfig,
@@ -306,8 +309,6 @@ class OutboxTest(unittest.TestCase):
         )
 
     def test_external_secret_file_and_endpoint_validation_fail_closed(self):
-        from unittest.mock import patch
-
         secret_file = Path(self.temp.name) / "key-a"
         secret_file.write_text("synthetic-external-secret-at-least-32-characters")
         secret_file.chmod(0o600)
@@ -347,6 +348,29 @@ class OutboxTest(unittest.TestCase):
         missing_edge.pop("ANPS_BSFV_CF_ACCESS_CLIENT_SECRET_FILE")
         with patch.dict(os.environ, missing_edge, clear=True):
             assert IntegrationConfig.from_env().refusal_code() == "edge_service_credentials_missing"
+
+    def test_render_managed_secret_symlink_is_narrowly_accepted(self):
+        render_root = Path(self.temp.name) / "etc-secrets"
+        version_dir = render_root / "..2026_08_30_01_56_35.1234567890"
+        version_dir.mkdir(parents=True)
+        target = version_dir / "key-a"
+        target.write_text("synthetic-render-secret-at-least-32-characters")
+        target.chmod(0o640)
+        projection = render_root / "key-a"
+        projection.symlink_to(target)
+
+        with patch.object(anps_bsfv_outbox, "RENDER_SECRETS_DIR", render_root):
+            self.assertTrue(anps_bsfv_outbox._read_external_secret(str(projection), "key-a"))
+
+            target.chmod(0o644)
+            self.assertEqual(anps_bsfv_outbox._read_external_secret(str(projection), "key-a"), "")
+
+            outside = Path(self.temp.name) / "outside-key-a"
+            outside.write_text("synthetic-outside-secret-at-least-32-characters")
+            outside.chmod(0o640)
+            projection.unlink()
+            projection.symlink_to(outside)
+            self.assertEqual(anps_bsfv_outbox._read_external_secret(str(projection), "key-a"), "")
 
     def test_service_credentials_are_added_only_when_both_are_present(self):
         base = config()

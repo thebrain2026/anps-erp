@@ -43,6 +43,7 @@ NON_RETRYABLE_HTTP = {400, 401, 403, 409, 413, 415, 422}
 MAX_ATTEMPTS = 12
 BACKOFF_SECONDS = (5, 30, 120, 600, 3600, 21600, 43200, 86400)
 INGESTION_PATH = "/api/v1/integrations/anps/events"
+RENDER_SECRETS_DIR = Path("/etc/secrets")
 
 
 SCHEMA_SQL = """
@@ -227,17 +228,46 @@ def _read_secret_file(filename, expected_name, minimum_length):
         return ""
     path = Path(filename)
     try:
-        if not path.is_absolute() or path.is_symlink() or not path.is_file():
+        if not path.is_absolute() or not path.is_file():
             return ""
         if path.name != expected_name:
             return ""
+        resolved = path.resolve(strict=True)
         metadata = path.stat()
-        if metadata.st_size > 4096 or stat.S_IMODE(metadata.st_mode) & 0o077:
+        mode = stat.S_IMODE(metadata.st_mode)
+        if path.is_symlink():
+            if not _is_render_managed_secret(path, resolved, metadata, mode):
+                return ""
+        elif mode & 0o077:
+            return ""
+        if metadata.st_size > 4096:
             return ""
         value = path.read_text(encoding="utf-8").strip()
     except (OSError, UnicodeError):
         return ""
     return value if len(value) >= minimum_length else ""
+
+
+def _is_render_managed_secret(path, resolved, metadata, mode):
+    """Accept only Render's exact, read-only /etc/secrets projection shape."""
+    try:
+        relative_target = resolved.relative_to(RENDER_SECRETS_DIR)
+    except ValueError:
+        return False
+    return (
+        path.parent == RENDER_SECRETS_DIR
+        and len(relative_target.parts) == 2
+        and re.fullmatch(
+            r"\.\.\d{4}_\d{2}_\d{2}_\d{2}_\d{2}_\d{2}\.\d+",
+            relative_target.parts[0],
+        )
+        and relative_target.parts[1] == path.name
+        and stat.S_ISREG(metadata.st_mode)
+        and mode == 0o640
+        and metadata.st_uid in {0, os.geteuid()}
+        and metadata.st_gid in os.getgroups()
+        and os.access(path, os.R_OK)
+    )
 
 
 def _read_external_secret(filename, expected_key_id):
