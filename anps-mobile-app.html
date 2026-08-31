@@ -2402,6 +2402,7 @@
     let reminderTimer = null;
     let activeReminderId = "";
     let activeViewId = "dashboard";
+    let activeScreenName = "landing";
     let liveSyncTimer = null;
     let liveSyncInFlight = false;
     let lastNoticeSignature = "";
@@ -4969,6 +4970,7 @@
     }
 
     function showScreen(name) {
+      activeScreenName = name;
       $("#landingScreen").classList.toggle("hidden", name !== "landing");
       $("#loginScreen").classList.toggle("hidden", name !== "login");
       $("#appScreen").classList.toggle("hidden", name !== "app");
@@ -5206,7 +5208,8 @@
       }
     }
 
-    function openView(id) {
+    function openView(id, options = {}) {
+      const previousViewId = activeViewId;
       if (state.role === "student" && id === "busLocation" && !studentBusLocationEnabled()) {
         toast("Bus Location is currently turned off by the school.");
         id = "dashboard";
@@ -5221,7 +5224,50 @@
       document.querySelectorAll("[data-nav]").forEach(btn => btn.classList.toggle("active", btn.dataset.nav === id));
       document.body.classList.remove("drawer-open");
       window.scrollTo({ top: 0, behavior: "smooth" });
+      if (!options.fromHistory && previousViewId !== id) {
+        const historyMethod = options.replaceHistory ? "replaceState" : "pushState";
+        window.history[historyMethod]({ anpsMobile: true, screen: "app", view: id }, "", `#${id}`);
+      } else if (options.replaceHistory) {
+        window.history.replaceState({ anpsMobile: true, screen: "app", view: id }, "", `#${id}`);
+      }
     }
+
+    function closeTopMobileOverlay() {
+      if (document.body.classList.contains("drawer-open")) {
+        document.body.classList.remove("drawer-open");
+        return true;
+      }
+      const visibleModal = ["birthdayModal", "dueAccessModal", "reminderModal"]
+        .map(id => document.getElementById(id))
+        .find(modal => modal && !modal.classList.contains("hidden"));
+      if (!visibleModal) return false;
+      if (visibleModal.id === "dueAccessModal" && dueAccessLocked()) return false;
+      visibleModal.classList.add("hidden");
+      return true;
+    }
+
+    function handleMobileBack() {
+      if (closeTopMobileOverlay()) return true;
+      if (activeScreenName === "login") {
+        showScreen("landing");
+        window.history.replaceState({ anpsMobile: true, screen: "landing" }, "", window.location.pathname);
+        return true;
+      }
+      if (activeScreenName !== "app" || activeViewId === "dashboard") return false;
+      if (window.history.state?.anpsMobile && window.history.length > 1) {
+        window.history.back();
+      } else {
+        openView("dashboard", { fromHistory: true, replaceHistory: true });
+      }
+      return true;
+    }
+
+    window.AnpsMobileBack = { handle: handleMobileBack };
+    window.addEventListener("popstate", event => {
+      if (activeScreenName !== "app") return;
+      const targetView = event.state?.anpsMobile && event.state?.screen === "app" ? event.state.view : "dashboard";
+      openView(targetView || "dashboard", { fromHistory: true, replaceHistory: !event.state?.anpsMobile });
+    });
 
     function studentBusLocationEnabled() {
       return state.role !== "student" || state.workspace?.mobileAppSettings?.busLocationEnabled !== false;
@@ -6113,7 +6159,7 @@
       renderDashboard();
       if (role === "student") renderStudentViews();
       if (role === "teacher") renderTeacherViews();
-      openView("dashboard");
+      openView("dashboard", { replaceHistory: true });
       scheduleReminderCheck();
       startLiveWorkspaceSync();
       if (role === "student") startStudentActivityTracking();

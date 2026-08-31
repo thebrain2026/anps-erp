@@ -517,10 +517,22 @@ public class MainActivity extends Activity {
 
     @Override
     public void onBackPressed() {
-        if (webView != null && webView.canGoBack()) {
-            webView.goBack();
+        if (webView != null) {
+            webView.evaluateJavascript(
+                    "(function(){try{return !!(window.AnpsMobileBack && window.AnpsMobileBack.handle());}catch(e){return false;}})()",
+                    handled -> {
+                        if ("true".equalsIgnoreCase(String.valueOf(handled).replace("\"", "").trim())) {
+                            return;
+                        }
+                        finishActivityFromBack();
+                    }
+            );
             return;
         }
+        super.onBackPressed();
+    }
+
+    private void finishActivityFromBack() {
         super.onBackPressed();
     }
 }
