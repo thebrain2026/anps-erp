@@ -11,7 +11,7 @@
       location.replace("http://127.0.0.1:4174/anps-erp.html#dashboard");
     }
   </script>
-  <link rel="stylesheet" href="./new-school-os.css?v=20260709-teacher-advisory" />
+  <link rel="stylesheet" href="./new-school-os.css?v=20260831-book-layout" />
 </head>
 <body>
   <div class="shell">
@@ -739,14 +739,12 @@
               <small>Bank and UPI fee collections appear here for account-wise tracking and reconciliation.</small>
             </div>
           </div>
-          <section class="bank-account-manager">
-            <div class="panel-head">
-              <div>
-                <p class="eyebrow">Bank setup</p>
-                <h3>Bank Accounts</h3>
-                <small>Add the school bank accounts used for fee deposits.</small>
-              </div>
-            </div>
+          <details class="bank-account-manager">
+            <summary>
+              <span><strong>Bank Account Setup</strong><small>Add, edit or deactivate school bank accounts</small></span>
+              <span class="bank-account-manager-action">Manage Accounts</span>
+            </summary>
+            <div class="bank-account-manager-body">
             <form id="bankAccountForm" class="bank-book-filter">
               <input name="id" type="hidden" />
               <label>Bank Name
@@ -770,7 +768,12 @@
                 <tbody id="bankAccountRows"><tr><td colspan="6">No bank account added yet.</td></tr></tbody>
               </table>
             </div>
-          </section>
+            </div>
+          </details>
+          <div class="book-section-title">
+            <div><p class="eyebrow">Transaction register</p><h3>Bank Receipts</h3></div>
+            <small>Bank and UPI collections · newest receipt first</small>
+          </div>
           <div class="bank-book-summary" id="bankBookSummary"></div>
           <div class="bank-book-filter">
             <label>Date
@@ -808,6 +811,10 @@
               <h2>Cash Book</h2>
               <small>All cash fee collections appear here automatically.</small>
             </div>
+          </div>
+          <div class="book-section-title">
+            <div><p class="eyebrow">Transaction register</p><h3>Cash Receipts</h3></div>
+            <small>Cash collections · newest receipt first</small>
           </div>
           <div class="bank-book-summary" id="cashBookSummary"></div>
           <div class="bank-book-filter">
@@ -4020,6 +4027,6 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="./new-school-os.js?v=20260727-july-due-payment-sync"></script>
+  <script src="./new-school-os.js?v=20260831-book-layout"></script>
 </body>
 </html>

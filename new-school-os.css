@@ -3203,6 +3203,63 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   box-shadow: 0 18px 42px rgba(30, 64, 104, .08);
 }
 
+.bank-account-manager {
+  margin-bottom: 14px;
+  border: 1px solid #c7ddf2;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, .82);
+  box-shadow: 0 8px 20px rgba(31, 50, 72, .06);
+  overflow: hidden;
+}
+
+.bank-account-manager summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 12px 14px;
+  color: #173761;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+}
+
+.bank-account-manager summary::-webkit-details-marker { display: none; }
+.bank-account-manager summary span:first-child { display: grid; gap: 2px; }
+.bank-account-manager summary strong { font-size: .92rem; }
+.bank-account-manager summary small { color: #60758a; font-size: .76rem; font-weight: 750; }
+
+.bank-account-manager-action {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  padding: 0 11px;
+  border-radius: 7px;
+  background: #e8f4ff;
+  color: #174f81;
+  font-size: .76rem;
+  font-weight: 950;
+}
+
+.bank-account-manager[open] .bank-account-manager-action::after { content: "  ▲"; }
+.bank-account-manager:not([open]) .bank-account-manager-action::after { content: "  ▼"; }
+
+.bank-account-manager-body {
+  padding: 12px;
+  border-top: 1px solid #d8e7f4;
+}
+
+.book-section-title {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 14px;
+  margin: 2px 0 10px;
+}
+
+.book-section-title h3 { margin: 2px 0 0; color: #173761; font-size: 1.05rem; }
+.book-section-title small { color: #60758a; font-size: .76rem; font-weight: 800; }
+
 .entire-school-fees-panel {
   overflow: hidden;
   border-color: #bfd8f1;
@@ -3524,6 +3581,22 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
 .bank-book-table table {
   min-width: 1180px;
 }
+
+.bank-book-table {
+  max-height: min(62vh, 680px);
+  overflow: auto;
+  border: 1px solid #c7ddf2;
+  border-radius: 9px;
+  overscroll-behavior: contain;
+}
+
+.bank-book-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.bank-book-table tbody td { white-space: nowrap; }
 
 .bank-reconciliation-table table {
   min-width: 1320px;

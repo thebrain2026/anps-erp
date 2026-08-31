@@ -2428,6 +2428,9 @@ function setView(viewName, options = {}) {
   views.forEach(view => view.classList.toggle("active", view.id === viewName));
   navButtons.forEach(button => button.classList.toggle("active", button.dataset.view === viewName));
   pageTitle.textContent = titleMap[viewName] || "Dashboard";
+  if (currentView !== viewName && !options.preserveScroll) {
+    window.scrollTo({top: 0, left: 0, behavior: "auto"});
+  }
   const renderSelectedView = () => {
     if (document.querySelector(".view.active")?.id !== viewName) return;
     renderActiveView(viewName);
@@ -3709,6 +3712,7 @@ function getDailyCollectionReportRows() {
 function getBankBookRows() {
   const sessionPayments = collectedPayments[activeSession] || {};
   const rows = [];
+  const visiblePaymentKeys = new Set();
   Object.entries(sessionPayments).forEach(([admissionNo, payments]) => {
     const student = findStudentByAdmissionNo(admissionNo);
     (payments || []).forEach(payment => {
@@ -3716,6 +3720,9 @@ function getBankBookRows() {
       const split = getPaymentSplitForAmount(payment, total);
       const bankAmount = Number(payment.bankAmount || split.bank || 0);
       if (bankAmount <= 0) return;
+      const visibleKey = [admissionNo, payment.receipt || "", payment.date || "", bankAmount, total, payment.bankAccountId || payment.bankAccountName || ""].join("|");
+      if (visiblePaymentKeys.has(visibleKey)) return;
+      visiblePaymentKeys.add(visibleKey);
       const allocations = Array.isArray(payment.allocations) ? payment.allocations : [];
       const feeHeads = [...new Set(allocations.map(item => item.head).filter(Boolean))];
       const feeMonths = [...new Set(allocations.map(item => item.month).filter(Boolean))];
@@ -3859,6 +3866,7 @@ function renderBankBook() {
 function getCashBookRows() {
   const sessionPayments = collectedPayments[activeSession] || {};
   const rows = [];
+  const visiblePaymentKeys = new Set();
   Object.entries(sessionPayments).forEach(([admissionNo, payments]) => {
     const student = findStudentByAdmissionNo(admissionNo);
     (payments || []).forEach(payment => {
@@ -3866,6 +3874,9 @@ function getCashBookRows() {
       const split = getPaymentSplitForAmount(payment, total);
       const cashAmount = Number(payment.cashAmount || split.cash || 0);
       if (cashAmount <= 0) return;
+      const visibleKey = [admissionNo, payment.receipt || "", payment.date || "", cashAmount, total].join("|");
+      if (visiblePaymentKeys.has(visibleKey)) return;
+      visiblePaymentKeys.add(visibleKey);
       const allocations = Array.isArray(payment.allocations) ? payment.allocations : [];
       const feeHeads = [...new Set(allocations.map(item => item.head).filter(Boolean))];
       const feeMonths = [...new Set(allocations.map(item => item.month).filter(Boolean))];
