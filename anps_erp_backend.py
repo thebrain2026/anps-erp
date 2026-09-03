@@ -2022,6 +2022,30 @@ def merge_class_timetable_entries(server_entries, incoming_entries):
     )
 
 
+def merge_class_subject_assignments(server_state, incoming_state):
+    server_assignments = server_state.get("classSubjectAssignments") if isinstance(server_state.get("classSubjectAssignments"), dict) else {}
+    incoming_assignments = incoming_state.get("classSubjectAssignments") if isinstance(incoming_state.get("classSubjectAssignments"), dict) else {}
+    server_time = record_updated_time({"updatedAt": server_state.get("classSubjectAssignmentsUpdatedAt")})
+    incoming_time = record_updated_time({"updatedAt": incoming_state.get("classSubjectAssignmentsUpdatedAt")})
+    if server_time or incoming_time:
+        source = incoming_assignments if incoming_time >= server_time else server_assignments
+        updated_at = incoming_state.get("classSubjectAssignmentsUpdatedAt") if incoming_time >= server_time else server_state.get("classSubjectAssignmentsUpdatedAt")
+        return {
+            str(class_name): list(dict.fromkeys(str(subject).strip() for subject in subjects if str(subject).strip()))
+            for class_name, subjects in source.items()
+            if isinstance(subjects, list)
+        }, updated_at or ""
+    merged = {}
+    for source in (server_assignments, incoming_assignments):
+        for class_name, subjects in source.items():
+            if not isinstance(subjects, list):
+                continue
+            key = str(class_name)
+            merged.setdefault(key, [])
+            merged[key] = list(dict.fromkeys([*merged[key], *(str(subject).strip() for subject in subjects if str(subject).strip())]))
+    return merged, ""
+
+
 def transport_assignment_key(item):
     if not isinstance(item, dict):
         return ""
@@ -2096,6 +2120,7 @@ def merge_state_without_losing_receipts(server_state, incoming_state):
         server_state.get("classTimetableEntries") or [],
         incoming_state.get("classTimetableEntries") or [],
     )
+    merged["classSubjectAssignments"], merged["classSubjectAssignmentsUpdatedAt"] = merge_class_subject_assignments(server_state, incoming_state)
     for key, updated_key in PRIMITIVE_SETUP_LIST_UPDATED_AT.items():
         server_time = record_updated_time({"updatedAt": server_state.get(updated_key)})
         incoming_time = record_updated_time({"updatedAt": incoming_state.get(updated_key)})

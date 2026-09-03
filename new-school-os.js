@@ -289,6 +289,8 @@ let customAdmissionClassesUpdatedAt = "";
 let customAdmissionSectionsUpdatedAt = "";
 let customSubjectsUpdatedAt = "";
 const classSubjectAssignments = {};
+let classSubjectAssignmentsUpdatedAt = "";
+const subjectAssignmentDrafts = new Map();
 
 const titleMap = {
   dashboard: "Dashboard",
@@ -537,6 +539,7 @@ function getAppStateSnapshot() {
     customSubjects,
     customSubjectsUpdatedAt,
     classSubjectAssignments,
+    classSubjectAssignmentsUpdatedAt,
     classSectionMasterInitialized,
     tuitionFineSetup,
     transportVillageDistances,
@@ -1116,7 +1119,16 @@ function mergeTransportVillageFees(remoteFees = {}, localFees = {}) {
   return merged;
 }
 
-function mergeClassSubjectAssignments(remoteAssignments = {}, localAssignments = {}) {
+function mergeClassSubjectAssignments(remoteAssignments = {}, localAssignments = {}, remoteUpdatedAt = "", localUpdatedAt = "") {
+  const remoteTime = getRecordUpdatedTime({updatedAt: remoteUpdatedAt});
+  const localTime = getRecordUpdatedTime({updatedAt: localUpdatedAt});
+  if (remoteTime || localTime) {
+    const newest = localTime >= remoteTime ? localAssignments : remoteAssignments;
+    return Object.fromEntries(Object.entries(newest || {}).map(([className, subjects]) => [
+      className,
+      [...new Set((Array.isArray(subjects) ? subjects : []).map(subject => String(subject || "").trim()).filter(Boolean))]
+    ]));
+  }
   const merged = {};
   const classes = new Set([...Object.keys(remoteAssignments || {}), ...Object.keys(localAssignments || {})]);
   classes.forEach(className => {
@@ -1263,7 +1275,13 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
   merged.rolePermissions = {...(remoteState.rolePermissions || {}), ...(localState.rolePermissions || {})};
   merged.rolePermissionAudit = {...(remoteState.rolePermissionAudit || {}), ...(localState.rolePermissionAudit || {})};
   merged.staffBiometricDevice = {...(remoteState.staffBiometricDevice || {}), ...(localState.staffBiometricDevice || {})};
-  merged.classSubjectAssignments = mergeClassSubjectAssignments(remoteState.classSubjectAssignments || {}, localState.classSubjectAssignments || {});
+  merged.classSubjectAssignments = mergeClassSubjectAssignments(
+    remoteState.classSubjectAssignments || {}, localState.classSubjectAssignments || {},
+    remoteState.classSubjectAssignmentsUpdatedAt, localState.classSubjectAssignmentsUpdatedAt
+  );
+  merged.classSubjectAssignmentsUpdatedAt = getRecordUpdatedTime({updatedAt: localState.classSubjectAssignmentsUpdatedAt}) >= getRecordUpdatedTime({updatedAt: remoteState.classSubjectAssignmentsUpdatedAt})
+    ? localState.classSubjectAssignmentsUpdatedAt || remoteState.classSubjectAssignmentsUpdatedAt || ""
+    : remoteState.classSubjectAssignmentsUpdatedAt || localState.classSubjectAssignmentsUpdatedAt || "";
   merged.classTimetableEntries = mergeClassTimetableEntries(remoteState.classTimetableEntries, localState.classTimetableEntries);
   merged.deletedPaymentReceipts = getDeletedPaymentReceiptMap(remoteState.deletedPaymentReceipts, localState.deletedPaymentReceipts);
   merged.collectedPayments = mergeCollectedPayments(remoteState.collectedPayments || {}, localState.collectedPayments || {}, merged.deletedPaymentReceipts);
@@ -1290,7 +1308,13 @@ function mergeSetupSafeState(backendState = {}, localSnapshot = {}) {
       ? localSnapshot.customSubjectsUpdatedAt || backendState.customSubjectsUpdatedAt || ""
       : backendState.customSubjectsUpdatedAt || localSnapshot.customSubjectsUpdatedAt || "",
     classSectionMasterInitialized: backendState.classSectionMasterInitialized === true || localSnapshot.classSectionMasterInitialized === true,
-    classSubjectAssignments: mergeClassSubjectAssignments(backendState.classSubjectAssignments || {}, localSnapshot.classSubjectAssignments || {}),
+    classSubjectAssignments: mergeClassSubjectAssignments(
+      backendState.classSubjectAssignments || {}, localSnapshot.classSubjectAssignments || {},
+      backendState.classSubjectAssignmentsUpdatedAt, localSnapshot.classSubjectAssignmentsUpdatedAt
+    ),
+    classSubjectAssignmentsUpdatedAt: getRecordUpdatedTime({updatedAt: localSnapshot.classSubjectAssignmentsUpdatedAt}) >= getRecordUpdatedTime({updatedAt: backendState.classSubjectAssignmentsUpdatedAt})
+      ? localSnapshot.classSubjectAssignmentsUpdatedAt || backendState.classSubjectAssignmentsUpdatedAt || ""
+      : backendState.classSubjectAssignmentsUpdatedAt || localSnapshot.classSubjectAssignmentsUpdatedAt || "",
     transportVillages: mergePrimitiveList(backendState.transportVillages || [], localSnapshot.transportVillages || []),
     customTransportVillages: mergePrimitiveList(backendState.customTransportVillages || [], localSnapshot.customTransportVillages || []),
     transportVillageDistances: {...(backendState.transportVillageDistances || {}), ...(localSnapshot.transportVillageDistances || {})},
@@ -1339,6 +1363,7 @@ function hasSetupSafeMergeChanges(mergedState = {}, backendState = {}) {
     ...Object.values(PRIMITIVE_SETUP_LIST_UPDATED_AT),
     "classSectionMasterInitialized",
     "classSubjectAssignments",
+    "classSubjectAssignmentsUpdatedAt",
     "transportVillages",
     "customTransportVillages",
     "transportVillageDistances",
@@ -1793,6 +1818,7 @@ function applySavedState(saved = {}) {
         }
       });
     }
+    classSubjectAssignmentsUpdatedAt = saved.classSubjectAssignmentsUpdatedAt || classSubjectAssignmentsUpdatedAt || "";
     if (!classSectionMasterInitialized) {
       customAdmissionClasses.splice(0, customAdmissionClasses.length, ...[...new Set([...DEFAULT_ADMISSION_CLASSES, ...customAdmissionClasses])]);
       customAdmissionSections.splice(0, customAdmissionSections.length, ...[...new Set([...DEFAULT_ADMISSION_SECTIONS, ...customAdmissionSections])]);
@@ -3014,7 +3040,9 @@ function renderSubjectAssignmentSetup(selectedValue = document.getElementById("s
     if (selected) classSelect.value = selected;
   }
   const activeClass = classSelect?.value || "";
-  const assigned = new Set(getAssignedSubjectsForClass(activeClass));
+  const assigned = new Set(subjectAssignmentDrafts.has(activeClass)
+    ? subjectAssignmentDrafts.get(activeClass)
+    : getAssignedSubjectsForClass(activeClass));
   if (subjectList) {
     subjectList.innerHTML = subjects.length ? subjects.map((subject, index) => {
       const id = `subjectAssign-${index}-${subject.replace(/[^a-z0-9]+/gi, "-")}`;
@@ -15336,8 +15364,15 @@ subjectAssignForm.addEventListener("submit", event => {
     showToast("Select class first.");
     return;
   }
-  classSubjectAssignments[className] = [...new Set(data.getAll("subjects").map(subject => String(subject || "").trim()).filter(Boolean))];
+  const selectedSubjects = [...new Set(data.getAll("subjects").map(subject => String(subject || "").trim()).filter(Boolean))];
+  if (!selectedSubjects.length) {
+    showToast("Select at least one subject before saving.");
+    return;
+  }
+  classSubjectAssignments[className] = selectedSubjects;
+  classSubjectAssignmentsUpdatedAt = new Date().toISOString();
   if (!saveAppState()) return;
+  subjectAssignmentDrafts.delete(className);
   renderSubjectAssignmentSetup(className);
   renderClassTimetableOptions();
   renderHomeworkModule();
@@ -15646,6 +15681,12 @@ document.getElementById("showSubjectAssignBtn").addEventListener("click", () => 
   renderSubjectAssignmentSetup();
 });
 document.getElementById("subjectAssignClass").addEventListener("change", event => renderSubjectAssignmentSetup(event.target.value));
+document.getElementById("subjectAssignList").addEventListener("change", event => {
+  if (!event.target.matches('input[name="subjects"]')) return;
+  const className = String(document.getElementById("subjectAssignClass")?.value || "").trim();
+  if (!className) return;
+  subjectAssignmentDrafts.set(className, [...subjectAssignForm.querySelectorAll('input[name="subjects"]:checked')].map(input => input.value));
+});
 
 document.getElementById("accessStaffSelect")?.addEventListener("change", event => {
   const staff = getStaffByStaffId(event.target.value);
