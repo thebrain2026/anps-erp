@@ -12,6 +12,7 @@ import anps_bsfv_outbox
 
 from anps_bsfv_outbox import (
     IntegrationConfig,
+    build_fee_baseline_envelope,
     capture_state_changes,
     dispatch_once,
     dispatcher_loop,
@@ -49,6 +50,15 @@ def payment(amount="100.00", discount="5.00"):
         "discountAmount": discount,
         "allocations": [{"id": "line-1", "head": "Synthetic Tuition", "month": "AUG", "amount": str(float(amount) + float(discount))}],
     }
+
+
+def bank_payment(amount="100.00", bank_id="bank-synthetic-01"):
+    item = payment(amount, "0.00")
+    item["cashAmount"] = "0.00"
+    item["bankAmount"] = amount
+    item["bankAccountId"] = bank_id
+    item["allocations"][0]["amount"] = amount
+    return item
 
 
 def fee_state(item=None):
@@ -162,6 +172,69 @@ class OutboxTest(unittest.TestCase):
             self.conn.execute("UPDATE bsfv_outbox_events SET event_type='changed'")
         with self.assertRaises(sqlite3.DatabaseError):
             self.conn.execute("DELETE FROM bsfv_outbox_events")
+
+    def test_normalization_only_changes_do_not_create_correction(self):
+        original = payment("100.0", "5")
+        normalized = payment("100.00", "5.00")
+        normalized["session"] = "2026-27"
+        normalized["school_id"] = "school-synthetic"
+        normalized["allocations"][0]["session"] = "2026-27"
+        normalized["allocations"][0]["schoolId"] = "school-synthetic"
+        original["date"] = "28-08-2026"
+        normalized["date"] = "2026-08-28"
+        capture_state_changes(self.conn, {}, fee_state(original), config())
+        capture_state_changes(self.conn, fee_state(original), fee_state(normalized), config())
+        self.assertEqual(len(self.rows()), 1)
+
+    def test_meaningful_finance_changes_create_corrections(self):
+        cases = []
+        amount_changed = payment("120.00", "5.00")
+        cases.append(amount_changed)
+        tender_changed = bank_payment("100.00")
+        cases.append(tender_changed)
+        bank_changed = bank_payment("100.00", "bank-synthetic-02")
+        cases.append(bank_changed)
+        allocation_changed = payment("100.00", "5.00")
+        allocation_changed["allocations"] = [
+            {"id": "line-1", "head": "Tuition", "month": "AUG", "amount": "50.00"},
+            {"id": "line-2", "head": "Transport", "month": "AUG", "amount": "55.00"},
+        ]
+        cases.append(allocation_changed)
+        prior = payment()
+        capture_state_changes(self.conn, {}, fee_state(prior), config())
+        for changed in cases:
+            before = len(self.rows())
+            capture_state_changes(self.conn, fee_state(prior), fee_state(changed), config())
+            self.assertEqual(len(self.rows()), before + 1)
+            prior = changed
+
+    def test_bank_identity_is_transport_only_and_cash_needs_none(self):
+        capture_state_changes(self.conn, {}, fee_state(bank_payment()), config())
+        bank_data = json.loads(self.rows()[0]["payload"])["data"]
+        self.assertEqual(bank_data["tenders"][0]["source_bank_id"], "bank-synthetic-01")
+        with self.assertRaisesRegex(ValueError, "source_bank_id_required"):
+            missing = bank_payment()
+            missing.pop("bankAccountId")
+            anps_bsfv_outbox._fee_payload(missing["id"], "2026-27", "ADM", missing)
+        cash_data = anps_bsfv_outbox._fee_payload(
+            "pay-cash", "2026-27", "ADM", payment()
+        )
+        self.assertNotIn("source_bank_id", cash_data["tenders"][0])
+
+    def test_baseline_preserves_high_water_without_mutating_outbox(self):
+        item = bank_payment()
+        capture_state_changes(self.conn, {}, fee_state(item), config())
+        corrected = dict(item, amount="110.00", bankAmount="110.00")
+        corrected["allocations"] = [dict(item["allocations"][0], amount="110.00")]
+        capture_state_changes(self.conn, fee_state(item), fee_state(corrected), config())
+        before = self.conn.total_changes
+        baseline = build_fee_baseline_envelope(
+            self.conn, item["id"], "2026-27", "ADM-SYN-1", corrected, config()
+        )
+        self.assertEqual(baseline["event_type"], "anps.fee_collection.baseline")
+        self.assertEqual(baseline["source_version"], 2)
+        self.assertEqual(self.conn.total_changes, before)
+        self.assertEqual(len(self.rows()), 2)
 
     def test_india_display_date_is_rfc3339_without_utc_reinterpretation(self):
         item = payment()

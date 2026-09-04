@@ -28,6 +28,7 @@ import rfc8785
 
 EVENT_TYPES = {
     "anps.fee_collection.created",
+    "anps.fee_collection.baseline",
     "anps.fee_collection.corrected",
     "anps.fee_collection.voided",
     "anps.staff.created",
@@ -374,7 +375,7 @@ def _decimal(value):
         raise ValueError("invalid_money") from exc
     if not amount.is_finite() or amount.as_tuple().exponent < -2:
         raise ValueError("invalid_money")
-    return format(amount, "f")
+    return format(amount.quantize(Decimal("0.01")), ".2f")
 
 
 def _fee_records(state):
@@ -464,13 +465,29 @@ def _fee_payload(payment_id, session, admission_no, payment, reason=None):
             "fee_month": str(item.get("month") or "").strip() or None,
             "amount": amount,
         })
+    allocations.sort(
+        key=lambda item: (
+            item["line_id"],
+            item["fee_head_id"] or "",
+            item["fee_head_name"],
+            item["fee_month"] or "",
+            item["amount"],
+        )
+    )
     cash = _decimal(payment.get("cashAmount"))
     bank = _decimal(payment.get("bankAmount"))
     tenders = []
     if Decimal(cash) > 0:
         tenders.append({"type": "cash", "amount": cash})
     if Decimal(bank) > 0:
-        tenders.append({"type": "bank", "amount": bank})
+        bank_tender = {"type": "bank", "amount": bank}
+        source_bank_id = str(
+            payment.get("bankAccountId") or payment.get("bank_account_id") or ""
+        ).strip()
+        if not source_bank_id:
+            raise ValueError("source_bank_id_required")
+        bank_tender["source_bank_id"] = source_bank_id
+        tenders.append(bank_tender)
     net_paid = _decimal(payment.get("amount") or (Decimal(cash) + Decimal(bank)))
     discount = _decimal(payment.get("discountAmount"))
     payload = {
@@ -493,6 +510,42 @@ def _fee_payload(payment_id, session, admission_no, payment, reason=None):
     if sum((Decimal(item["amount"]) for item in allocations), Decimal(0)) != Decimal(net_paid) + Decimal(discount):
         raise ValueError("allocation_total_mismatch")
     return payload
+
+
+def build_fee_baseline_envelope(conn, payment_id, session, admission_no, payment, config=None):
+    """Build, but never enqueue or transmit, an explicitly versioned final-state baseline."""
+    config = config or IntegrationConfig.from_env()
+    row = conn.execute(
+        "SELECT source_version FROM bsfv_source_versions "
+        "WHERE aggregate_type='fee_collection' AND aggregate_id=?",
+        (payment_id,),
+    ).fetchone()
+    if not row or int(row[0]) < 1:
+        raise ValueError("baseline_source_version_missing")
+    data = _fee_payload(payment_id, session, admission_no, payment)
+    now = utc_now()
+    envelope = {
+        "contract": "school-finance-integration",
+        "schema_version": "1.0",
+        "event_id": uuid.uuid4().hex,
+        "event_type": "anps.fee_collection.baseline",
+        "source_system": config.source_system,
+        "source_record_id": payment_id,
+        "aggregate_type": "fee_collection",
+        "aggregate_id": payment_id,
+        "source_version": int(row[0]),
+        "school_id": config.school_id,
+        "created_at": now,
+        "occurred_at": _occurred_at(payment.get("date")),
+        "published_at": now,
+        "trace_id": uuid.uuid4().hex,
+        "data": data,
+    }
+    if session:
+        envelope["data"]["session"] = config.session_map.get(session, session)
+    if _contains_forbidden(envelope["data"]):
+        raise ValueError("invalid_or_sensitive_event")
+    return envelope
 
 
 def _staff_payload(staff_id, staff, reason=None):
@@ -596,8 +649,20 @@ def capture_state_changes(conn, old_state, new_state, config=None):
     for payment_id in sorted(new_fees):
         session, admission, payment = new_fees[payment_id]
         prior = old_fees.get(payment_id)
-        if prior and _stable(prior) == _stable(new_fees[payment_id]):
-            continue
+        if prior:
+            prior_session, prior_admission, prior_payment = prior
+            try:
+                prior_finance_state = _fee_payload(
+                    payment_id, prior_session, prior_admission, prior_payment
+                )
+                current_finance_state = _fee_payload(
+                    payment_id, session, admission, payment
+                )
+            except ValueError:
+                _metric(conn, "blocked_invalid_fee_contract")
+                continue
+            if _stable(prior_finance_state) == _stable(current_finance_state):
+                continue
         lifecycle = "corrected" if prior else "created"
         reason = "Source payment corrected" if prior else None
         try:
