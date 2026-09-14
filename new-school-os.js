@@ -2370,13 +2370,15 @@ function renderActiveView(viewName = document.querySelector(".view.active")?.id 
     renderFeeMasterClassOptions();
   }
   if (viewName === "finance") {
-    renderFinanceSession(false);
+    // Step 2: paint Collect Fees form first; defer school-wide dues/KPI scans.
+    renderFinanceSession(false, {deferHeavy: true});
     renderStudentFeeCounter();
-    setTimeout(() => {
+    clearTimeout(financeFeeBookRenderTimer);
+    financeFeeBookRenderTimer = setTimeout(() => {
       if (document.querySelector(".view.active")?.id !== "finance") return;
       renderFeeBookStudentOptions();
       renderFeeBook(activeLedgerAdmissionNo || activeFeeStudentAdmissionNo);
-    }, 80);
+    }, 120);
   }
   if (viewName === "feeBook") {
     renderFeeBookStudentOptions();
@@ -9138,17 +9140,38 @@ function renderSessions() {
   sessionSelect.value = activeSession;
 }
 
-function renderFinanceSession(includeTables = true) {
+function renderFinanceSessionShell() {
   const session = ensureActiveFinanceSessionData();
+  const feesKpiCard = document.querySelector(".kpi-card.fees-kpi");
+  if (feesKpiCard) feesKpiCard.hidden = !canCurrentRoleAccessModule("dashboardFeesCollection");
+  const academicYearText = document.getElementById("academicYearText");
+  if (academicYearText) academicYearText.textContent = `Academic year ${activeSession}`;
+  const sessionSummaryText = document.getElementById("sessionSummaryText");
+  if (sessionSummaryText) sessionSummaryText.textContent = session.summary;
+  const studentCount = document.getElementById("studentCount");
+  if (studentCount) studentCount.textContent = getActiveStudents().length.toLocaleString("en-IN");
+  return session;
+}
+
+function markFinanceHeavyAggregatesLoading() {
+  const feesNote = document.getElementById("kpiFeesNote");
+  if (feesNote) feesNote.textContent = "Updating collections…";
+  const followUpsNote = document.getElementById("kpiFollowUpsNote");
+  if (followUpsNote) followUpsNote.textContent = "Updating…";
+  const dueTable = document.getElementById("dueTable");
+  if (dueTable && !dueTable.dataset.financeHeavyReady) {
+    dueTable.innerHTML = `<tr><td colspan="4">Updating due follow-ups…</td></tr>`;
+  }
+}
+
+function renderFinanceSessionHeavyAggregates() {
   const dashboardMonthly = getDashboardMonthlyFeeCollectionSummary();
   const dashboardFollowUps = getDashboardDueFollowUps();
   const dashboardHighPriority = dashboardFollowUps.filter(item => item.status === "High Priority").length;
-  const feesKpiCard = document.querySelector(".kpi-card.fees-kpi");
-  if (feesKpiCard) feesKpiCard.hidden = !canCurrentRoleAccessModule("dashboardFeesCollection");
-  document.getElementById("academicYearText").textContent = `Academic year ${activeSession}`;
-  document.getElementById("sessionSummaryText").textContent = session.summary;
-  document.getElementById("kpiFeesCollected").textContent = formatRs(dashboardMonthly.collected);
-  document.getElementById("kpiFeesNote").textContent = "Payment-date collections";
+  const feesCollected = document.getElementById("kpiFeesCollected");
+  if (feesCollected) feesCollected.textContent = formatRs(dashboardMonthly.collected);
+  const feesNote = document.getElementById("kpiFeesNote");
+  if (feesNote) feesNote.textContent = "Payment-date collections";
   const monthlyBreakdown = document.getElementById("kpiFeesMonthlyBreakdown");
   if (monthlyBreakdown) {
     monthlyBreakdown.innerHTML = dashboardMonthly.monthlyBreakdown.map(item => `
@@ -9162,9 +9185,49 @@ function renderFinanceSession(includeTables = true) {
   const followUpsNote = document.getElementById("kpiFollowUpsNote");
   if (followUpsKpi) followUpsKpi.textContent = String(dashboardFollowUps.length).padStart(2, "0");
   if (followUpsNote) followUpsNote.textContent = `${dashboardHighPriority} high priority`;
-  document.getElementById("studentCount").textContent = getActiveStudents().length.toLocaleString("en-IN");
   renderDues();
   renderDashboardDueStudents();
+  const dueTable = document.getElementById("dueTable");
+  if (dueTable) dueTable.dataset.financeHeavyReady = "1";
+}
+
+let financeHeavyRenderTimer = null;
+let financeHeavyRenderToken = 0;
+let financeFeeBookRenderTimer = null;
+
+function scheduleFinanceHeavyAggregates(includeTables = false) {
+  clearTimeout(financeHeavyRenderTimer);
+  const token = ++financeHeavyRenderToken;
+  const run = () => {
+    if (token !== financeHeavyRenderToken) return;
+    renderFinanceSessionHeavyAggregates();
+    if (!includeTables) return;
+    resetFeeMasterEditing();
+    resetFeeGroupEditing();
+    renderFeeMaster();
+    renderFeeGroups();
+    renderDueFeesSearch();
+  };
+  const start = () => {
+    financeHeavyRenderTimer = setTimeout(run, 0);
+  };
+  if (typeof requestIdleCallback === "function") {
+    requestIdleCallback(start, {timeout: 400});
+  } else {
+    financeHeavyRenderTimer = setTimeout(run, 50);
+  }
+}
+
+function renderFinanceSession(includeTables = true, options = {}) {
+  renderFinanceSessionShell();
+  if (options.deferHeavy) {
+    markFinanceHeavyAggregatesLoading();
+    scheduleFinanceHeavyAggregates(includeTables);
+    return;
+  }
+  financeHeavyRenderToken += 1;
+  clearTimeout(financeHeavyRenderTimer);
+  renderFinanceSessionHeavyAggregates();
   if (!includeTables) return;
   resetFeeMasterEditing();
   resetFeeGroupEditing();
