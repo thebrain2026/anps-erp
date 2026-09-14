@@ -17328,9 +17328,52 @@ receiptPreviewBody.addEventListener("change", event => {
   openFeeBookMonthlyReport(monthlyReportSelect.dataset.admissionNo, monthlyReportSelect.value);
 });
 
+// Step 1: office fee forms only — confirm + double-submit guard (no schema/data migration).
+let feeCollectionSubmitLock = false;
+
+function getFeeCollectionSubmitButton(form) {
+  return form?.querySelector?.("button[type='submit']") || null;
+}
+
+function setFeeCollectionSubmitLocked(form, locked) {
+  feeCollectionSubmitLock = Boolean(locked);
+  const button = getFeeCollectionSubmitButton(form);
+  if (button) button.disabled = Boolean(locked);
+}
+
+function confirmOfficeFeeCollectionSave({
+  student,
+  amount,
+  mode = "",
+  receiptNo = "",
+  isEdit = false,
+  fineAmount = 0,
+  discountAmount = 0
+} = {}) {
+  const name = String(student?.name || "Student").trim() || "Student";
+  const admission = String(student?.admissionNo || student?.id || "").trim() || "-";
+  const action = isEdit ? "Update" : "Collect";
+  const lines = [
+    `${action} fee receipt?`,
+    "",
+    `Student: ${name} (${admission})`,
+    `Amount: ${formatRs(amount)}`,
+    `Mode: ${mode || "-"}`,
+    `Receipt: ${receiptNo || "(auto)"}`
+  ];
+  if (Number(fineAmount || 0) > 0) lines.push(`Fine: ${formatRs(fineAmount)}`);
+  if (Number(discountAmount || 0) > 0) lines.push(`Discount: ${formatRs(discountAmount)}`);
+  lines.push("", "OK = save this receipt. Cancel = do not save.");
+  return window.confirm(lines.join("\n"));
+}
+
 combinedCollectionForm.addEventListener("submit", event => {
   event.preventDefault();
   const form = event.currentTarget;
+  if (feeCollectionSubmitLock) {
+    showToast("Fee save already in progress. Please wait.", "warning", 3000);
+    return;
+  }
   const student = findActiveStudentByAdmissionOrName(form.elements.admissionNo.value);
   const selected = [...form.querySelectorAll("[data-combined-fee]:checked")].map(input => {
     const appliedDate = formatDateDDMMYYYY(form.elements.date.value || new Date());
@@ -17374,34 +17417,57 @@ combinedCollectionForm.addEventListener("submit", event => {
     form.elements.receiptNo.value = receiptNo;
     showToast(`Receipt no. changed to ${receiptNo} to avoid duplicate.`);
   }
-  if (editingReceipt) deletePaymentByReceipt(student.admissionNo, editingReceipt, editingPaymentId);
-  const payment = collectCombinedStudentPayment(student, selected, form.elements.date.value, receiptNo, {
-    bankAmount,
-    cashAmount,
-    discountAmount,
-    remarks: form.elements.remarks?.value || "",
-    bankAccountId: bankAccount?.id || "",
-    bankAccountName: bankAccount ? getBankAccountLabel(bankAccount) : "",
-    paymentId: editingPaymentId || undefined
-  });
-  if (!payment) {
-    showToast("Combined payment could not be saved.");
+  const paidNow = bankAmount + cashAmount;
+  const mode = bankAmount > 0 && cashAmount > 0 ? "Bank + Cash" : bankAmount > 0 ? "Bank" : "Cash";
+  if (!confirmOfficeFeeCollectionSave({
+    student,
+    amount: paidNow,
+    mode,
+    receiptNo,
+    isEdit: Boolean(editingReceipt),
+    discountAmount
+  })) {
+    showToast("Fee save cancelled.", "warning", 2500);
     return;
   }
-  setNextReceiptNo();
-  saveAppState();
-  renderFeeBook(student.admissionNo);
-  renderStudentFeeCounter(student.admissionNo);
-  renderDueFeesSearch();
-  renderFinanceSession();
-  closeCombinedCollectionPopup();
-  openCombinedReceiptPreview(student, payment, selected);
-  showToast(`Combined receipt ${payment.receipt} ${editingReceipt ? "updated" : "saved"}.`);
+  setFeeCollectionSubmitLocked(form, true);
+  try {
+    if (editingReceipt) deletePaymentByReceipt(student.admissionNo, editingReceipt, editingPaymentId);
+    const payment = collectCombinedStudentPayment(student, selected, form.elements.date.value, receiptNo, {
+      bankAmount,
+      cashAmount,
+      discountAmount,
+      remarks: form.elements.remarks?.value || "",
+      bankAccountId: bankAccount?.id || "",
+      bankAccountName: bankAccount ? getBankAccountLabel(bankAccount) : "",
+      paymentId: editingPaymentId || undefined
+    });
+    if (!payment) {
+      showToast("Combined payment could not be saved.");
+      return;
+    }
+    setNextReceiptNo();
+    saveAppState();
+    renderFeeBook(student.admissionNo);
+    renderStudentFeeCounter(student.admissionNo);
+    renderDueFeesSearch();
+    renderFinanceSession();
+    closeCombinedCollectionPopup();
+    openCombinedReceiptPreview(student, payment, selected);
+    showToast(`Combined receipt ${payment.receipt} ${editingReceipt ? "updated" : "saved"}.`);
+  } finally {
+    setFeeCollectionSubmitLocked(form, false);
+  }
 });
 
 document.getElementById("feeForm").addEventListener("submit", event => {
   event.preventDefault();
-  const data = new FormData(event.currentTarget);
+  const form = event.currentTarget;
+  if (feeCollectionSubmitLock) {
+    showToast("Fee save already in progress. Please wait.", "warning", 3000);
+    return;
+  }
+  const data = new FormData(form);
   const id = data.get("id");
   const student = findActiveStudentByAdmissionNo(id);
   if (!student) {
@@ -17414,41 +17480,57 @@ document.getElementById("feeForm").addEventListener("submit", event => {
   const bankAccount = bankAccounts.find(account => account.id === String(data.get("bankAccountId") || "") && account.active !== false);
   const rawAmount = bankAmount + cashAmount;
   const mode = bankAmount > 0 && cashAmount > 0 ? "Bank + Cash" : bankAmount > 0 ? "Bank" : "Cash";
-  const feeHead = event.currentTarget.dataset.feeHead || "";
-  const fineAmount = ["Tuition Fee", "Transport Fees"].includes(feeHead) ? Number(data.get("fineAmount") || event.currentTarget.dataset.fineAmount || 0) : 0;
-  const feeMonth = event.currentTarget.dataset.feeMonth || "";
-  const editingReceipt = event.currentTarget.dataset.editPaymentReceipt || "";
-  const editingPaymentId = event.currentTarget.dataset.editPaymentId || "";
+  const feeHead = form.dataset.feeHead || "";
+  const fineAmount = ["Tuition Fee", "Transport Fees"].includes(feeHead) ? Number(data.get("fineAmount") || form.dataset.fineAmount || 0) : 0;
+  const feeMonth = form.dataset.feeMonth || "";
+  const editingReceipt = form.dataset.editPaymentReceipt || "";
+  const editingPaymentId = form.dataset.editPaymentId || "";
   const safeReceipt = getSafeReceiptNoForPayment(student.admissionNo, data.get("receiptNo"), editingPaymentId);
   const receiptNo = safeReceipt.receiptNo;
-  event.currentTarget.elements.amount.value = rawAmount;
+  form.elements.amount.value = rawAmount;
   if (rawAmount <= 0) {
     showToast("Enter bank or cash payment amount.");
     return;
   }
   if (bankAmount > 0 && !bankAccount) {
     showToast("Select the bank account receiving this payment.");
-    event.currentTarget.elements.bankAccountId?.focus();
+    form.elements.bankAccountId?.focus();
     return;
   }
-  if (editingReceipt) deletePaymentByReceipt(student.admissionNo, editingReceipt, editingPaymentId);
-  const payment = collectStudentPayment(student, rawAmount, date, mode, feeHead, fineAmount, feeMonth, receiptNo, {bankAmount, cashAmount, bankAccountId: bankAccount?.id || "", bankAccountName: bankAccount ? getBankAccountLabel(bankAccount) : "", paymentId: editingPaymentId || undefined});
-  if (!payment) {
-    showToast("Payment could not be saved.");
+  if (!confirmOfficeFeeCollectionSave({
+    student,
+    amount: rawAmount,
+    mode,
+    receiptNo,
+    isEdit: Boolean(editingReceipt),
+    fineAmount
+  })) {
+    showToast("Fee save cancelled.", "warning", 2500);
     return;
   }
-  renderStudentFeeCounter(student.admissionNo);
-  renderFeeBook(student.admissionNo);
-  renderDueFeesSearch();
-  renderFinanceSession();
-  setNextReceiptNo();
-  saveAppState();
-  resetPaymentEditMode();
-  resetFeeDateToToday();
-  document.getElementById("receiptBox").innerHTML = `<strong>Receipt ${payment.receipt}</strong><br>${student.name} (${id}) paid ${formatRs(payment.amount)} by ${mode}.<br><small>Bank: ${formatRs(payment.bankAmount)} | Cash: ${formatRs(payment.cashAmount)} | Fine: ${formatRs(fineAmount)} | Date: ${formatDateDDMMYYYY(payment.date)}</small>`;
-  const returnView = activeFeeReturnView || "finance";
-  if (returnView !== "finance") setView(returnView);
-  showToast(returnView === "feeBook" ? "Payment saved. Fee Book opened." : returnView === "dueFeesSearch" ? "Payment saved. Search Due Fees opened." : "Payment saved in Fee Book.");
+  setFeeCollectionSubmitLocked(form, true);
+  try {
+    if (editingReceipt) deletePaymentByReceipt(student.admissionNo, editingReceipt, editingPaymentId);
+    const payment = collectStudentPayment(student, rawAmount, date, mode, feeHead, fineAmount, feeMonth, receiptNo, {bankAmount, cashAmount, bankAccountId: bankAccount?.id || "", bankAccountName: bankAccount ? getBankAccountLabel(bankAccount) : "", paymentId: editingPaymentId || undefined});
+    if (!payment) {
+      showToast("Payment could not be saved.");
+      return;
+    }
+    renderStudentFeeCounter(student.admissionNo);
+    renderFeeBook(student.admissionNo);
+    renderDueFeesSearch();
+    renderFinanceSession();
+    setNextReceiptNo();
+    saveAppState();
+    resetPaymentEditMode();
+    resetFeeDateToToday();
+    document.getElementById("receiptBox").innerHTML = `<strong>Receipt ${payment.receipt}</strong><br>${student.name} (${id}) paid ${formatRs(payment.amount)} by ${mode}.<br><small>Bank: ${formatRs(payment.bankAmount)} | Cash: ${formatRs(payment.cashAmount)} | Fine: ${formatRs(fineAmount)} | Date: ${formatDateDDMMYYYY(payment.date)}</small>`;
+    const returnView = activeFeeReturnView || "finance";
+    if (returnView !== "finance") setView(returnView);
+    showToast(returnView === "feeBook" ? "Payment saved. Fee Book opened." : returnView === "dueFeesSearch" ? "Payment saved. Search Due Fees opened." : "Payment saved in Fee Book.");
+  } finally {
+    setFeeCollectionSubmitLocked(form, false);
+  }
 });
 
 document.querySelector("#feeForm [name='id']").addEventListener("change", event => {
