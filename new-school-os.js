@@ -3799,6 +3799,7 @@ function refreshBankAccountSelectors() {
   populateBankAccountSelect(document.getElementById("feeBankAccount"));
   populateBankAccountSelect(combinedCollectionForm?.elements?.bankAccountId);
   populateBankAccountSelect(document.getElementById("bankBookAccountFilter"), true);
+  populateBankAccountSelect(document.getElementById("upiApproveBankAccount"));
 }
 
 function resetBankAccountForm() {
@@ -9883,6 +9884,7 @@ function getFilteredUpiPaymentRequests() {
 function renderUpiPaymentVerification() {
   const rows = document.getElementById("upiPaymentRows");
   if (!rows) return;
+  populateBankAccountSelect(document.getElementById("upiApproveBankAccount"));
   const filtered = getFilteredUpiPaymentRequests();
   const pendingCount = upiPaymentRequests.filter(request => String(request.status || "Pending") === "Pending").length;
   const summary = document.getElementById("upiPaymentSummary");
@@ -9929,11 +9931,20 @@ function approveUpiPaymentRequest(requestId = "") {
     showToast("Student not found or disabled.");
     return;
   }
+  const bankSelect = document.getElementById("upiApproveBankAccount");
+  const bankAccount = getActiveBankAccounts().find(account => account.id === String(bankSelect?.value || ""));
+  if (!bankAccount) {
+    showToast("Select the settlement bank account before approving UPI.");
+    bankSelect?.focus();
+    return;
+  }
   const receiptNo = getSafeReceiptNoForPayment(student.admissionNo, getNextReceiptNo()).receiptNo;
   const amount = Number(request.amount || 0);
   const payment = collectStudentPayment(student, amount, request.date || new Date(), "Bank", "", 0, "", receiptNo, {
     bankAmount: amount,
     cashAmount: 0,
+    bankAccountId: bankAccount.id,
+    bankAccountName: getBankAccountLabel(bankAccount),
     remarks: `Student app UPI verification | UTR: ${request.utr || "-"}`
   });
   if (!payment) {
@@ -9942,6 +9953,7 @@ function approveUpiPaymentRequest(requestId = "") {
   }
   request.status = "Approved";
   request.receiptNo = payment.receipt;
+  request.bankAccountId = bankAccount.id;
   request.approvedAt = new Date().toISOString();
   request.approvedBy = getCurrentCollectorRoleName();
   setNextReceiptNo();

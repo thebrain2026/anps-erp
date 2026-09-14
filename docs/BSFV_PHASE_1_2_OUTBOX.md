@@ -90,6 +90,9 @@ ANPS_BSFV_CF_ACCESS_CLIENT_SECRET_FILE=
 ANPS_BSFV_SCHOOL_ID=
 ANPS_BSFV_SESSION_MAP=
 ANPS_BSFV_SOURCE_SYSTEM=anps
+ANPS_BSFV_ALLOWED_EVENT_TYPES=anps.fee_collection.created,anps.fee_collection.corrected,anps.fee_collection.voided,anps.staff.created,anps.staff.updated,anps.staff.deactivated
 ```
 
 Do not enable these settings without a separately approved production phase.
+UPI bank tenders require a selected settlement `bankAccountId` — see `docs/BSFV_UPI_SETTLEMENT_BANK.md`.
+Enablement order for NPSF/BSFV is documented in the BSFV repo as `docs/ANPS_BSFV_ENABLEMENT_RUNBOOK.md`.
