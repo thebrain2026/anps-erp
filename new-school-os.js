@@ -2370,13 +2370,15 @@ function renderActiveView(viewName = document.querySelector(".view.active")?.id 
     renderFeeMasterClassOptions();
   }
   if (viewName === "finance") {
-    renderFinanceSession(false);
+    // Step 2: paint Collect Fees form first; defer school-wide dues/KPI scans.
+    renderFinanceSession(false, {deferHeavy: true});
     renderStudentFeeCounter();
-    setTimeout(() => {
+    clearTimeout(financeFeeBookRenderTimer);
+    financeFeeBookRenderTimer = setTimeout(() => {
       if (document.querySelector(".view.active")?.id !== "finance") return;
       renderFeeBookStudentOptions();
       renderFeeBook(activeLedgerAdmissionNo || activeFeeStudentAdmissionNo);
-    }, 80);
+    }, 120);
   }
   if (viewName === "feeBook") {
     renderFeeBookStudentOptions();
@@ -9138,17 +9140,38 @@ function renderSessions() {
   sessionSelect.value = activeSession;
 }
 
-function renderFinanceSession(includeTables = true) {
+function renderFinanceSessionShell() {
   const session = ensureActiveFinanceSessionData();
+  const feesKpiCard = document.querySelector(".kpi-card.fees-kpi");
+  if (feesKpiCard) feesKpiCard.hidden = !canCurrentRoleAccessModule("dashboardFeesCollection");
+  const academicYearText = document.getElementById("academicYearText");
+  if (academicYearText) academicYearText.textContent = `Academic year ${activeSession}`;
+  const sessionSummaryText = document.getElementById("sessionSummaryText");
+  if (sessionSummaryText) sessionSummaryText.textContent = session.summary;
+  const studentCount = document.getElementById("studentCount");
+  if (studentCount) studentCount.textContent = getActiveStudents().length.toLocaleString("en-IN");
+  return session;
+}
+
+function markFinanceHeavyAggregatesLoading() {
+  const feesNote = document.getElementById("kpiFeesNote");
+  if (feesNote) feesNote.textContent = "Updating collections…";
+  const followUpsNote = document.getElementById("kpiFollowUpsNote");
+  if (followUpsNote) followUpsNote.textContent = "Updating…";
+  const dueTable = document.getElementById("dueTable");
+  if (dueTable && !dueTable.dataset.financeHeavyReady) {
+    dueTable.innerHTML = `<tr><td colspan="4">Updating due follow-ups…</td></tr>`;
+  }
+}
+
+function renderFinanceSessionHeavyAggregates() {
   const dashboardMonthly = getDashboardMonthlyFeeCollectionSummary();
   const dashboardFollowUps = getDashboardDueFollowUps();
   const dashboardHighPriority = dashboardFollowUps.filter(item => item.status === "High Priority").length;
-  const feesKpiCard = document.querySelector(".kpi-card.fees-kpi");
-  if (feesKpiCard) feesKpiCard.hidden = !canCurrentRoleAccessModule("dashboardFeesCollection");
-  document.getElementById("academicYearText").textContent = `Academic year ${activeSession}`;
-  document.getElementById("sessionSummaryText").textContent = session.summary;
-  document.getElementById("kpiFeesCollected").textContent = formatRs(dashboardMonthly.collected);
-  document.getElementById("kpiFeesNote").textContent = "Payment-date collections";
+  const feesCollected = document.getElementById("kpiFeesCollected");
+  if (feesCollected) feesCollected.textContent = formatRs(dashboardMonthly.collected);
+  const feesNote = document.getElementById("kpiFeesNote");
+  if (feesNote) feesNote.textContent = "Payment-date collections";
   const monthlyBreakdown = document.getElementById("kpiFeesMonthlyBreakdown");
   if (monthlyBreakdown) {
     monthlyBreakdown.innerHTML = dashboardMonthly.monthlyBreakdown.map(item => `
@@ -9162,9 +9185,49 @@ function renderFinanceSession(includeTables = true) {
   const followUpsNote = document.getElementById("kpiFollowUpsNote");
   if (followUpsKpi) followUpsKpi.textContent = String(dashboardFollowUps.length).padStart(2, "0");
   if (followUpsNote) followUpsNote.textContent = `${dashboardHighPriority} high priority`;
-  document.getElementById("studentCount").textContent = getActiveStudents().length.toLocaleString("en-IN");
   renderDues();
   renderDashboardDueStudents();
+  const dueTable = document.getElementById("dueTable");
+  if (dueTable) dueTable.dataset.financeHeavyReady = "1";
+}
+
+let financeHeavyRenderTimer = null;
+let financeHeavyRenderToken = 0;
+let financeFeeBookRenderTimer = null;
+
+function scheduleFinanceHeavyAggregates(includeTables = false) {
+  clearTimeout(financeHeavyRenderTimer);
+  const token = ++financeHeavyRenderToken;
+  const run = () => {
+    if (token !== financeHeavyRenderToken) return;
+    renderFinanceSessionHeavyAggregates();
+    if (!includeTables) return;
+    resetFeeMasterEditing();
+    resetFeeGroupEditing();
+    renderFeeMaster();
+    renderFeeGroups();
+    renderDueFeesSearch();
+  };
+  const start = () => {
+    financeHeavyRenderTimer = setTimeout(run, 0);
+  };
+  if (typeof requestIdleCallback === "function") {
+    requestIdleCallback(start, {timeout: 400});
+  } else {
+    financeHeavyRenderTimer = setTimeout(run, 50);
+  }
+}
+
+function renderFinanceSession(includeTables = true, options = {}) {
+  renderFinanceSessionShell();
+  if (options.deferHeavy) {
+    markFinanceHeavyAggregatesLoading();
+    scheduleFinanceHeavyAggregates(includeTables);
+    return;
+  }
+  financeHeavyRenderToken += 1;
+  clearTimeout(financeHeavyRenderTimer);
+  renderFinanceSessionHeavyAggregates();
   if (!includeTables) return;
   resetFeeMasterEditing();
   resetFeeGroupEditing();
@@ -14408,6 +14471,7 @@ async function pullBackendStateIfChanged(showMessage = false) {
     markBackendOnline();
     backendSyncReady = true;
     const health = await healthResponse.json();
+    if (typeof health?.fee_append_api === "boolean") feeAppendApiEnabledCache = health.fee_append_api;
     const serverUpdatedAt = health?.updated_at || "";
     if (serverUpdatedAt && backendLastUpdatedAt && serverUpdatedAt === backendLastUpdatedAt) return;
     const stateResponse = await backendFetch(`/api/state?v=${Date.now()}`, {
@@ -17328,9 +17392,120 @@ receiptPreviewBody.addEventListener("change", event => {
   openFeeBookMonthlyReport(monthlyReportSelect.dataset.admissionNo, monthlyReportSelect.value);
 });
 
-combinedCollectionForm.addEventListener("submit", event => {
+// Step 1: office fee forms only — confirm + double-submit guard (no schema/data migration).
+let feeCollectionSubmitLock = false;
+let feeAppendApiEnabledCache = null;
+
+function getFeeCollectionSubmitButton(form) {
+  return form?.querySelector?.("button[type='submit']") || null;
+}
+
+function setFeeCollectionSubmitLocked(form, locked) {
+  feeCollectionSubmitLock = Boolean(locked);
+  const button = getFeeCollectionSubmitButton(form);
+  if (button) button.disabled = Boolean(locked);
+}
+
+function confirmOfficeFeeCollectionSave({
+  student,
+  amount,
+  mode = "",
+  receiptNo = "",
+  isEdit = false,
+  fineAmount = 0,
+  discountAmount = 0
+} = {}) {
+  const name = String(student?.name || "Student").trim() || "Student";
+  const admission = String(student?.admissionNo || student?.id || "").trim() || "-";
+  const action = isEdit ? "Update" : "Collect";
+  const lines = [
+    `${action} fee receipt?`,
+    "",
+    `Student: ${name} (${admission})`,
+    `Amount: ${formatRs(amount)}`,
+    `Mode: ${mode || "-"}`,
+    `Receipt: ${receiptNo || "(auto)"}`
+  ];
+  if (Number(fineAmount || 0) > 0) lines.push(`Fine: ${formatRs(fineAmount)}`);
+  if (Number(discountAmount || 0) > 0) lines.push(`Discount: ${formatRs(discountAmount)}`);
+  lines.push("", "OK = save this receipt. Cancel = do not save.");
+  return window.confirm(lines.join("\n"));
+}
+
+async function refreshFeeAppendApiFlag() {
+  try {
+    const response = await backendFetch(`/api/health?v=${Date.now()}`, {cache: "no-store"});
+    if (!response.ok) {
+      feeAppendApiEnabledCache = false;
+      return false;
+    }
+    const health = await response.json();
+    feeAppendApiEnabledCache = Boolean(health?.fee_append_api);
+    return feeAppendApiEnabledCache;
+  } catch (error) {
+    console.warn("Could not refresh fee append API flag.", error);
+    feeAppendApiEnabledCache = false;
+    return false;
+  }
+}
+
+async function ensureFeeAppendApiEnabled() {
+  const forced = String(localStorage.getItem("anps_fee_append_api") || "").trim();
+  if (forced === "1" || forced === "true") return true;
+  if (forced === "0" || forced === "false") return false;
+  const meta = document.querySelector('meta[name="anps-fee-append-api"]')?.getAttribute("content");
+  if (meta === "1" || meta === "true") return true;
+  if (feeAppendApiEnabledCache !== null) return feeAppendApiEnabledCache;
+  return refreshFeeAppendApiFlag();
+}
+
+function removeLocalSessionPayment(admissionNo, paymentId = "", receiptNo = "") {
+  const list = getSessionPayments(admissionNo);
+  const cleanId = String(paymentId || "").trim();
+  const cleanReceipt = String(receiptNo || "").trim().toLowerCase();
+  const next = list.filter(payment => {
+    if (cleanId && String(payment?.id || "").trim() === cleanId) return false;
+    if (cleanReceipt && String(payment?.receipt || "").trim().toLowerCase() === cleanReceipt) return false;
+    return true;
+  });
+  list.splice(0, list.length, ...next);
+}
+
+async function persistOfficeFeePaymentToServer(student, payment, {replaceReceipt = "", replacePaymentId = ""} = {}) {
+  const response = await backendFetch("/api/fees/collect", {
+    method: "POST",
+    headers: backendHeaders({"Content-Type": "application/json"}),
+    body: JSON.stringify({
+      admissionNo: student.admissionNo || student.id || "",
+      session: activeSession,
+      payment,
+      replaceReceipt,
+      replacePaymentId
+    })
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || !result?.ok) {
+    throw new Error(result?.error || `Fee append failed (${response.status})`);
+  }
+  if (result.updated_at) backendLastUpdatedAt = result.updated_at;
+  if (result.payment?.receipt) payment.receipt = result.payment.receipt;
+  if (result.payment?.id) payment.id = result.payment.id;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(getAppStateSnapshot()));
+  } catch (error) {
+    console.warn("Could not refresh local snapshot after fee append.", error);
+  }
+  setTopbarSaveStatus("saved");
+  return result;
+}
+
+combinedCollectionForm.addEventListener("submit", async event => {
   event.preventDefault();
   const form = event.currentTarget;
+  if (feeCollectionSubmitLock) {
+    showToast("Fee save already in progress. Please wait.", "warning", 3000);
+    return;
+  }
   const student = findActiveStudentByAdmissionOrName(form.elements.admissionNo.value);
   const selected = [...form.querySelectorAll("[data-combined-fee]:checked")].map(input => {
     const appliedDate = formatDateDDMMYYYY(form.elements.date.value || new Date());
@@ -17374,34 +17549,72 @@ combinedCollectionForm.addEventListener("submit", event => {
     form.elements.receiptNo.value = receiptNo;
     showToast(`Receipt no. changed to ${receiptNo} to avoid duplicate.`);
   }
-  if (editingReceipt) deletePaymentByReceipt(student.admissionNo, editingReceipt, editingPaymentId);
-  const payment = collectCombinedStudentPayment(student, selected, form.elements.date.value, receiptNo, {
-    bankAmount,
-    cashAmount,
-    discountAmount,
-    remarks: form.elements.remarks?.value || "",
-    bankAccountId: bankAccount?.id || "",
-    bankAccountName: bankAccount ? getBankAccountLabel(bankAccount) : "",
-    paymentId: editingPaymentId || undefined
-  });
-  if (!payment) {
-    showToast("Combined payment could not be saved.");
+  const paidNow = bankAmount + cashAmount;
+  const mode = bankAmount > 0 && cashAmount > 0 ? "Bank + Cash" : bankAmount > 0 ? "Bank" : "Cash";
+  if (!confirmOfficeFeeCollectionSave({
+    student,
+    amount: paidNow,
+    mode,
+    receiptNo,
+    isEdit: Boolean(editingReceipt),
+    discountAmount
+  })) {
+    showToast("Fee save cancelled.", "warning", 2500);
     return;
   }
-  setNextReceiptNo();
-  saveAppState();
-  renderFeeBook(student.admissionNo);
-  renderStudentFeeCounter(student.admissionNo);
-  renderDueFeesSearch();
-  renderFinanceSession();
-  closeCombinedCollectionPopup();
-  openCombinedReceiptPreview(student, payment, selected);
-  showToast(`Combined receipt ${payment.receipt} ${editingReceipt ? "updated" : "saved"}.`);
+  setFeeCollectionSubmitLocked(form, true);
+  try {
+    const useAppendApi = await ensureFeeAppendApiEnabled();
+    if (editingReceipt) deletePaymentByReceipt(student.admissionNo, editingReceipt, editingPaymentId);
+    const payment = collectCombinedStudentPayment(student, selected, form.elements.date.value, receiptNo, {
+      bankAmount,
+      cashAmount,
+      discountAmount,
+      remarks: form.elements.remarks?.value || "",
+      bankAccountId: bankAccount?.id || "",
+      bankAccountName: bankAccount ? getBankAccountLabel(bankAccount) : "",
+      paymentId: editingPaymentId || undefined
+    });
+    if (!payment) {
+      showToast("Combined payment could not be saved.");
+      return;
+    }
+    setNextReceiptNo();
+    if (useAppendApi) {
+      try {
+        await persistOfficeFeePaymentToServer(student, payment, {
+          replaceReceipt: editingReceipt,
+          replacePaymentId: editingPaymentId
+        });
+        showToast(`Combined receipt ${payment.receipt} ${editingReceipt ? "updated" : "saved"} on server.`);
+      } catch (error) {
+        removeLocalSessionPayment(student.admissionNo, payment.id, payment.receipt);
+        showToast(error?.message || "Server fee save failed. Receipt was not kept locally.", "error", 7000);
+        return;
+      }
+    } else {
+      saveAppState();
+      showToast(`Combined receipt ${payment.receipt} ${editingReceipt ? "updated" : "saved"}.`);
+    }
+    renderFeeBook(student.admissionNo);
+    renderStudentFeeCounter(student.admissionNo);
+    renderDueFeesSearch();
+    renderFinanceSession();
+    closeCombinedCollectionPopup();
+    openCombinedReceiptPreview(student, payment, selected);
+  } finally {
+    setFeeCollectionSubmitLocked(form, false);
+  }
 });
 
-document.getElementById("feeForm").addEventListener("submit", event => {
+document.getElementById("feeForm").addEventListener("submit", async event => {
   event.preventDefault();
-  const data = new FormData(event.currentTarget);
+  const form = event.currentTarget;
+  if (feeCollectionSubmitLock) {
+    showToast("Fee save already in progress. Please wait.", "warning", 3000);
+    return;
+  }
+  const data = new FormData(form);
   const id = data.get("id");
   const student = findActiveStudentByAdmissionNo(id);
   if (!student) {
@@ -17414,41 +17627,80 @@ document.getElementById("feeForm").addEventListener("submit", event => {
   const bankAccount = bankAccounts.find(account => account.id === String(data.get("bankAccountId") || "") && account.active !== false);
   const rawAmount = bankAmount + cashAmount;
   const mode = bankAmount > 0 && cashAmount > 0 ? "Bank + Cash" : bankAmount > 0 ? "Bank" : "Cash";
-  const feeHead = event.currentTarget.dataset.feeHead || "";
-  const fineAmount = ["Tuition Fee", "Transport Fees"].includes(feeHead) ? Number(data.get("fineAmount") || event.currentTarget.dataset.fineAmount || 0) : 0;
-  const feeMonth = event.currentTarget.dataset.feeMonth || "";
-  const editingReceipt = event.currentTarget.dataset.editPaymentReceipt || "";
-  const editingPaymentId = event.currentTarget.dataset.editPaymentId || "";
+  const feeHead = form.dataset.feeHead || "";
+  const fineAmount = ["Tuition Fee", "Transport Fees"].includes(feeHead) ? Number(data.get("fineAmount") || form.dataset.fineAmount || 0) : 0;
+  const feeMonth = form.dataset.feeMonth || "";
+  const editingReceipt = form.dataset.editPaymentReceipt || "";
+  const editingPaymentId = form.dataset.editPaymentId || "";
   const safeReceipt = getSafeReceiptNoForPayment(student.admissionNo, data.get("receiptNo"), editingPaymentId);
   const receiptNo = safeReceipt.receiptNo;
-  event.currentTarget.elements.amount.value = rawAmount;
+  form.elements.amount.value = rawAmount;
   if (rawAmount <= 0) {
     showToast("Enter bank or cash payment amount.");
     return;
   }
   if (bankAmount > 0 && !bankAccount) {
     showToast("Select the bank account receiving this payment.");
-    event.currentTarget.elements.bankAccountId?.focus();
+    form.elements.bankAccountId?.focus();
     return;
   }
-  if (editingReceipt) deletePaymentByReceipt(student.admissionNo, editingReceipt, editingPaymentId);
-  const payment = collectStudentPayment(student, rawAmount, date, mode, feeHead, fineAmount, feeMonth, receiptNo, {bankAmount, cashAmount, bankAccountId: bankAccount?.id || "", bankAccountName: bankAccount ? getBankAccountLabel(bankAccount) : "", paymentId: editingPaymentId || undefined});
-  if (!payment) {
-    showToast("Payment could not be saved.");
+  if (!confirmOfficeFeeCollectionSave({
+    student,
+    amount: rawAmount,
+    mode,
+    receiptNo,
+    isEdit: Boolean(editingReceipt),
+    fineAmount
+  })) {
+    showToast("Fee save cancelled.", "warning", 2500);
     return;
   }
-  renderStudentFeeCounter(student.admissionNo);
-  renderFeeBook(student.admissionNo);
-  renderDueFeesSearch();
-  renderFinanceSession();
-  setNextReceiptNo();
-  saveAppState();
-  resetPaymentEditMode();
-  resetFeeDateToToday();
-  document.getElementById("receiptBox").innerHTML = `<strong>Receipt ${payment.receipt}</strong><br>${student.name} (${id}) paid ${formatRs(payment.amount)} by ${mode}.<br><small>Bank: ${formatRs(payment.bankAmount)} | Cash: ${formatRs(payment.cashAmount)} | Fine: ${formatRs(fineAmount)} | Date: ${formatDateDDMMYYYY(payment.date)}</small>`;
-  const returnView = activeFeeReturnView || "finance";
-  if (returnView !== "finance") setView(returnView);
-  showToast(returnView === "feeBook" ? "Payment saved. Fee Book opened." : returnView === "dueFeesSearch" ? "Payment saved. Search Due Fees opened." : "Payment saved in Fee Book.");
+  setFeeCollectionSubmitLocked(form, true);
+  try {
+    const useAppendApi = await ensureFeeAppendApiEnabled();
+    if (editingReceipt) deletePaymentByReceipt(student.admissionNo, editingReceipt, editingPaymentId);
+    const payment = collectStudentPayment(student, rawAmount, date, mode, feeHead, fineAmount, feeMonth, receiptNo, {bankAmount, cashAmount, bankAccountId: bankAccount?.id || "", bankAccountName: bankAccount ? getBankAccountLabel(bankAccount) : "", paymentId: editingPaymentId || undefined});
+    if (!payment) {
+      showToast("Payment could not be saved.");
+      return;
+    }
+    let savedToServer = false;
+    if (useAppendApi) {
+      try {
+        await persistOfficeFeePaymentToServer(student, payment, {
+          replaceReceipt: editingReceipt,
+          replacePaymentId: editingPaymentId
+        });
+        savedToServer = true;
+      } catch (error) {
+        removeLocalSessionPayment(student.admissionNo, payment.id, payment.receipt);
+        showToast(error?.message || "Server fee save failed. Receipt was not kept locally.", "error", 7000);
+        return;
+      }
+    } else {
+      saveAppState();
+    }
+    renderStudentFeeCounter(student.admissionNo);
+    renderFeeBook(student.admissionNo);
+    renderDueFeesSearch();
+    renderFinanceSession();
+    setNextReceiptNo();
+    resetPaymentEditMode();
+    resetFeeDateToToday();
+    document.getElementById("receiptBox").innerHTML = `<strong>Receipt ${payment.receipt}</strong><br>${student.name} (${id}) paid ${formatRs(payment.amount)} by ${mode}.<br><small>Bank: ${formatRs(payment.bankAmount)} | Cash: ${formatRs(payment.cashAmount)} | Fine: ${formatRs(fineAmount)} | Date: ${formatDateDDMMYYYY(payment.date)}</small>`;
+    const returnView = activeFeeReturnView || "finance";
+    if (returnView !== "finance") setView(returnView);
+    const serverLabel = savedToServer ? "saved to server" : "saved";
+    showToast(
+      returnView === "feeBook"
+        ? `Payment ${serverLabel}. Fee Book opened.`
+        : returnView === "dueFeesSearch"
+          ? `Payment ${serverLabel}. Search Due Fees opened.`
+          : `Payment ${serverLabel} in Fee Book.`
+    );
+  } finally {
+    setFeeCollectionSubmitLocked(form, false);
+  }
 });
 
 document.querySelector("#feeForm [name='id']").addEventListener("change", event => {

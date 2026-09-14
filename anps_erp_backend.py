@@ -84,6 +84,7 @@ DEFAULT_SCHOOL_NAME = os.environ.get("ANPS_DEFAULT_SCHOOL_NAME", "Alfred Nobel P
 SESSION_TTL_DAYS = 7
 EMERGENCY_STAFF_RESTORE_ENABLED = os.environ.get("ANPS_EMERGENCY_STAFF_RESTORE_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
 AUTO_STAFF_BACKUP_RESTORE_ENABLED = os.environ.get("ANPS_AUTO_STAFF_BACKUP_RESTORE_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
+FEE_APPEND_API_ENABLED = os.environ.get("ANPS_FEE_APPEND_API", "").strip().lower() in {"1", "true", "yes", "on"}
 STATE_IO_LOCK = threading.RLock()
 EMERGENCY_STAFF_RESTORE_SEED = []
 TENANT_TABLES = {
@@ -3698,6 +3699,211 @@ def write_state(value):
     return state_row["updated_at"] if state_row else None
 
 
+def upsert_single_fee_payment_projection(conn, state, session, admission_no, payment):
+    """Upsert one fee_receipt (+ replace its allocations). Does not wipe other tables."""
+    state = ensure_state_school(state or {})
+    school_id = school_id_from_state(state)
+    payment = payment if isinstance(payment, dict) else {}
+    receipt_no = str(payment.get("receipt") or "").strip()
+    if not receipt_no:
+        return
+    student = find_student_by_admission(state, admission_no) or {}
+    allocations = dedupe_payment_allocations(payment.get("allocations") or [])
+    fine_total = sum(
+        money(item.get("amount"))
+        for item in allocations
+        if "fine" in str(item.get("head") or "").lower()
+    )
+    net_paid = money(payment.get("amount")) or money(payment.get("bankAmount")) + money(payment.get("cashAmount"))
+    fee_heads = ", ".join(
+        sorted({str(item.get("head") or "") for item in allocations if str(item.get("head") or "").strip()})
+    )
+    fee_months = ", ".join(
+        sorted({str(item.get("month") or "") for item in allocations if str(item.get("month") or "").strip()})
+    )
+    if table_has_column(conn, "fee_payment_allocations", "school_id"):
+        conn.execute(
+            "DELETE FROM fee_payment_allocations WHERE school_id = ? AND receipt_no = ?",
+            (school_id, receipt_no),
+        )
+    else:
+        conn.execute("DELETE FROM fee_payment_allocations WHERE receipt_no = ?", (receipt_no,))
+    upsert_json_row(
+        conn,
+        "fee_receipts",
+        ["receipt_no"],
+        payment,
+        {
+            "receipt_no": receipt_no,
+            "admission_no": str(admission_no),
+            "student_name": student.get("name") or "",
+            "class_name": student.get("klass") or student.get("class") or "",
+            "section": student.get("section") or "",
+            "fee_head": fee_heads,
+            "fee_month": fee_months,
+            "payment_date": payment.get("date") or "",
+            "entry_date": payment.get("date") or "",
+            "cash_amount": money(payment.get("cashAmount")),
+            "bank_amount": money(payment.get("bankAmount")),
+            "discount": money(payment.get("discountAmount")),
+            "fine": fine_total,
+            "net_paid": net_paid,
+            "status": "Paid",
+            "raw_json": json.dumps({**payment, "allocations": allocations, "session": session}, ensure_ascii=False),
+        },
+    )
+    for allocation in allocations:
+        head = str(allocation.get("head") or "")
+        conn.execute(
+            """
+            INSERT INTO fee_payment_allocations
+                (school_id, receipt_no, admission_no, fee_head, fee_month, amount, is_fine, raw_json)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                school_id,
+                receipt_no,
+                str(admission_no),
+                head,
+                allocation.get("month") or "",
+                money(allocation.get("amount")),
+                1 if "fine" in head.lower() else 0,
+                json.dumps({**allocation, "session": session, "school_id": school_id, "schoolId": school_id}, ensure_ascii=False),
+            ),
+        )
+
+
+@serialized_state_io
+def append_office_fee_payment(admission_no, payment, session=None, replace_receipt="", replace_payment_id=""):
+    """
+    Append/replace one collected payment in app_state without sync_state_tables wipe.
+    Idempotent on payment.id when the same receipt is retried.
+    """
+    if not FEE_APPEND_API_ENABLED:
+        raise RuntimeError("fee_append_api_disabled")
+    payment = dict(payment or {})
+    payment_id = str(payment.get("id") or "").strip() or f"PAY-{int(datetime.now().timestamp() * 1000)}"
+    payment["id"] = payment_id
+    with connect() as conn:
+        row = conn.execute("SELECT value, updated_at FROM app_state WHERE key = ?", (STATE_KEY,)).fetchone()
+        previous_state = ensure_state_school(json.loads(row["value"])) if row else ensure_state_school(fresh_state())
+        state = json.loads(json.dumps(previous_state))
+        session_name = str(
+            session
+            or state.get("activeSession")
+            or state.get("selectedSession")
+            or (state.get("settings") or {}).get("academicYear")
+            or "2026-27"
+        ).strip()
+        student = find_student_by_admission(state, admission_no)
+        if not student:
+            raise ValueError("Student not found in ERP data")
+        canonical_admission = str(student.get("admissionNo") or student.get("id") or admission_no).strip()
+        deleted_receipts = deleted_payment_receipt_map(state.get("deletedPaymentReceipts") or {})
+        state["collectedPayments"] = state.get("collectedPayments") if isinstance(state.get("collectedPayments"), dict) else {}
+        state["collectedPayments"].setdefault(session_name, {})
+        existing_key = next(
+            (
+                key
+                for key in state["collectedPayments"][session_name].keys()
+                if normalize_admission_no(key) == normalize_admission_no(canonical_admission)
+            ),
+            canonical_admission,
+        )
+        payments = live_payment_list(
+            state["collectedPayments"][session_name].get(existing_key, []),
+            deleted_receipts,
+            session_name,
+            existing_key,
+        )
+        replace_receipt = str(replace_receipt or "").strip()
+        replace_payment_id = str(replace_payment_id or "").strip()
+        if replace_receipt or replace_payment_id:
+            payments = [
+                row_payment
+                for row_payment in payments
+                if str((row_payment or {}).get("id") or "").strip() != replace_payment_id
+                and str((row_payment or {}).get("receipt") or "").strip().lower() != replace_receipt.lower()
+            ]
+        receipt = str(payment.get("receipt") or "").strip()
+        if receipt and is_deleted_payment_receipt(deleted_receipts, session_name, existing_key, receipt):
+            raise ValueError("receipt_deleted")
+        owner = payment_receipt_owner(state, session_name, receipt) if receipt else ""
+        if not receipt or (owner and normalize_admission_no(owner) != normalize_admission_no(existing_key)):
+            receipt = next_receipt_no_for_state(state, session_name, deleted_receipts)
+            payment["receipt"] = receipt
+        else:
+            payment["receipt"] = receipt
+        existing_by_id = next(
+            (row_payment for row_payment in payments if str((row_payment or {}).get("id") or "").strip() == payment_id),
+            None,
+        )
+        if existing_by_id and str(existing_by_id.get("receipt") or "").strip() == str(payment.get("receipt") or "").strip():
+            updated_at = row["updated_at"] if row else None
+            return {
+                "ok": True,
+                "idempotent": True,
+                "updated_at": updated_at,
+                "payment": existing_by_id,
+                "session": session_name,
+                "admission_no": existing_key,
+                "state": state,
+            }
+        payments = [
+            row_payment
+            for row_payment in payments
+            if str((row_payment or {}).get("id") or "").strip() != payment_id
+            and str((row_payment or {}).get("receipt") or "").strip().lower() != str(payment.get("receipt") or "").strip().lower()
+        ]
+        payments.insert(0, payment)
+        state["collectedPayments"][session_name][existing_key] = payments
+        try:
+            serial = int(state.get("receiptSerial") or 0)
+        except (TypeError, ValueError):
+            serial = 0
+        receipt_year = str(session_name or datetime.now().year).split("-")[0] or str(datetime.now().year)
+        receipt_serial_value = receipt_serial(payment.get("receipt") or "", receipt_year)
+        if receipt_serial_value > serial:
+            state["receiptSerial"] = receipt_serial_value
+        state = ensure_state_school(state)
+        raw = json.dumps(state, ensure_ascii=False, separators=(",", ":"))
+        conn.execute(
+            """
+            INSERT INTO app_state (key, value, updated_at)
+            VALUES (?, ?, CURRENT_TIMESTAMP)
+            ON CONFLICT(key) DO UPDATE SET
+                value = excluded.value,
+                updated_at = CURRENT_TIMESTAMP
+            """,
+            (STATE_KEY, raw),
+        )
+        upsert_single_fee_payment_projection(conn, state, session_name, existing_key, payment)
+        capture_state_changes(conn, previous_state, state, IntegrationConfig.from_env())
+        conn.execute(
+            """
+            INSERT INTO audit_events (actor, action, entity_type, entity_id, details)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+            (
+                payment.get("by") or "office",
+                "FeeAppend",
+                "fee_receipt",
+                str(payment.get("receipt") or payment_id),
+                f"append {payment_id} session={session_name} admission={existing_key}",
+            ),
+        )
+        state_row = conn.execute("SELECT updated_at FROM app_state WHERE key = ?", (STATE_KEY,)).fetchone()
+    return {
+        "ok": True,
+        "idempotent": False,
+        "updated_at": state_row["updated_at"] if state_row else None,
+        "payment": payment,
+        "session": session_name,
+        "admission_no": existing_key,
+        "state": state,
+    }
+
+
 def table_rows(table, limit=500):
     allowed = {
         "schools",
@@ -4056,6 +4262,7 @@ def summary():
         },
         "state_size": state["size"] if state else 0,
         "updated_at": state["updated_at"] if state else None,
+        "fee_append_api": FEE_APPEND_API_ENABLED,
     }
 
 
@@ -5073,6 +5280,8 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             return self.mobile_push_token_request()
         if path == "/api/mobile/fee-payment":
             return self.mobile_fee_payment_request()
+        if path == "/api/fees/collect":
+            return self.office_fee_collect_request()
         if path == "/api/notifications/notice":
             return self.notice_push_request()
         if path == "/api/notifications/homework":
@@ -5240,6 +5449,35 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             state["collectedPayments"][session][existing_key] = payments
             updated_at = write_state(state)
             self.json_response({"ok": True, "updated_at": updated_at, "payment": payment, "state": state})
+        except Exception as exc:
+            self.json_response({"ok": False, "error": str(exc)}, status=400)
+
+    def office_fee_collect_request(self):
+        if not FEE_APPEND_API_ENABLED:
+            return self.json_response(
+                {"ok": False, "error": "fee_append_api_disabled", "fee_append_api": False},
+                status=404,
+            )
+        length = int(self.headers.get("Content-Length") or "0")
+        if length > MAX_BODY:
+            self.send_error(413, "Request body too large")
+            return
+        try:
+            payload = json.loads(self.rfile.read(length).decode("utf-8") or "{}")
+            admission_no = str(payload.get("admissionNo") or payload.get("admission_no") or "").strip()
+            payment = payload.get("payment") or {}
+            if not admission_no or not isinstance(payment, dict):
+                raise ValueError("admissionNo and payment are required")
+            result = append_office_fee_payment(
+                admission_no,
+                payment,
+                session=payload.get("session") or "",
+                replace_receipt=payload.get("replaceReceipt") or payload.get("replace_receipt") or "",
+                replace_payment_id=payload.get("replacePaymentId") or payload.get("replace_payment_id") or "",
+            )
+            self.json_response(result)
+        except RuntimeError as exc:
+            self.json_response({"ok": False, "error": str(exc), "fee_append_api": FEE_APPEND_API_ENABLED}, status=404)
         except Exception as exc:
             self.json_response({"ok": False, "error": str(exc)}, status=400)
 
