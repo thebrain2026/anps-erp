@@ -14471,6 +14471,7 @@ async function pullBackendStateIfChanged(showMessage = false) {
     markBackendOnline();
     backendSyncReady = true;
     const health = await healthResponse.json();
+    if (typeof health?.fee_append_api === "boolean") feeAppendApiEnabledCache = health.fee_append_api;
     const serverUpdatedAt = health?.updated_at || "";
     if (serverUpdatedAt && backendLastUpdatedAt && serverUpdatedAt === backendLastUpdatedAt) return;
     const stateResponse = await backendFetch(`/api/state?v=${Date.now()}`, {
@@ -17393,6 +17394,7 @@ receiptPreviewBody.addEventListener("change", event => {
 
 // Step 1: office fee forms only — confirm + double-submit guard (no schema/data migration).
 let feeCollectionSubmitLock = false;
+let feeAppendApiEnabledCache = null;
 
 function getFeeCollectionSubmitButton(form) {
   return form?.querySelector?.("button[type='submit']") || null;
@@ -17430,7 +17432,74 @@ function confirmOfficeFeeCollectionSave({
   return window.confirm(lines.join("\n"));
 }
 
-combinedCollectionForm.addEventListener("submit", event => {
+async function refreshFeeAppendApiFlag() {
+  try {
+    const response = await backendFetch(`/api/health?v=${Date.now()}`, {cache: "no-store"});
+    if (!response.ok) {
+      feeAppendApiEnabledCache = false;
+      return false;
+    }
+    const health = await response.json();
+    feeAppendApiEnabledCache = Boolean(health?.fee_append_api);
+    return feeAppendApiEnabledCache;
+  } catch (error) {
+    console.warn("Could not refresh fee append API flag.", error);
+    feeAppendApiEnabledCache = false;
+    return false;
+  }
+}
+
+async function ensureFeeAppendApiEnabled() {
+  const forced = String(localStorage.getItem("anps_fee_append_api") || "").trim();
+  if (forced === "1" || forced === "true") return true;
+  if (forced === "0" || forced === "false") return false;
+  const meta = document.querySelector('meta[name="anps-fee-append-api"]')?.getAttribute("content");
+  if (meta === "1" || meta === "true") return true;
+  if (feeAppendApiEnabledCache !== null) return feeAppendApiEnabledCache;
+  return refreshFeeAppendApiFlag();
+}
+
+function removeLocalSessionPayment(admissionNo, paymentId = "", receiptNo = "") {
+  const list = getSessionPayments(admissionNo);
+  const cleanId = String(paymentId || "").trim();
+  const cleanReceipt = String(receiptNo || "").trim().toLowerCase();
+  const next = list.filter(payment => {
+    if (cleanId && String(payment?.id || "").trim() === cleanId) return false;
+    if (cleanReceipt && String(payment?.receipt || "").trim().toLowerCase() === cleanReceipt) return false;
+    return true;
+  });
+  list.splice(0, list.length, ...next);
+}
+
+async function persistOfficeFeePaymentToServer(student, payment, {replaceReceipt = "", replacePaymentId = ""} = {}) {
+  const response = await backendFetch("/api/fees/collect", {
+    method: "POST",
+    headers: backendHeaders({"Content-Type": "application/json"}),
+    body: JSON.stringify({
+      admissionNo: student.admissionNo || student.id || "",
+      session: activeSession,
+      payment,
+      replaceReceipt,
+      replacePaymentId
+    })
+  });
+  const result = await response.json().catch(() => ({}));
+  if (!response.ok || !result?.ok) {
+    throw new Error(result?.error || `Fee append failed (${response.status})`);
+  }
+  if (result.updated_at) backendLastUpdatedAt = result.updated_at;
+  if (result.payment?.receipt) payment.receipt = result.payment.receipt;
+  if (result.payment?.id) payment.id = result.payment.id;
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(getAppStateSnapshot()));
+  } catch (error) {
+    console.warn("Could not refresh local snapshot after fee append.", error);
+  }
+  setTopbarSaveStatus("saved");
+  return result;
+}
+
+combinedCollectionForm.addEventListener("submit", async event => {
   event.preventDefault();
   const form = event.currentTarget;
   if (feeCollectionSubmitLock) {
@@ -17495,6 +17564,7 @@ combinedCollectionForm.addEventListener("submit", event => {
   }
   setFeeCollectionSubmitLocked(form, true);
   try {
+    const useAppendApi = await ensureFeeAppendApiEnabled();
     if (editingReceipt) deletePaymentByReceipt(student.admissionNo, editingReceipt, editingPaymentId);
     const payment = collectCombinedStudentPayment(student, selected, form.elements.date.value, receiptNo, {
       bankAmount,
@@ -17510,20 +17580,34 @@ combinedCollectionForm.addEventListener("submit", event => {
       return;
     }
     setNextReceiptNo();
-    saveAppState();
+    if (useAppendApi) {
+      try {
+        await persistOfficeFeePaymentToServer(student, payment, {
+          replaceReceipt: editingReceipt,
+          replacePaymentId: editingPaymentId
+        });
+        showToast(`Combined receipt ${payment.receipt} ${editingReceipt ? "updated" : "saved"} on server.`);
+      } catch (error) {
+        removeLocalSessionPayment(student.admissionNo, payment.id, payment.receipt);
+        showToast(error?.message || "Server fee save failed. Receipt was not kept locally.", "error", 7000);
+        return;
+      }
+    } else {
+      saveAppState();
+      showToast(`Combined receipt ${payment.receipt} ${editingReceipt ? "updated" : "saved"}.`);
+    }
     renderFeeBook(student.admissionNo);
     renderStudentFeeCounter(student.admissionNo);
     renderDueFeesSearch();
     renderFinanceSession();
     closeCombinedCollectionPopup();
     openCombinedReceiptPreview(student, payment, selected);
-    showToast(`Combined receipt ${payment.receipt} ${editingReceipt ? "updated" : "saved"}.`);
   } finally {
     setFeeCollectionSubmitLocked(form, false);
   }
 });
 
-document.getElementById("feeForm").addEventListener("submit", event => {
+document.getElementById("feeForm").addEventListener("submit", async event => {
   event.preventDefault();
   const form = event.currentTarget;
   if (feeCollectionSubmitLock) {
@@ -17573,24 +17657,47 @@ document.getElementById("feeForm").addEventListener("submit", event => {
   }
   setFeeCollectionSubmitLocked(form, true);
   try {
+    const useAppendApi = await ensureFeeAppendApiEnabled();
     if (editingReceipt) deletePaymentByReceipt(student.admissionNo, editingReceipt, editingPaymentId);
     const payment = collectStudentPayment(student, rawAmount, date, mode, feeHead, fineAmount, feeMonth, receiptNo, {bankAmount, cashAmount, bankAccountId: bankAccount?.id || "", bankAccountName: bankAccount ? getBankAccountLabel(bankAccount) : "", paymentId: editingPaymentId || undefined});
     if (!payment) {
       showToast("Payment could not be saved.");
       return;
     }
+    let savedToServer = false;
+    if (useAppendApi) {
+      try {
+        await persistOfficeFeePaymentToServer(student, payment, {
+          replaceReceipt: editingReceipt,
+          replacePaymentId: editingPaymentId
+        });
+        savedToServer = true;
+      } catch (error) {
+        removeLocalSessionPayment(student.admissionNo, payment.id, payment.receipt);
+        showToast(error?.message || "Server fee save failed. Receipt was not kept locally.", "error", 7000);
+        return;
+      }
+    } else {
+      saveAppState();
+    }
     renderStudentFeeCounter(student.admissionNo);
     renderFeeBook(student.admissionNo);
     renderDueFeesSearch();
     renderFinanceSession();
     setNextReceiptNo();
-    saveAppState();
     resetPaymentEditMode();
     resetFeeDateToToday();
     document.getElementById("receiptBox").innerHTML = `<strong>Receipt ${payment.receipt}</strong><br>${student.name} (${id}) paid ${formatRs(payment.amount)} by ${mode}.<br><small>Bank: ${formatRs(payment.bankAmount)} | Cash: ${formatRs(payment.cashAmount)} | Fine: ${formatRs(fineAmount)} | Date: ${formatDateDDMMYYYY(payment.date)}</small>`;
     const returnView = activeFeeReturnView || "finance";
     if (returnView !== "finance") setView(returnView);
-    showToast(returnView === "feeBook" ? "Payment saved. Fee Book opened." : returnView === "dueFeesSearch" ? "Payment saved. Search Due Fees opened." : "Payment saved in Fee Book.");
+    const serverLabel = savedToServer ? "saved to server" : "saved";
+    showToast(
+      returnView === "feeBook"
+        ? `Payment ${serverLabel}. Fee Book opened.`
+        : returnView === "dueFeesSearch"
+          ? `Payment ${serverLabel}. Search Due Fees opened.`
+          : `Payment ${serverLabel} in Fee Book.`
+    );
   } finally {
     setFeeCollectionSubmitLocked(form, false);
   }
