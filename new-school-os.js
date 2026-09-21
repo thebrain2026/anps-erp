@@ -4560,9 +4560,12 @@ function getMonthReceivedTotal(month) {
   const sessionPayments = collectedPayments[activeSession] || {};
   return Object.values(sessionPayments).reduce((total, payments) => {
     return total + (payments || []).reduce((paymentTotal, payment) => {
-      const allocations = Array.isArray(payment.allocations) ? payment.allocations : [];
+      const allocations = dedupePaymentAllocations(getPaymentAllocationsWithFallback(payment));
       const amount = allocations
-        .filter(allocation => allocation.month === month && !["Tuition Late Fine", "Transport Late Fine"].includes(allocation.head))
+        .filter(allocation => (
+          normalizePaymentMonth(allocation.month) === normalizePaymentMonth(month)
+          && !["Tuition Late Fine", "Transport Late Fine"].includes(normalizePaymentFeeHead(allocation.head))
+        ))
         .reduce((sum, allocation) => sum + Number(allocation.amount || 0), 0);
       return paymentTotal + amount;
     }, 0);
@@ -4573,9 +4576,12 @@ function getMonthFineReceivedTotal(month) {
   const sessionPayments = collectedPayments[activeSession] || {};
   return Object.values(sessionPayments).reduce((total, payments) => {
     return total + (payments || []).reduce((paymentTotal, payment) => {
-      const allocations = Array.isArray(payment.allocations) ? payment.allocations : [];
+      const allocations = dedupePaymentAllocations(getPaymentAllocationsWithFallback(payment));
       return paymentTotal + allocations
-        .filter(allocation => allocation.month === month && ["Tuition Late Fine", "Transport Late Fine"].includes(allocation.head))
+        .filter(allocation => (
+          normalizePaymentMonth(allocation.month) === normalizePaymentMonth(month)
+          && ["Tuition Late Fine", "Transport Late Fine"].includes(normalizePaymentFeeHead(allocation.head))
+        ))
         .reduce((sum, allocation) => sum + Number(allocation.amount || 0), 0);
     }, 0);
   }, 0);
@@ -4686,9 +4692,10 @@ function getYearlyFeeReceivedTotals() {
   const sessionPayments = collectedPayments[activeSession] || {};
   Object.values(sessionPayments).forEach(payments => {
     (payments || []).forEach(payment => {
-      (payment.allocations || []).forEach(allocation => {
-        if (Object.prototype.hasOwnProperty.call(heads, allocation.head)) {
-          heads[allocation.head] += Number(allocation.amount || 0);
+      dedupePaymentAllocations(getPaymentAllocationsWithFallback(payment)).forEach(allocation => {
+        const head = normalizePaymentFeeHead(allocation.head);
+        if (Object.prototype.hasOwnProperty.call(heads, head)) {
+          heads[head] += Number(allocation.amount || 0);
         }
       });
     });
