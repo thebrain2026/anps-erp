@@ -9,6 +9,8 @@ services:
     image: postgres:16-alpine
     container_name: anps-erp-postgres
     restart: unless-stopped
+    env_file:
+      - ${ANPS_SECRETS_FILE:-/opt/thebrain/anps-erp/secrets/secrets.env}
     environment:
       POSTGRES_DB: anps_erp
       POSTGRES_USER: anps_erp
@@ -32,6 +34,8 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    env_file:
+      - ${ANPS_SECRETS_FILE:-/opt/thebrain/anps-erp/secrets/secrets.env}
     environment:
       ANPS_ERP_HOST: 0.0.0.0
       ANPS_ERP_PORT: "4174"
