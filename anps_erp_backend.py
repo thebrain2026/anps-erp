@@ -1654,9 +1654,8 @@ def init_db():
         )
         ensure_default_school_row(conn)
         ensure_tenant_columns(conn)
-        # BSFV outbox DDL includes SQLite-oriented TRIGGER IF NOT EXISTS / script
-        # splitting issues on Postgres. Skip unless integration is explicitly on.
-        if not using_postgres() or os.environ.get("ANPS_BSFV_INTEGRATION_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}:
+        # BSFV outbox DDL uses SQLite trigger scripts; Postgres port is a follow-up.
+        if not using_postgres():
             initialize_outbox(conn)
         conn.execute(
             """
@@ -1668,6 +1667,8 @@ def init_db():
             """,
             (str(DB_SCHEMA_VERSION),),
         )
+        # Postgres DDL is transactional; commit before read_state opens a new connection.
+        conn.commit()
         state = read_state()
         if state:
             sync_state_tables(conn, state)
