@@ -1,14 +1,33 @@
-# ANPS School ERP — Hostinger VPS (ISOLATED)
-# Path on server: /opt/thebrain/anps-erp
-# Do NOT reuse volumes/networks/names from hotel / LayerX / Progati / RoyalGP.
+# ANPS School ERP — Hostinger VPS (FULL BOUNDARY)
+# Absolute root: /opt/thebrain/anps-erp
+# FORBIDDEN: hotel / LayerX / Progati / RoyalGP paths, volumes, networks, ports.
+# Postgres is private-network only. Web publishes ONLY 127.0.0.1:12784.
 
 name: anps_erp
+
+x-anps-security: &anps-security
+  security_opt:
+    - no-new-privileges:true
+  cap_drop:
+    - ALL
+  labels:
+    app.thebrain.project: anps-erp
+    app.thebrain.boundary: /opt/thebrain/anps-erp
+    app.thebrain.isolation: dedicated
 
 services:
   postgres:
     image: postgres:16-alpine
     container_name: anps-erp-postgres
     restart: unless-stopped
+    <<: *anps-security
+    # Postgres needs a few caps for shared memory / listen.
+    cap_add:
+      - CHOWN
+      - SETGID
+      - SETUID
+      - FOWNER
+      - DAC_OVERRIDE
     env_file:
       - ${ANPS_SECRETS_FILE:-/opt/thebrain/anps-erp/secrets/secrets.env}
     environment:
@@ -18,19 +37,28 @@ services:
     volumes:
       - anps_erp_pgdata:/var/lib/postgresql/data
     networks:
-      - anps_private
+      anps_private:
+        aliases: [postgres]
+    # No host ports — unreachable from other compose projects / public NIC.
+    ports: []
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U anps_erp -d anps_erp"]
       interval: 10s
       timeout: 5s
       retries: 12
-    security_opt:
-      - no-new-privileges:true
+    mem_limit: 1g
+    pids_limit: 256
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run/postgresql
+    # Allow writes only on dedicated volume (default RW for named volume).
 
   web:
     image: ${ANPS_WEB_IMAGE:-anps-erp-web:staging}
     container_name: anps-erp-web
     restart: unless-stopped
+    <<: *anps-security
     depends_on:
       postgres:
         condition: service_healthy
@@ -48,15 +76,18 @@ services:
       ANPS_FEE_APPEND_API: "false"
       ANPS_BSFV_INTEGRATION_ENABLED: "false"
     volumes:
-      - /opt/thebrain/anps-erp/shared/data:/data
+      # ONLY ANPS data path — never mount sibling project dirs.
+      - /opt/thebrain/anps-erp/shared/data:/data:rw
     ports:
-      # Host-only bind — Cloudflare tunnel / reverse-proxy later. Free of hotel/layerx ports.
       - "127.0.0.1:12784:4174"
     networks:
       - anps_private
       - anps_edge
-    security_opt:
-      - no-new-privileges:true
+    mem_limit: 1g
+    pids_limit: 256
+    read_only: true
+    tmpfs:
+      - /tmp
     healthcheck:
       test:
         [
@@ -73,10 +104,19 @@ services:
 volumes:
   anps_erp_pgdata:
     name: anps_erp_pgdata
+    labels:
+      app.thebrain.project: anps-erp
+      app.thebrain.boundary: /opt/thebrain/anps-erp
 
 networks:
   anps_private:
     name: anps_erp_private
     internal: true
+    labels:
+      app.thebrain.project: anps-erp
   anps_edge:
     name: anps_erp_edge
+    # Not internal so Cloudflare/local proxy can reach 127.0.0.1 publish.
+    # Not shared with other projects' networks.
+    labels:
+      app.thebrain.project: anps-erp
