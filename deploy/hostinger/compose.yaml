@@ -49,8 +49,6 @@ services:
       ANPS_BSFV_INTEGRATION_ENABLED: "false"
     volumes:
       - /opt/thebrain/anps-erp/shared/data:/data
-      - /opt/thebrain/anps-erp/shared/uploads:/data/uploads
-      - /opt/thebrain/anps-erp/shared/backups:/data/backups
     ports:
       # Host-only bind — Cloudflare tunnel / reverse-proxy later. Free of hotel/layerx ports.
       - "127.0.0.1:12784:4174"

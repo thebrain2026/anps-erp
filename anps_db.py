@@ -38,6 +38,13 @@ def _rewrite_sql_for_postgres(sql: str) -> str:
         flags=re.IGNORECASE | re.DOTALL,
     )
     text = re.sub(r"\bexcluded\.", "EXCLUDED.", text)
+    # ANPS stores timestamps as TEXT; avoid timestamp-vs-text operator errors.
+    text = re.sub(
+        r"\bCURRENT_TIMESTAMP\b",
+        "CAST(CURRENT_TIMESTAMP AS TEXT)",
+        text,
+        flags=re.IGNORECASE,
+    )
     return text
 
 
@@ -50,6 +57,12 @@ def _rewrite_ddl_for_postgres(script: str) -> str:
         flags=re.IGNORECASE,
     )
     text = re.sub(r"\bCOLLATE\s+NOCASE\b", "", text, flags=re.IGNORECASE)
+    text = re.sub(
+        r"\bCURRENT_TIMESTAMP\b",
+        "CAST(CURRENT_TIMESTAMP AS TEXT)",
+        text,
+        flags=re.IGNORECASE,
+    )
     return text
 
 
