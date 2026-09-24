@@ -37,6 +37,14 @@ Local `uploads/` mirrors are empty. If production needs Render `/data/uploads`, 
 - Do **not** touch hotel / LayerX / Progati / RoyalGP
 - Re-check live health before Step 3: `updated_at` and receipt count must still match receipt
 
+## Step 3 result (2026-09-24)
+
+- Freeze DB installed under `/opt/thebrain/anps-erp` only (`staging/prod-snapshots/anps_erp_freeze_20260924T153635Z.db` + `shared/data/anps_erp_source.db`)
+- Migrator: `migrate_ok students=218 fee_receipts=1537 staff=22`
+- Postgres + health parity: allocations **3521**, fees_collected **6,976,745**, `fee_append_api=false`
+- Re-smoke: Front Office login + `/api/module/fees` total **1537** + students **218**
+- `BOUNDARY_VERIFY_PASSED`; haven/royalgp ready; **DNS not switched**
+
 ## Next
 
-**Step 3** — final migrator run of `anps_erp_freeze_final.db` into Hostinger ANPS Postgres only.
+**Step 4** — Cloudflare / tunnel cutover for `anps.thebrainerp.com` → `http://127.0.0.1:12784` (explicit go-ahead).

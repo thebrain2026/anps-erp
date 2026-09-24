@@ -14,9 +14,13 @@ esac
 
 STAMP=$(date -u +%Y%m%dT%H%M%SZ)
 DEST="$BOUNDARY/staging/prod-snapshots"
-mkdir -p "$DEST"
+DATA="$BOUNDARY/shared/data"
+mkdir -p "$DEST" "$DATA"
 install -m 0600 "$SOURCE" "$DEST/anps_erp_${STAMP}.db"
-chown anpserp:anpserp "$DEST/anps_erp_${STAMP}.db" 2>/dev/null || chown 999:999 "$DEST/anps_erp_${STAMP}.db" || true
+# Migrator inside the web container reads /data/anps_erp_source.db (shared/data bind).
+install -m 0600 "$SOURCE" "$DATA/anps_erp_source.db"
+chown anpserp:anpserp "$DEST/anps_erp_${STAMP}.db" "$DATA/anps_erp_source.db" 2>/dev/null \
+  || chown 999:999 "$DEST/anps_erp_${STAMP}.db" "$DATA/anps_erp_source.db" || true
 ln -sfn "anps_erp_${STAMP}.db" "$DEST/anps_erp_latest.db"
 
 docker compose --env-file "$BOUNDARY/secrets/secrets.env" -p anps_erp \

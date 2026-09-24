@@ -19,8 +19,8 @@
 See also `FREEZE.md` for the live freeze packet / office notice.
 
 1. Announce freeze; take Render `/data` SQLite + uploads backup. ← **Step 2 done 2026-09-24** (freeze DB + receipt under Mac `freeze-20260924/`; uploads optional/manual).
-2. Final migrator run into ANPS Postgres volume only.
-3. Smoke: login, fee read, notice.
+2. Final migrator run into ANPS Postgres volume only. ← **Step 3 done 2026-09-24** (freeze DB → `anps_erp_pgdata`; parity 218/1537/3521; smoke PASSED; DNS still off).
+3. Smoke: login, fee read, notice. ← covered in Step 3 staging re-smoke; repeat after DNS.
 4. Point Cloudflare / tunnel for `anps.thebrainerp.com` → `http://127.0.0.1:12784`.
 5. Keep Render live briefly as rollback; do not delete Render disk yet.
 6. After 24–48h healthy → stop Render web if desired (saves Render cost; no Managed Postgres purchase).
