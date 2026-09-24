@@ -16,7 +16,9 @@
 
 ## Production cutover (short freeze)
 
-1. Announce freeze; take Render `/data` SQLite + uploads backup.
+See also `FREEZE.md` for the live freeze packet / office notice.
+
+1. Announce freeze; take Render `/data` SQLite + uploads backup. ← **Step 2 done 2026-09-24** (freeze DB + receipt under Mac `freeze-20260924/`; uploads optional/manual).
 2. Final migrator run into ANPS Postgres volume only.
 3. Smoke: login, fee read, notice.
 4. Point Cloudflare / tunnel for `anps.thebrainerp.com` → `http://127.0.0.1:12784`.
