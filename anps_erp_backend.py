@@ -1654,7 +1654,10 @@ def init_db():
         )
         ensure_default_school_row(conn)
         ensure_tenant_columns(conn)
-        initialize_outbox(conn)
+        # BSFV outbox DDL includes SQLite-oriented TRIGGER IF NOT EXISTS / script
+        # splitting issues on Postgres. Skip unless integration is explicitly on.
+        if not using_postgres() or os.environ.get("ANPS_BSFV_INTEGRATION_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}:
+            initialize_outbox(conn)
         conn.execute(
             """
             INSERT INTO schema_meta (key, value, updated_at)
