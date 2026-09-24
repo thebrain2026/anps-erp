@@ -22,6 +22,14 @@ from anps_bsfv_outbox import (
     initialize_outbox,
     pilot_metrics,
 )
+from anps_db import (
+    connect,
+    database_label,
+    db_error_types,
+    table_exists,
+    table_has_column,
+    using_postgres,
+)
 
 try:
     from google.auth.transport.requests import Request as GoogleAuthRequest
@@ -188,8 +196,11 @@ def create_session_token(user):
         with connect() as conn:
             conn.execute(
                 """
-                INSERT OR REPLACE INTO auth_sessions (token, user_json, expires_at)
+                INSERT INTO auth_sessions (token, user_json, expires_at)
                 VALUES (?, ?, ?)
+                ON CONFLICT(token) DO UPDATE SET
+                    user_json = excluded.user_json,
+                    expires_at = excluded.expires_at
                 """,
                 (token, json.dumps(user_data, ensure_ascii=False, separators=(",", ":")), expires_at),
             )
@@ -1271,26 +1282,9 @@ def sync_smart_bus_master_data():
     }
 
 
-def connect():
-    conn = sqlite3.connect(DB_PATH, timeout=20)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode = WAL")
-    conn.execute("PRAGMA busy_timeout = 5000")
-    conn.execute("PRAGMA foreign_keys = ON")
-    return conn
-
-
-def table_has_column(conn, table, column):
-    return any(row["name"] == column for row in conn.execute(f"PRAGMA table_info({table})").fetchall())
-
-
 def ensure_tenant_columns(conn):
     for table in sorted(TENANT_TABLES):
-        exists = conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?",
-            (table,),
-        ).fetchone()
-        if not exists:
+        if not table_exists(conn, table):
             continue
         if not table_has_column(conn, table, "school_id"):
             conn.execute(f"ALTER TABLE {table} ADD COLUMN school_id TEXT DEFAULT '{DEFAULT_SCHOOL_ID}'")
@@ -3184,7 +3178,7 @@ def hydrate_collected_payments_from_fee_tables(conn, state):
             """,
             (school_id_from_state(state),),
         ).fetchall()
-    except sqlite3.Error:
+    except db_error_types():
         return state
     if not receipt_rows:
         return state
@@ -3262,7 +3256,7 @@ def hydrate_student_user_accounts_from_user_table(conn):
             ORDER BY full_name COLLATE NOCASE, login_id COLLATE NOCASE
             """
         ).fetchall()
-    except sqlite3.Error:
+    except db_error_types():
         return []
     accounts = []
     for row in rows:
@@ -3291,7 +3285,7 @@ def hydrate_staff_user_accounts_from_user_table(conn):
             ORDER BY full_name COLLATE NOCASE, login_id COLLATE NOCASE
             """
         ).fetchall()
-    except sqlite3.Error:
+    except db_error_types():
         return []
     accounts = []
     for row in rows:
@@ -3321,7 +3315,7 @@ def hydrate_role_permissions_from_table(conn):
             ORDER BY role_name COLLATE NOCASE
             """
         ).fetchall()
-    except sqlite3.Error:
+    except db_error_types():
         return {}
     hydrated = {}
     for row in rows:
@@ -3487,12 +3481,12 @@ def staff_restore_candidate_from_backup_db(path):
     try:
         backup_conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
         backup_conn.row_factory = sqlite3.Row
-    except sqlite3.Error:
+    except db_error_types():
         return None
     with backup_conn:
         try:
             rows = backup_conn.execute("SELECT value FROM app_state WHERE key = ?", (STATE_KEY,)).fetchall()
-        except sqlite3.Error:
+        except db_error_types():
             rows = []
         for row in rows:
             try:
@@ -3501,7 +3495,7 @@ def staff_restore_candidate_from_backup_db(path):
                 continue
         try:
             rows = backup_conn.execute("SELECT value FROM state_backups ORDER BY id DESC LIMIT 100").fetchall()
-        except sqlite3.Error:
+        except db_error_types():
             rows = []
         for row in rows:
             try:
@@ -3527,7 +3521,7 @@ def staff_restore_candidate_from_backup_db(path):
                     "status": item.get("status") or row["status"] or "Active",
                 },
             )
-        except sqlite3.Error:
+        except db_error_types():
             staff = []
         if staff:
             candidates.append({"staffMembers": staff, "source": str(path), "count": len(staff)})
@@ -4238,7 +4232,7 @@ def summary():
         state = conn.execute("SELECT length(value) size, updated_at FROM app_state WHERE key = ?", (STATE_KEY,)).fetchone()
     return {
         "ok": True,
-        "database": str(DB_PATH),
+        "database": database_label(),
         "tenant": {
             "mode": "single-school-ready",
             "default_school_id": DEFAULT_SCHOOL_ID,
@@ -4263,6 +4257,7 @@ def summary():
         "state_size": state["size"] if state else 0,
         "updated_at": state["updated_at"] if state else None,
         "fee_append_api": FEE_APPEND_API_ENABLED,
+        "db_engine": "postgres" if using_postgres() else "sqlite",
     }
 
 
@@ -4378,7 +4373,7 @@ def readiness_report():
         "ready": not blockers,
         "blockers": blockers,
         "warnings": warnings,
-        "database": str(DB_PATH),
+        "database": database_label(),
         "schema_version": str(DB_SCHEMA_VERSION),
         "tenant": {
             "mode": "single-school-ready",
@@ -4530,6 +4525,9 @@ def state_backup_payload(state, reason):
 
 
 def write_sqlite_db_snapshot(target):
+    if using_postgres():
+        # Postgres backups are handled by pg_dump / volume snapshots on the host.
+        return False
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = target.with_suffix(target.suffix + ".tmp")
     try:
@@ -4545,6 +4543,7 @@ def write_sqlite_db_snapshot(target):
         dest.close()
         source.close()
     tmp_path.replace(target)
+    return True
 
 
 def file_is_recent(path, minutes):
@@ -5679,7 +5678,7 @@ def main():
         ).start()
     server = BoundedThreadingHTTPServer((HOST, PORT), SchoolERPHandler)
     print(f"School ERP backend running at http://{HOST}:{PORT}/")
-    print(f"SQLite database: {DB_PATH}")
+    print(f"Database: {database_label()} (engine={'postgres' if using_postgres() else 'sqlite'})")
     server.serve_forever()
 
 

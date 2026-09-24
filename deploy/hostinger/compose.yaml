@@ -1,0 +1,80 @@
+# ANPS School ERP — Hostinger VPS (ISOLATED)
+# Path on server: /opt/thebrain/anps-erp
+# Do NOT reuse volumes/networks/names from hotel / LayerX / Progati / RoyalGP.
+
+name: anps_erp
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: anps-erp-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: anps_erp
+      POSTGRES_USER: anps_erp
+      POSTGRES_PASSWORD: ${ANPS_PG_PASSWORD:?set ANPS_PG_PASSWORD in secrets.env}
+    volumes:
+      - anps_erp_pgdata:/var/lib/postgresql/data
+    networks:
+      - anps_private
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U anps_erp -d anps_erp"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    security_opt:
+      - no-new-privileges:true
+
+  web:
+    image: ${ANPS_WEB_IMAGE:-anps-erp-web:staging}
+    container_name: anps-erp-web
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ANPS_ERP_HOST: 0.0.0.0
+      ANPS_ERP_PORT: "4174"
+      ANPS_ERP_DATA_DIR: /data
+      ANPS_ERP_BACKUP_DIR: /data/backups
+      ANPS_ERP_UPLOAD_DIR: /data/uploads
+      ANPS_ERP_ALLOWED_ORIGINS: "*"
+      ANPS_DB_ENGINE: postgres
+      DATABASE_URL: postgresql://anps_erp:${ANPS_PG_PASSWORD}@postgres:5432/anps_erp
+      ANPS_FEE_APPEND_API: "false"
+      ANPS_BSFV_INTEGRATION_ENABLED: "false"
+    volumes:
+      - /opt/thebrain/anps-erp/shared/data:/data
+      - /opt/thebrain/anps-erp/shared/uploads:/data/uploads
+      - /opt/thebrain/anps-erp/shared/backups:/data/backups
+    ports:
+      # Host-only bind — Cloudflare tunnel / reverse-proxy later. Free of hotel/layerx ports.
+      - "127.0.0.1:12784:4174"
+    networks:
+      - anps_private
+      - anps_edge
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import json,urllib.request;d=json.load(urllib.request.urlopen('http://127.0.0.1:4174/api/health',timeout=3));raise SystemExit(0 if d.get('ok') and d.get('db_engine')=='postgres' else 1)",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+volumes:
+  anps_erp_pgdata:
+    name: anps_erp_pgdata
+
+networks:
+  anps_private:
+    name: anps_erp_private
+    internal: true
+  anps_edge:
+    name: anps_erp_edge
