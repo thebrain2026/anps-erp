@@ -15,8 +15,9 @@ WORKDIR /app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY anps-erp.html anps-mobile-app.html anps-payment-policies.html new-school-os.css new-school-os.js anps_erp_backend.py anps_bsfv_outbox.py ./
+COPY anps-erp.html anps-mobile-app.html anps-payment-policies.html new-school-os.css new-school-os.js anps_erp_backend.py anps_bsfv_outbox.py anps_db.py ./
 COPY assets ./assets
+COPY scripts/migrate_sqlite_to_postgres.py ./migrate_sqlite_to_postgres.py
 
 RUN useradd --system --create-home --home-dir /home/anps anps \
     && mkdir -p /data/backups /data/uploads \
