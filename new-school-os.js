@@ -1139,16 +1139,6 @@ const PRIMITIVE_SETUP_LIST_UPDATED_AT = {
 };
 
 function mergePrimitiveSetupList(remoteState = {}, localState = {}, key = "") {
-  const updatedKey = PRIMITIVE_SETUP_LIST_UPDATED_AT[key];
-  if (updatedKey) {
-    const remoteTime = getRecordUpdatedTime({updatedAt: remoteState[updatedKey]});
-    const localTime = getRecordUpdatedTime({updatedAt: localState[updatedKey]});
-    if (remoteTime || localTime) {
-      return localTime >= remoteTime
-        ? mergePrimitiveList([], localState[key] || [])
-        : mergePrimitiveList([], remoteState[key] || []);
-    }
-  }
   return mergePrimitiveList(remoteState[key] || [], localState[key] || []);
 }
 
@@ -1190,7 +1180,7 @@ function mergeClassTimetableEntries(remoteEntries = [], localEntries = []) {
   const localList = Array.isArray(localEntries) ? localEntries : [];
   const groups = new Map();
   const groupKey = entry => [
-    String(entry?.classSection || `${entry?.className || ""} ${entry?.sectionName || ""}`.trim()).trim().toLowerCase(),
+    String(entry?.classSection || `${entry?.className || ""} ${entry?.sectionName || ""}`).trim().replace(/\s+/g, " ").toLowerCase(),
     String(entry?.day || "").trim().toLowerCase()
   ].join("|");
   const addGroup = (entry, source) => {
@@ -1204,10 +1194,14 @@ function mergeClassTimetableEntries(remoteEntries = [], localEntries = []) {
   localList.forEach(entry => addGroup(entry, "local"));
   const merged = [];
   groups.forEach(group => {
-    const remoteTime = Math.max(0, ...group.remote.map(getRecordUpdatedTime));
-    const localTime = Math.max(0, ...group.local.map(getRecordUpdatedTime));
-    if (group.local.length && (!group.remote.length || localTime >= remoteTime)) merged.push(...group.local);
-    else merged.push(...group.remote);
+    const periodKey = entry => String(Number(entry?.period || 0));
+    const byPeriod = new Map();
+    [...group.remote, ...group.local].forEach(entry => {
+      const key = periodKey(entry);
+      const existing = byPeriod.get(key);
+      if (!existing || getRecordUpdatedTime(entry) >= getRecordUpdatedTime(existing)) byPeriod.set(key, entry);
+    });
+    merged.push(...byPeriod.values());
   });
   return merged.sort((a, b) =>
     String(a.classSection || "").localeCompare(String(b.classSection || ""), undefined, {numeric: true}) ||
