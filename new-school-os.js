@@ -1119,16 +1119,7 @@ function mergeTransportVillageFees(remoteFees = {}, localFees = {}) {
   return merged;
 }
 
-function mergeClassSubjectAssignments(remoteAssignments = {}, localAssignments = {}, remoteUpdatedAt = "", localUpdatedAt = "") {
-  const remoteTime = getRecordUpdatedTime({updatedAt: remoteUpdatedAt});
-  const localTime = getRecordUpdatedTime({updatedAt: localUpdatedAt});
-  if (remoteTime || localTime) {
-    const newest = localTime >= remoteTime ? localAssignments : remoteAssignments;
-    return Object.fromEntries(Object.entries(newest || {}).map(([className, subjects]) => [
-      className,
-      [...new Set((Array.isArray(subjects) ? subjects : []).map(subject => String(subject || "").trim()).filter(Boolean))]
-    ]));
-  }
+function mergeClassSubjectAssignments(remoteAssignments = {}, localAssignments = {}) {
   const merged = {};
   const classes = new Set([...Object.keys(remoteAssignments || {}), ...Object.keys(localAssignments || {})]);
   classes.forEach(className => {
@@ -1861,9 +1852,6 @@ function applySavedState(saved = {}) {
 function loadAppState() {
   try {
     const savedState = JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
-    if (savedState && typeof savedState === "object") {
-      savedState.classTimetableEntries = [];
-    }
     applySavedState(savedState);
   } catch (error) {
     console.warn("Could not load saved school data.", error);
