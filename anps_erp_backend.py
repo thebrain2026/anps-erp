@@ -1115,16 +1115,13 @@ def normalize_lookup(value=""):
 
 
 def smart_bus_student_takes_transport(student):
+    if not isinstance(student, dict) or student.get("disabled"):
+        return False
     services = student.get("otherServices") if isinstance(student.get("otherServices"), list) else []
-    try:
-        transport_fee = float(student.get("transportFee") or 0)
-    except (TypeError, ValueError):
-        transport_fee = 0
     return bool(
         student.get("transportRequired") or
         "Transport" in services or
-        "Special/Custom" in services or
-        transport_fee > 0
+        "Special/Custom" in services
     )
 
 

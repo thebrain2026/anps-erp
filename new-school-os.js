@@ -1574,6 +1574,10 @@ async function processBackendSaveQueue() {
     backendLastLocalSaveAt = Date.now();
     if (!backendQueuedSnapshot) localStorage.removeItem(BACKEND_PENDING_STATE_KEY);
     finishTransportBackendSave("saved", `Backend saved at ${new Date().toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"})}.`);
+    if (smartBusSyncAfterSave && !backendQueuedSnapshot) {
+      smartBusSyncAfterSave = false;
+      syncSmartBusMasterData({silent: true});
+    }
   } catch (error) {
     markBackendConnectionIssue();
     backendSaveRetryCount += 1;
@@ -5837,6 +5841,7 @@ function disableStudentByAdmissionNo(admissionNo, reason) {
   student.disabled = true;
   student.disabledAt = new Date().toISOString();
   student.disabledReason = cleanReason;
+  if (studentTakesTransport({...student, disabled: false})) requestSmartBusSyncAfterSave();
   if (normalizeAdmissionNo(activeLedgerAdmissionNo) === normalizeAdmissionNo(admissionNo)) activeLedgerAdmissionNo = "";
   if (normalizeAdmissionNo(activeFeeStudentAdmissionNo) === normalizeAdmissionNo(admissionNo)) activeFeeStudentAdmissionNo = "";
   saveAppState();
@@ -11679,12 +11684,12 @@ function upsertRoutePickupVillageMapping(villageName = "", patch = {}) {
 }
 
 function studentTakesTransport(student = {}) {
+  if (!student || student.disabled) return false;
   const services = Array.isArray(student.otherServices) ? student.otherServices : [];
   return Boolean(
     student.transportRequired ||
     services.includes("Transport") ||
-    services.includes("Special/Custom") ||
-    Number(student.transportFee || 0) > 0
+    services.includes("Special/Custom")
   );
 }
 
@@ -12212,15 +12217,22 @@ async function openSmartBusDriverGpsLink(vehicleId, vehicleName = "", vehicleNo 
   }
 }
 
-async function syncSmartBusMasterData() {
+let smartBusSyncAfterSave = false;
+
+function requestSmartBusSyncAfterSave() {
+  smartBusSyncAfterSave = true;
+}
+
+async function syncSmartBusMasterData(options = {}) {
+  const silent = options.silent === true;
   const button = document.getElementById("smartBusSyncButton");
   const statusBox = document.getElementById("smartBusSyncStatus");
   const originalText = button?.textContent || "Sync Bus Master Data";
-  if (button) {
+  if (button && !silent) {
     button.disabled = true;
     button.textContent = "Syncing...";
   }
-  if (statusBox) statusBox.textContent = "Sending master data to Smart Bus Tracking service...";
+  if (statusBox && !silent) statusBox.textContent = "Sending master data to Smart Bus Tracking service...";
   try {
     const response = await backendFetch("/api/smart-bus/sync-master-data", {
       method: "POST",
@@ -12229,13 +12241,13 @@ async function syncSmartBusMasterData() {
     }, 30000);
     const result = await response.json().catch(() => ({}));
     if (!response.ok || result.ok === false) throw new Error(result.error || `Smart Bus sync failed ${response.status}`);
-    if (statusBox) statusBox.textContent = `${result.message || "ERP master data synced"} (${result.synced ?? result.payloadCount ?? 0} students).`;
-    showToast(`Smart Bus synced: ${result.synced ?? result.payloadCount ?? 0} students`);
+    if (statusBox && !silent) statusBox.textContent = `${result.message || "ERP master data synced"} (${result.synced ?? result.payloadCount ?? 0} students).`;
+    if (!silent) showToast(`Smart Bus synced: ${result.synced ?? result.payloadCount ?? 0} students`);
   } catch (error) {
-    if (statusBox) statusBox.textContent = error.message || "Smart Bus sync failed.";
-    showToast(error.message || "Smart Bus sync failed.");
+    if (statusBox && !silent) statusBox.textContent = error.message || "Smart Bus sync failed.";
+    if (!silent) showToast(error.message || "Smart Bus sync failed.");
   } finally {
-    if (button) {
+    if (button && !silent) {
       button.disabled = false;
       button.textContent = originalText;
     }
@@ -17314,6 +17326,9 @@ admissionForm.addEventListener("submit", event => {
   };
 
   const editIndex = students.findIndex(student => normalizeAdmissionNo(student.admissionNo) === normalizeAdmissionNo(editingAdmissionNo));
+  const previousStudent = editIndex >= 0 ? students[editIndex] : null;
+  const transportChanged = studentTakesTransport(previousStudent || {}) !== studentTakesTransport(studentData);
+  if (transportChanged || studentTakesTransport(studentData)) requestSmartBusSyncAfterSave();
   clearStudentDeletedMark(admissionNo);
   if (editIndex >= 0) students[editIndex] = {...students[editIndex], ...studentData};
   else students.unshift(studentData);
@@ -18691,6 +18706,7 @@ document.body.addEventListener("click", event => {
       student.disabled = false;
       delete student.disabledAt;
       delete student.disabledReason;
+      if (studentTakesTransport(student)) requestSmartBusSyncAfterSave();
       saveAppState();
       renderStudents();
       renderDisabledStudents();
