@@ -4827,24 +4827,33 @@ function createTimetableBuilderRow() {
 
 function getParallelLanguageGroup(row = {}) {
   const subject = normalizeText(row.subject || row.entryType || "").toLowerCase();
-  const isLanguage = subject.includes("language") || subject.includes("laguage");
   const isHindiOrBengali = subject.includes("hindi") || subject.includes("bengali");
-  if (!isLanguage || !isHindiOrBengali) return "";
-  if (/\b2\s*nd\b/.test(subject) || subject.includes("second")) return "second-language";
+  if (!isHindiOrBengali) return "";
   if (/\b3\s*rd\b/.test(subject) || subject.includes("third")) return "third-language";
+  return "second-language";
+}
+
+function getTimetableLanguageCode(row = {}) {
+  const subject = normalizeText(row.subject || row.entryType || "").toLowerCase();
+  if (subject.includes("bengali")) return "bengali";
+  if (subject.includes("hindi")) return "hindi";
   return "";
 }
 
 function getTimetableLogicalPeriods(rows = []) {
   let period = 0;
   let previousGroup = "";
+  let previousLanguageCode = "";
   return rows.map(row => {
     const group = getParallelLanguageGroup(row);
-    if (group && group === previousGroup) {
+    const languageCode = getTimetableLanguageCode(row);
+    if (group && group === previousGroup && languageCode && previousLanguageCode && languageCode !== previousLanguageCode) {
+      previousLanguageCode = languageCode;
       return period || 1;
     }
     period += 1;
     previousGroup = group;
+    previousLanguageCode = languageCode;
     return period;
   });
 }
