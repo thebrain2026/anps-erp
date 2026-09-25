@@ -487,8 +487,22 @@ function getPersistableTimetableEntries() {
     .map(normalizeMainErpTimetableEntry);
 }
 
+function scrubDebugProbeSubjects(list = []) {
+  const blocked = new Set(["syncprobesubject", "assistantaddedsubject"]);
+  return (Array.isArray(list) ? list : [])
+    .map(item => String(item || "").trim())
+    .filter(item => item && !blocked.has(item.toLowerCase()));
+}
+
 function getAppStateSnapshot() {
   sanitizeStaffAttendanceRecords();
+  const cleanedSubjects = scrubDebugProbeSubjects(customSubjects);
+  if (cleanedSubjects.length !== customSubjects.length) {
+    customSubjects.splice(0, customSubjects.length, ...cleanedSubjects);
+  }
+  Object.keys(classSubjectAssignments).forEach(className => {
+    classSubjectAssignments[className] = scrubDebugProbeSubjects(classSubjectAssignments[className]);
+  });
   return {
     students,
     financeSessions,
@@ -536,7 +550,7 @@ function getAppStateSnapshot() {
     customAdmissionClassesUpdatedAt,
     customAdmissionSections,
     customAdmissionSectionsUpdatedAt,
-    customSubjects,
+    customSubjects: cleanedSubjects,
     customSubjectsUpdatedAt,
     classSubjectAssignments,
     classSubjectAssignmentsUpdatedAt,
@@ -1793,7 +1807,7 @@ function applySavedState(saved = {}) {
     }
     customAdmissionSectionsUpdatedAt = saved.customAdmissionSectionsUpdatedAt || customAdmissionSectionsUpdatedAt || "";
     if (Array.isArray(saved.customSubjects)) {
-      customSubjects.splice(0, customSubjects.length, ...saved.customSubjects.filter(Boolean));
+      customSubjects.splice(0, customSubjects.length, ...scrubDebugProbeSubjects(saved.customSubjects.filter(Boolean)));
     }
     customSubjectsUpdatedAt = saved.customSubjectsUpdatedAt || customSubjectsUpdatedAt || "";
     if (saved.classSubjectAssignments && typeof saved.classSubjectAssignments === "object") {
