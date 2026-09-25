@@ -5164,8 +5164,13 @@ function renderClassTimetable() {
   const classFilter = document.getElementById("classTimetableClassFilter")?.value || "";
   const sectionFilter = document.getElementById("classTimetableSectionFilter")?.value || "";
   const visibleEntries = classTimetableEntries
-    .filter(entry => !classFilter || entry.className === classFilter || String(entry.classSection || "").startsWith(classFilter))
-    .filter(entry => !sectionFilter || entry.sectionName === sectionFilter || (!entry.sectionName && String(entry.classSection || "").startsWith(classFilter || "")))
+    .filter(entry => {
+      const parsed = splitStudentClassSection(entry.classSection || "");
+      const entryClass = String(entry.className || parsed.klass || "").trim();
+      const entrySection = String(entry.sectionName || parsed.section || "").trim();
+      return (!classFilter || entryClass === classFilter)
+        && (!sectionFilter || entrySection === sectionFilter);
+    })
     .sort((a, b) => a.classSection.localeCompare(b.classSection, undefined, {numeric: true})
       || ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].indexOf(a.day) - ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"].indexOf(b.day)
       || Number(a.period || 0) - Number(b.period || 0));
