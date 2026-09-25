@@ -430,7 +430,7 @@ CREATE TABLE IF NOT EXISTS bsfv_outbox_recovery_delivery (
 def _metric(conn, name, amount=1):
     conn.execute(
         "INSERT INTO bsfv_outbox_metrics(name,value) VALUES (?,?) "
-        "ON CONFLICT(name) DO UPDATE SET value=value+excluded.value",
+        "ON CONFLICT(name) DO UPDATE SET value = bsfv_outbox_metrics.value + excluded.value",
         (name, amount),
     )
 
