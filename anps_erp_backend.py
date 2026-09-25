@@ -85,6 +85,15 @@ SESSION_TTL_DAYS = 7
 EMERGENCY_STAFF_RESTORE_ENABLED = os.environ.get("ANPS_EMERGENCY_STAFF_RESTORE_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
 AUTO_STAFF_BACKUP_RESTORE_ENABLED = os.environ.get("ANPS_AUTO_STAFF_BACKUP_RESTORE_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
 FEE_APPEND_API_ENABLED = os.environ.get("ANPS_FEE_APPEND_API", "").strip().lower() in {"1", "true", "yes", "on"}
+WRITE_DISABLED = os.environ.get("ANPS_WRITE_DISABLED", "").strip().lower() in {"1", "true", "yes", "on"}
+WRITE_DISABLED_MESSAGE = (
+    os.environ.get("ANPS_WRITE_DISABLED_MESSAGE", "").strip()
+    or "This Render copy is in maintenance (read-only). Use https://anps.thebrainerp.com for live work."
+)
+CANONICAL_LIVE_HOST = (
+    os.environ.get("ANPS_CANONICAL_LIVE_HOST", "").strip().rstrip("/")
+    or "https://anps.thebrainerp.com"
+)
 STATE_IO_LOCK = threading.RLock()
 EMERGENCY_STAFF_RESTORE_SEED = []
 TENANT_TABLES = {
@@ -4272,6 +4281,10 @@ def summary():
         "state_size": state["size"] if state else 0,
         "updated_at": state["updated_at"] if state else None,
         "fee_append_api": FEE_APPEND_API_ENABLED,
+        "write_disabled": WRITE_DISABLED,
+        "maintenance": WRITE_DISABLED,
+        "canonical_host": CANONICAL_LIVE_HOST,
+        "message": WRITE_DISABLED_MESSAGE if WRITE_DISABLED else None,
     }
 
 
@@ -5079,7 +5092,22 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
         self.send_response(204)
         self.end_headers()
 
+    def write_frozen_response(self):
+        self.json_response(
+            {
+                "ok": False,
+                "error": "write_disabled",
+                "maintenance": True,
+                "message": WRITE_DISABLED_MESSAGE,
+                "canonical_host": CANONICAL_LIVE_HOST,
+            },
+            status=503,
+        )
+        return False
+
     def authorized(self, write=False):
+        if write and WRITE_DISABLED:
+            return self.write_frozen_response()
         origin = self.headers.get("Origin", "")
         if write and origin and not origin_allowed(origin):
             self.json_response({"ok": False, "error": "Origin not allowed"}, status=403)
@@ -5263,6 +5291,14 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/api/login":
             return self.login_request()
+        if path == "/api/logout":
+            if not self.authorized():
+                return
+            token = self.headers.get("Authorization", "").replace("Bearer ", "", 1).strip()
+            remove_session_token(token)
+            return self.json_response({"ok": True})
+        if WRITE_DISABLED:
+            return self.write_frozen_response()
         if path == "/api/payments/icici/callback":
             return self.icici_payment_callback_request()
         if path == "/api/staff-biometric/punches":
@@ -5277,10 +5313,6 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             return self.json_response({"ok": True, **clear_state_backups()})
         if path == "/api/reset-data":
             return self.json_response(reset_live_data())
-        if path == "/api/logout":
-            token = self.headers.get("Authorization", "").replace("Bearer ", "", 1).strip()
-            remove_session_token(token)
-            return self.json_response({"ok": True})
         if path == "/api/schools":
             return self.school_upsert_request()
         if path == "/api/whatsapp/send":
@@ -5312,6 +5344,8 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
         self.save_state_request()
 
     def do_PUT(self):
+        if WRITE_DISABLED:
+            return self.write_frozen_response()
         if not self.authorized(write=True):
             return
         self.save_state_request()

@@ -24,6 +24,12 @@ services:
         value: /data/uploads
       - key: ANPS_ERP_ALLOWED_ORIGINS
         value: "*"
+      - key: ANPS_WRITE_DISABLED
+        value: "true"
+      - key: ANPS_WRITE_DISABLED_MESSAGE
+        value: "Render copy is maintenance (read-only). Use https://anps.thebrainerp.com"
+      - key: ANPS_CANONICAL_LIVE_HOST
+        value: https://anps.thebrainerp.com
       - key: ANPS_BSFV_INTEGRATION_ENABLED
         value: "true"
       - key: ANPS_BSFV_SECRET_PROVIDER

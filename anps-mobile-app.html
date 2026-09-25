@@ -7,6 +7,11 @@
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="ANPS App" />
   <title>ANPS Mobile App</title>
+  <script>
+    if (location.hostname.endsWith("onrender.com")) {
+      location.replace(`https://anps.thebrainerp.com${location.pathname}${location.search}${location.hash}`);
+    }
+  </script>
   <style>
     :root {
       --ink: #12172f;
