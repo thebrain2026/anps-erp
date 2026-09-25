@@ -1332,8 +1332,14 @@ function mergeSetupSafeState(backendState = {}, localSnapshot = {}) {
       deletedStaffMap
     ),
     classTimetableEntries: mergeClassTimetableEntries(backendState.classTimetableEntries, localSnapshot.classTimetableEntries),
-    rolePermissions: {...(backendState.rolePermissions || {}), ...(localSnapshot.rolePermissions || {})},
-    rolePermissionAudit: {...(backendState.rolePermissionAudit || {}), ...(localSnapshot.rolePermissionAudit || {})},
+    // Permission settings are server-authoritative during hydration. A stale browser
+    // cache must not hide pages that an administrator has already enabled.
+    rolePermissions: Object.keys(backendState.rolePermissions || {}).length
+      ? {...backendState.rolePermissions}
+      : {...(localSnapshot.rolePermissions || {})},
+    rolePermissionAudit: Object.keys(backendState.rolePermissionAudit || {}).length
+      ? {...backendState.rolePermissionAudit}
+      : {...(localSnapshot.rolePermissionAudit || {})},
     staffBiometricDevice: {...(backendState.staffBiometricDevice || {}), ...(localSnapshot.staffBiometricDevice || {})},
     transportRoutes: mergeObjectListByCompositeKey(backendState.transportRoutes || [], localSnapshot.transportRoutes || [], ["routeName"])
       .filter(route => !deletedTransportMap.routes[String(route.routeName || "").trim().toLowerCase()]),
