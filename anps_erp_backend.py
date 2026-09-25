@@ -1996,6 +1996,12 @@ def class_timetable_group_key(entry):
 
 
 def merge_class_timetable_entries(server_entries, incoming_entries):
+    """Merge timetables without dropping periods.
+
+    Groups by classSection+day, then keeps the newest entry per period.
+    A newer but incomplete day must not wipe other periods on that day
+    (matches frontend mergeClassTimetableEntries).
+    """
     groups = {}
     for source, entries in (("server", server_entries or []), ("incoming", incoming_entries or [])):
         if not isinstance(entries, list):
@@ -2007,12 +2013,15 @@ def merge_class_timetable_entries(server_entries, incoming_entries):
             groups.setdefault(key, {"server": [], "incoming": []})[source].append(entry)
     merged = []
     for group in groups.values():
-        server_time = max([record_updated_time(entry) for entry in group["server"]] or [0])
-        incoming_time = max([record_updated_time(entry) for entry in group["incoming"]] or [0])
-        if group["incoming"] and (not group["server"] or incoming_time >= server_time):
-            merged.extend(group["incoming"])
-        else:
-            merged.extend(group["server"])
+        by_period = {}
+        for entry in (group["server"] + group["incoming"]):
+            if not isinstance(entry, dict):
+                continue
+            period_key = str(int(numeric_value(entry.get("period")) or 0))
+            existing = by_period.get(period_key)
+            if existing is None or record_updated_time(entry) >= record_updated_time(existing):
+                by_period[period_key] = entry
+        merged.extend(by_period.values())
     return sorted(
         merged,
         key=lambda entry: (
