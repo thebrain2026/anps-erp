@@ -8,7 +8,9 @@
   <meta name="school-api-base" content="" />
   <meta name="anps-fee-append-api" content="" />
   <script>
-    if (location.protocol === "file:") {
+    if (location.hostname.endsWith("onrender.com")) {
+      location.replace(`https://anps.thebrainerp.com${location.pathname}${location.search}${location.hash}`);
+    } else if (location.protocol === "file:") {
       location.replace("http://127.0.0.1:4174/anps-erp.html#dashboard");
     }
   </script>
