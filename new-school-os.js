@@ -154,8 +154,8 @@ let transportBackendSavePending = false;
 let backendNetworkFailCount = 0;
 let backendLastHealthOkAt = 0;
 const BACKEND_SAVE_DEBOUNCE_MS = 250;
-const BACKEND_AUTO_SYNC_INTERVAL_MS = 15000;
-const BACKEND_LOCAL_SAVE_GUARD_MS = 5000;
+const BACKEND_AUTO_SYNC_INTERVAL_MS = 8000;
+const BACKEND_LOCAL_SAVE_GUARD_MS = 2500;
 const BACKEND_OFFLINE_FAIL_THRESHOLD = 5;
 const BACKEND_HEALTH_GRACE_MS = 60000;
 const BACKEND_FETCH_TIMEOUT_MS = 25000;
@@ -1165,7 +1165,9 @@ const EDITABLE_OBJECT_MERGE_RULES = {
   teacherNoticeRequests: ["id", "title", "teacherId"],
   teacherLeaves: ["id", "teacherId", "from", "to", "type"],
   teacherAdvisories: ["id", "teacherId", "subject"],
-  homeworkDoubts: ["id", "homeworkId", "studentAdmissionNo"]
+  homework: ["id"],
+  homeworkDoubts: ["id", "homeworkId", "studentAdmissionNo"],
+  upiPaymentRequests: ["id", "upiTxnId", "utr", "admissionNo"]
 };
 
 function mergeEditableObjectLists(remoteState = {}, localState = {}) {
@@ -1350,7 +1352,6 @@ function hasSetupSafeMergeChanges(mergedState = {}, backendState = {}) {
     "classSubjectAssignments",
     "classSubjectAssignmentsUpdatedAt",
     "transportVillages",
-    "customTransportVillages",
     "transportVillageDistances",
     "transportVillageFees",
     "transportFineSetup",
@@ -14482,7 +14483,8 @@ function refreshAllAfterSecurityClean() {
 
 function isBackendAutoSyncPaused() {
   if (backendHydrating || document.hidden) return true;
-  if (document.body.classList.contains("modal-open")) return true;
+  // Keep syncing even if a view modal is open so other-role entries appear.
+  // Only pause while a local save is actively queued/in-flight or fee-master is being typed.
   if (backendSaveTimer) return true;
   if (backendSaveInFlight) return true;
   if (backendQueuedSnapshot) return true;

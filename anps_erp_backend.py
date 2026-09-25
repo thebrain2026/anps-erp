@@ -1948,7 +1948,9 @@ EDITABLE_OBJECT_MERGE_RULES = {
     "teacherNoticeRequests": ["id", "title", "teacherId"],
     "teacherLeaves": ["id", "teacherId", "from", "to", "type"],
     "teacherAdvisories": ["id", "teacherId", "subject"],
+    "homework": ["id"],
     "homeworkDoubts": ["id", "homeworkId", "studentAdmissionNo"],
+    "upiPaymentRequests": ["id", "upiTxnId", "utr", "admissionNo"],
 }
 
 
@@ -2078,6 +2080,70 @@ def transport_pickup_point_key(item):
     )
 
 
+def merge_finance_sessions(server_sessions, incoming_sessions):
+    merged = {}
+    server_sessions = server_sessions if isinstance(server_sessions, dict) else {}
+    incoming_sessions = incoming_sessions if isinstance(incoming_sessions, dict) else {}
+    sessions = set(server_sessions) | set(incoming_sessions)
+
+    def fee_master_updated_at(item):
+        return record_updated_time(item if isinstance(item, dict) else {})
+
+    def fee_master_key(item):
+        if not isinstance(item, dict):
+            return ""
+        class_name = str(item.get("className") or "").strip().lower()
+        student_type = str(item.get("studentType") or "New Student").strip().lower()
+        if class_name:
+            return f"{class_name}|{student_type}"
+        item_id = str(item.get("id") or "").strip().lower()
+        return f"id:{item_id}" if item_id else ""
+
+    def merge_fee_master_list(server_list, incoming_list):
+        rows = []
+        index_by_key = {}
+        for item in [*(server_list or []), *(incoming_list or [])]:
+            if not isinstance(item, dict):
+                continue
+            key = fee_master_key(item) or json.dumps(item, sort_keys=True, default=str)
+            existing_index = index_by_key.get(key)
+            if existing_index is None:
+                index_by_key[key] = len(rows)
+                rows.append(item)
+                continue
+            existing = rows[existing_index]
+            rows[existing_index] = (
+                {**existing, **item}
+                if fee_master_updated_at(item) >= fee_master_updated_at(existing)
+                else {**item, **existing}
+            )
+        return rows
+
+    for session_name in sessions:
+        server_session = server_sessions.get(session_name) or {}
+        incoming_session = incoming_sessions.get(session_name) or {}
+        if not isinstance(server_session, dict):
+            server_session = {}
+        if not isinstance(incoming_session, dict):
+            incoming_session = {}
+        merged[session_name] = {
+            **server_session,
+            **incoming_session,
+            "feeMaster": merge_fee_master_list(server_session.get("feeMaster") or [], incoming_session.get("feeMaster") or []),
+            "feeGroups": merge_object_lists(
+                server_session.get("feeGroups") or [],
+                incoming_session.get("feeGroups") or [],
+                ["id", "groupName"],
+            ),
+            "dues": merge_object_lists(
+                server_session.get("dues") or [],
+                incoming_session.get("dues") or [],
+                ["id", "admissionNo", "feeHead"],
+            ),
+        }
+    return merged
+
+
 def merge_state_without_losing_receipts(server_state, incoming_state):
     if not isinstance(server_state, dict):
         server_state = {}
@@ -2101,6 +2167,21 @@ def merge_state_without_losing_receipts(server_state, incoming_state):
         incoming_state.get("collectedPayments") or {},
         merged["deletedPaymentReceipts"],
     )
+    merged["financeSessions"] = merge_finance_sessions(
+        server_state.get("financeSessions") or {},
+        incoming_state.get("financeSessions") or {},
+    )
+    try:
+        merged["receiptSerial"] = max(
+            int(server_state.get("receiptSerial") or 0),
+            int(incoming_state.get("receiptSerial") or 0),
+        )
+    except (TypeError, ValueError):
+        merged["receiptSerial"] = incoming_state.get("receiptSerial") or server_state.get("receiptSerial") or 0
+    merged["tuitionFineSetup"] = {
+        **(server_state.get("tuitionFineSetup") if isinstance(server_state.get("tuitionFineSetup"), dict) else {}),
+        **(incoming_state.get("tuitionFineSetup") if isinstance(incoming_state.get("tuitionFineSetup"), dict) else {}),
+    }
     merged["mobileAppSettings"] = {
         **(server_state.get("mobileAppSettings") if isinstance(server_state.get("mobileAppSettings"), dict) else {}),
         **(incoming_state.get("mobileAppSettings") if isinstance(incoming_state.get("mobileAppSettings"), dict) else {}),
