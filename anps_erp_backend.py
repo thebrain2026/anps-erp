@@ -226,9 +226,41 @@ def normalize_school_id(value):
     return clean or DEFAULT_SCHOOL_ID
 
 
+DEBUG_PROBE_SUBJECTS = {
+    "syncprobesubject",
+    "assistantaddedsubject",
+}
+
+
+def scrub_debug_probe_subjects(value):
+    """Remove temporary sync-test subjects that must never persist in production."""
+    if not isinstance(value, dict):
+        return value
+    subjects = value.get("customSubjects")
+    if isinstance(subjects, list):
+        value["customSubjects"] = [
+            item for item in subjects
+            if str(item or "").strip().lower() not in DEBUG_PROBE_SUBJECTS
+        ]
+    assignments = value.get("classSubjectAssignments")
+    if isinstance(assignments, dict):
+        cleaned = {}
+        for class_name, class_subjects in assignments.items():
+            if not isinstance(class_subjects, list):
+                cleaned[class_name] = class_subjects
+                continue
+            cleaned[class_name] = [
+                item for item in class_subjects
+                if str(item or "").strip().lower() not in DEBUG_PROBE_SUBJECTS
+            ]
+        value["classSubjectAssignments"] = cleaned
+    return value
+
+
 def ensure_state_school(value):
     if not isinstance(value, dict):
         return value
+    value = scrub_debug_probe_subjects(value)
     schools = value.get("schools")
     if not isinstance(schools, list):
         schools = []
