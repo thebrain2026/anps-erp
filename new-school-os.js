@@ -466,6 +466,7 @@ let classSectionMasterInitialized = false;
 let activeTimetableDay = "Monday";
 let timetableBuilderRows = [];
 let timetableIntervalMap = {};
+let timetableBuilderDirty = false;
 let editingSyllabusIndex = -1;
 let editingExternalExamFeeId = "";
 let editingHolidayIndex = -1;
@@ -2601,6 +2602,7 @@ function setClassTimetableBuilderVisible(isVisible) {
   const overview = document.getElementById("classTimetableOverviewPanel");
   if (panel) panel.hidden = !isVisible;
   if (overview) overview.hidden = isVisible;
+  timetableBuilderDirty = false;
   if (isVisible) {
     renderClassTimetableOptions();
     loadTimetableBuilderForSelection();
@@ -5027,6 +5029,7 @@ function applyTimetableQuickParameters(options = {}) {
     }
     return {...row, startTime: timing.startTime, endTime: timing.endTime, room: room || row.room};
   });
+  timetableBuilderDirty = true;
   renderTimetableBuilderRows();
   return true;
 }
@@ -5069,6 +5072,7 @@ function applyTimetableTimingToAllBlankEntries(options = {}) {
     builderUpdated += 1;
     return {...row, startTime: row.startTime || timing.startTime, endTime: row.endTime || timing.endTime, room: row.room || room};
   });
+  if (builderUpdated) timetableBuilderDirty = true;
   let savedUpdated = 0;
   classTimetableEntries.forEach(entry => {
     if (!overwriteSavedTimes && entry.startTime && entry.endTime) return;
@@ -14519,6 +14523,8 @@ function isBackendAutoSyncPaused() {
   if (localStorage.getItem(BACKEND_PENDING_STATE_KEY)) return true;
   if (Date.now() - backendLastLocalSaveAt < BACKEND_LOCAL_SAVE_GUARD_MS) return true;
   if (document.activeElement && document.activeElement.closest?.("#feeMasterForm")) return true;
+  const timetableBuilderPanel = document.getElementById("classTimetableBuilderPanel");
+  if (timetableBuilderDirty && timetableBuilderPanel && !timetableBuilderPanel.hidden) return true;
   return false;
 }
 
@@ -17093,6 +17099,7 @@ classTimetableForm.addEventListener("submit", event => {
     renderTeacherTimetable();
     return;
   }
+  timetableBuilderDirty = false;
   timetableBuilderRows = [createTimetableBuilderRow()];
   timetableIntervalMap = {};
   renderTimetableBuilderRows();
@@ -17112,7 +17119,14 @@ document.getElementById("closeClassTimetableBuilder").addEventListener("click", 
 document.getElementById("addTimetableRow").addEventListener("click", () => {
   syncTimetableBuilderRowsFromDom();
   timetableBuilderRows.push(createTimetableBuilderRow());
+  timetableBuilderDirty = true;
   renderTimetableBuilderRows();
+});
+classTimetableForm.addEventListener("input", event => {
+  if (event.target.closest?.(".timetable-builder-row")) timetableBuilderDirty = true;
+});
+classTimetableForm.addEventListener("change", event => {
+  if (event.target.closest?.(".timetable-builder-row")) timetableBuilderDirty = true;
 });
 document.getElementById("applyTimetableQuick").addEventListener("click", applyTimetableQuickParameters);
 document.getElementById("applyTimetableAllClasses")?.addEventListener("click", applyTimetableTimingToAllBlankEntries);
@@ -17158,6 +17172,7 @@ document.getElementById("classTimetableBuilderRows").addEventListener("click", e
   syncTimetableBuilderRowsFromDom();
   timetableBuilderRows = timetableBuilderRows.filter(row => row.id !== deleteButton.dataset.deleteTimetableRow);
   if (!timetableBuilderRows.length) timetableBuilderRows = [createTimetableBuilderRow()];
+  timetableBuilderDirty = true;
   renderTimetableBuilderRows();
 });
 document.getElementById("classTimetableBuilderSavedRows")?.addEventListener("click", event => {
