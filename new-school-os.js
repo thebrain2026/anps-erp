@@ -14582,7 +14582,7 @@ async function initializeBackendSync() {
     backendSyncReady = true;
     const hasToken = await ensureBackendToken();
     if (!hasToken) return;
-    const flushedPending = await flushPendingBackendSnapshot();
+    await flushPendingBackendSnapshot();
     const stateResponse = await backendFetch(`/api/state?v=${Date.now()}`, {
       cache: "no-store",
       headers: backendHeaders()
@@ -14591,7 +14591,10 @@ async function initializeBackendSync() {
     const payload = await stateResponse.json();
     const backendState = payload?.state || {};
     backendLastUpdatedAt = payload?.updated_at || "";
-    if (!flushedPending && backendState && Object.keys(backendState).length) {
+    // The state response is fetched after any pending snapshot is flushed, so it is
+    // the newest server copy and must always hydrate the UI. Skipping hydration here
+    // leaves stale role permissions in this browser until another server write occurs.
+    if (backendState && Object.keys(backendState).length) {
       const localSnapshot = getAppStateSnapshot();
       const mergedState = mergeSetupSafeState(backendState, localSnapshot);
       backendHydrating = true;
@@ -14602,7 +14605,7 @@ async function initializeBackendSync() {
       backendHydrating = false;
       if (restoredStaff) queueBackendSave(getAppStateSnapshot());
       showToast("Backend database connected.");
-    } else if (!backendState || !Object.keys(backendState).length) {
+    } else {
       queueBackendSave(getAppStateSnapshot());
     }
     startBackendAutoSync();
