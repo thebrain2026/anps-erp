@@ -466,6 +466,7 @@ let classSectionMasterInitialized = false;
 let activeTimetableDay = "Monday";
 let timetableBuilderRows = [];
 let timetableIntervalMap = {};
+let timetableIntervalAfterPeriodValue = "";
 let timetableBuilderDirty = false;
 let editingSyllabusIndex = -1;
 let editingExternalExamFeeId = "";
@@ -2456,6 +2457,9 @@ function setView(viewName, options = {}) {
     return;
   }
   const currentView = document.querySelector(".view.active")?.id || "";
+  if (currentView === "classTimetable" && viewName !== "classTimetable") {
+    resetTimetablePageQuickSettings();
+  }
   if (!options.skipHistory && currentView && currentView !== viewName) {
     viewHistoryStack.push(currentView);
     if (viewHistoryStack.length > 25) viewHistoryStack.shift();
@@ -2607,6 +2611,20 @@ function setClassTimetableBuilderVisible(isVisible) {
     renderClassTimetableOptions();
     loadTimetableBuilderForSelection();
   }
+}
+
+function resetTimetablePageQuickSettings() {
+  timetableIntervalMap = {};
+  timetableIntervalAfterPeriodValue = "";
+  timetableBuilderDirty = false;
+  if (!classTimetableForm) return;
+  ["periodStartTime", "periodDuration", "quickRoom"].forEach(name => {
+    if (classTimetableForm.elements[name]) classTimetableForm.elements[name].value = "";
+  });
+  if (classTimetableForm.elements.timeFillMode) classTimetableForm.elements.timeFillMode.value = "blank";
+  if (classTimetableForm.elements.intervalAfterPeriod) classTimetableForm.elements.intervalAfterPeriod.value = "";
+  if (classTimetableForm.elements.periodInterval) classTimetableForm.elements.periodInterval.value = "0";
+  renderTimetableIntervalOptions();
 }
 
 function getSourceView(element) {
@@ -4968,7 +4986,7 @@ function renderTimetableIntervalOptions() {
   const select = document.getElementById("intervalAfterPeriod");
   const list = document.getElementById("timetableIntervalList");
   if (!select) return;
-  const selected = select.value;
+  const selected = select.value || timetableIntervalAfterPeriodValue;
   const maxPeriod = getMaxTimetableLogicalPeriod(timetableBuilderRows);
   select.innerHTML = `<option value="">No interval</option>${Array.from({length: maxPeriod}, (_, index) => `<option value="${index + 1}">After Period ${index + 1}</option>`).join("")}`;
   if (selected && [...select.options].some(option => option.value === selected)) {
@@ -5113,14 +5131,12 @@ function loadTimetableBuilderForSelection(options = {}) {
   const day = String(classTimetableForm.elements.day?.value || activeTimetableDay || "Monday");
   if (!className || !sectionName || !day) {
     timetableBuilderRows = [createTimetableBuilderRow()];
-    timetableIntervalMap = {};
     renderTimetableBuilderRows();
     renderTimetableBuilderSavedEntries();
     return;
   }
   if (!shouldLoadExisting) {
     timetableBuilderRows = [createTimetableBuilderRow()];
-    timetableIntervalMap = {};
     renderTimetableBuilderRows();
     renderTimetableBuilderSavedEntries();
     return;
@@ -5131,7 +5147,6 @@ function loadTimetableBuilderForSelection(options = {}) {
     .sort((a, b) => Number(a.period || 0) - Number(b.period || 0));
   if (!existingEntries.length) {
     timetableBuilderRows = [createTimetableBuilderRow()];
-    timetableIntervalMap = {};
     renderTimetableBuilderRows();
     renderTimetableBuilderSavedEntries();
     return;
@@ -5144,7 +5159,6 @@ function loadTimetableBuilderForSelection(options = {}) {
     endTime: entry.endTime || "",
     room: entry.room || ""
   }));
-  timetableIntervalMap = {};
   renderTimetableBuilderRows();
   renderTimetableBuilderSavedEntries();
 }
@@ -17110,7 +17124,6 @@ classTimetableForm.addEventListener("submit", event => {
   }
   timetableBuilderDirty = false;
   timetableBuilderRows = [createTimetableBuilderRow()];
-  timetableIntervalMap = {};
   renderTimetableBuilderRows();
   renderTimetableBuilderSavedEntries();
   renderTeacherTimetable();
@@ -17136,6 +17149,9 @@ classTimetableForm.addEventListener("input", event => {
 });
 classTimetableForm.addEventListener("change", event => {
   if (event.target.closest?.(".timetable-builder-row")) timetableBuilderDirty = true;
+  if (event.target === classTimetableForm.elements.intervalAfterPeriod) {
+    timetableIntervalAfterPeriodValue = event.target.value || "";
+  }
 });
 document.getElementById("applyTimetableQuick").addEventListener("click", applyTimetableQuickParameters);
 document.getElementById("applyTimetableAllClasses")?.addEventListener("click", applyTimetableTimingToAllBlankEntries);
