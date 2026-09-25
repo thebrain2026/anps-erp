@@ -3754,10 +3754,16 @@ def write_state(value):
             (STATE_KEY, raw),
         )
         sync_state_tables(conn, value)
+        # Isolate BSFV capture so a missing/failed outbox never aborts the ERP save txn.
         try:
+            conn.execute("SAVEPOINT anps_bsfv_capture")
             capture_state_changes(conn, previous_state, value, IntegrationConfig.from_env())
+            conn.execute("RELEASE SAVEPOINT anps_bsfv_capture")
         except Exception as exc:
-            # Never block ERP saves if BSFV outbox/metrics DDL is missing (Postgres staging).
+            try:
+                conn.execute("ROLLBACK TO SAVEPOINT anps_bsfv_capture")
+            except Exception:
+                pass
             try:
                 conn.execute(
                     """
