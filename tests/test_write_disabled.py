@@ -57,6 +57,8 @@ def _load_backend():
 def test_write_disabled_defaults_off():
     with mock.patch.dict(os.environ, {}, clear=False):
         os.environ.pop("ANPS_WRITE_DISABLED", None)
+        os.environ.pop("RENDER", None)
+        os.environ.pop("RENDER_SERVICE_ID", None)
         backend = _load_backend()
         assert backend.WRITE_DISABLED is False
 
@@ -75,6 +77,27 @@ def test_write_disabled_truthy_and_message():
         assert backend.WRITE_DISABLED is True
         assert "thebrainerp.com" in backend.WRITE_DISABLED_MESSAGE
         assert backend.CANONICAL_LIVE_HOST == "https://anps.thebrainerp.com"
+
+
+def test_render_host_defaults_to_write_disabled():
+    with mock.patch.dict(
+        os.environ,
+        {"RENDER": "true"},
+        clear=False,
+    ):
+        os.environ.pop("ANPS_WRITE_DISABLED", None)
+        backend = _load_backend()
+        assert backend.WRITE_DISABLED is True
+
+
+def test_explicit_false_overrides_render_default():
+    with mock.patch.dict(
+        os.environ,
+        {"RENDER": "true", "ANPS_WRITE_DISABLED": "false"},
+        clear=False,
+    ):
+        backend = _load_backend()
+        assert backend.WRITE_DISABLED is False
 
 
 def test_authorized_write_returns_503_when_frozen():

@@ -85,7 +85,17 @@ SESSION_TTL_DAYS = 7
 EMERGENCY_STAFF_RESTORE_ENABLED = os.environ.get("ANPS_EMERGENCY_STAFF_RESTORE_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
 AUTO_STAFF_BACKUP_RESTORE_ENABLED = os.environ.get("ANPS_AUTO_STAFF_BACKUP_RESTORE_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
 FEE_APPEND_API_ENABLED = os.environ.get("ANPS_FEE_APPEND_API", "").strip().lower() in {"1", "true", "yes", "on"}
-WRITE_DISABLED = os.environ.get("ANPS_WRITE_DISABLED", "").strip().lower() in {"1", "true", "yes", "on"}
+_WRITE_DISABLED_RAW = os.environ.get("ANPS_WRITE_DISABLED", "").strip().lower()
+if _WRITE_DISABLED_RAW in {"1", "true", "yes", "on"}:
+    WRITE_DISABLED = True
+elif _WRITE_DISABLED_RAW in {"0", "false", "no", "off"}:
+    WRITE_DISABLED = False
+else:
+    # Render-hosted copies default to read-only so forgotten bookmarks cannot dual-write.
+    WRITE_DISABLED = (
+        os.environ.get("RENDER", "").strip().lower() in {"1", "true", "yes", "on"}
+        or bool(os.environ.get("RENDER_SERVICE_ID", "").strip())
+    )
 WRITE_DISABLED_MESSAGE = (
     os.environ.get("ANPS_WRITE_DISABLED_MESSAGE", "").strip()
     or "This Render copy is in maintenance (read-only). Use https://anps.thebrainerp.com for live work."
