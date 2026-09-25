@@ -156,6 +156,8 @@ let backendLastHealthOkAt = 0;
 const BACKEND_SAVE_DEBOUNCE_MS = 250;
 const BACKEND_AUTO_SYNC_INTERVAL_MS = 8000;
 const BACKEND_LOCAL_SAVE_GUARD_MS = 2500;
+const BACKEND_SAVE_MAX_RETRIES = 3;
+let backendSaveRetryCount = 0;
 const BACKEND_OFFLINE_FAIL_THRESHOLD = 5;
 const BACKEND_HEALTH_GRACE_MS = 60000;
 const BACKEND_FETCH_TIMEOUT_MS = 25000;
@@ -1563,26 +1565,31 @@ async function processBackendSaveQueue() {
     }
     const result = await putBackendState(snapshot);
     markBackendOnline();
+    backendSaveRetryCount = 0;
     if (result?.updated_at) backendLastUpdatedAt = result.updated_at;
     backendLastLocalSaveAt = Date.now();
     if (!backendQueuedSnapshot) localStorage.removeItem(BACKEND_PENDING_STATE_KEY);
     finishTransportBackendSave("saved", `Backend saved at ${new Date().toLocaleTimeString([], {hour: "2-digit", minute: "2-digit", second: "2-digit"})}.`);
   } catch (error) {
     markBackendConnectionIssue();
-    if (!backendQueuedSnapshot) {
+    backendSaveRetryCount += 1;
+    if (backendSaveRetryCount <= BACKEND_SAVE_MAX_RETRIES && !backendQueuedSnapshot) {
       backendQueuedSnapshot = snapshot;
       backendQueuedRollbackRawState = rollbackRawState;
       storePendingBackendSnapshot(snapshot);
+      scheduleBackendReconnect();
+      finishTransportBackendSave("error", "Backend save pending. Server sync will retry automatically.");
+      showToast("Saved locally. Server sync will retry automatically.", "warning", 6000);
+    } else {
+      backendQueuedSnapshot = null;
+      backendQueuedRollbackRawState = "";
+      localStorage.removeItem(BACKEND_PENDING_STATE_KEY);
+      backendSaveRetryCount = 0;
+      finishTransportBackendSave("error", "Backend save paused after repeated conflicts. Refresh and try again.");
+      showToast("Could not sync to server. Please hard refresh, then save again.", "error", 7000);
+      setTopbarSaveStatus("saved");
     }
-    scheduleBackendReconnect();
-    finishTransportBackendSave("error", "Backend save pending. Server sync will retry automatically.");
-    showToast("Saved locally. Server sync will retry automatically.", "warning", 6000);
-    console.warn(
-      backendQueuedSnapshot
-        ? "Backend save failed; latest queued change will retry."
-        : "Backend save failed; local change rolled back.",
-      error
-    );
+    console.warn("Backend save failed.", error);
   } finally {
     backendSaveInFlight = false;
     if (backendQueuedSnapshot) {
@@ -14533,7 +14540,6 @@ async function pullBackendStateIfChanged(showMessage = false) {
     if (!backendState || !Object.keys(backendState).length) return;
     const localSnapshot = getAppStateSnapshot();
     const mergedState = mergeSetupSafeState(backendState, localSnapshot);
-    const shouldResaveSetup = hasSetupSafeMergeChanges(mergedState, backendState);
     backendHydrating = true;
     backendLastUpdatedAt = payload?.updated_at || serverUpdatedAt || backendLastUpdatedAt;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(mergedState));
@@ -14541,7 +14547,9 @@ async function pullBackendStateIfChanged(showMessage = false) {
     const restoredStaff = await hydrateStaffFromBackendModule();
     refreshAllAfterSecurityClean();
     backendHydrating = false;
-    if (restoredStaff || shouldResaveSetup) queueBackendSave(getAppStateSnapshot());
+    // Never auto-resave setup diffs on pull — that causes multi-role 409 storms
+    // and keeps other roles stuck on "Saving..." so they never see new entries.
+    if (restoredStaff) queueBackendSave(getAppStateSnapshot());
     if (showMessage) showToast("Latest database data synced.");
   } catch (error) {
     markBackendConnectionIssue();
