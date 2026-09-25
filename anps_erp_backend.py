@@ -1654,9 +1654,8 @@ def init_db():
         )
         ensure_default_school_row(conn)
         ensure_tenant_columns(conn)
-        # BSFV outbox DDL uses SQLite trigger scripts; Postgres port is a follow-up.
-        if not using_postgres():
-            initialize_outbox(conn)
+        # Postgres uses trigger-free BSFV DDL so state saves can capture outbox safely.
+        initialize_outbox(conn)
         conn.execute(
             """
             INSERT INTO schema_meta (key, value, updated_at)
@@ -1962,15 +1961,8 @@ PRIMITIVE_SETUP_LIST_UPDATED_AT = {
 
 
 def merge_primitive_setup_list(server_state, incoming_state, key):
-    updated_key = PRIMITIVE_SETUP_LIST_UPDATED_AT.get(key)
-    if updated_key:
-        server_time = record_updated_time({"updatedAt": (server_state or {}).get(updated_key)})
-        incoming_time = record_updated_time({"updatedAt": (incoming_state or {}).get(updated_key)})
-        if server_time or incoming_time:
-            return merge_primitive_lists(
-                [],
-                (incoming_state if incoming_time >= server_time else server_state).get(key) or [],
-            )
+    # Always union both sides. A newer timestamp must not wipe subjects/classes
+    # added by another role with an older timestamp.
     return merge_primitive_lists(
         (server_state or {}).get(key) or [],
         (incoming_state or {}).get(key) or [],
@@ -3762,7 +3754,26 @@ def write_state(value):
             (STATE_KEY, raw),
         )
         sync_state_tables(conn, value)
-        capture_state_changes(conn, previous_state, value, IntegrationConfig.from_env())
+        try:
+            capture_state_changes(conn, previous_state, value, IntegrationConfig.from_env())
+        except Exception as exc:
+            # Never block ERP saves if BSFV outbox/metrics DDL is missing (Postgres staging).
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO audit_events (actor, action, entity_type, entity_id, details)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        "system",
+                        "BSFV Capture Warning",
+                        "app_state",
+                        STATE_KEY,
+                        str(exc)[:500],
+                    ),
+                )
+            except Exception:
+                pass
         state_row = conn.execute("SELECT updated_at FROM app_state WHERE key = ?", (STATE_KEY,)).fetchone()
         conn.execute(
             """
