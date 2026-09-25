@@ -1393,39 +1393,35 @@ function canApplyBackendSaveResult() {
 }
 
 async function putBackendState(snapshot, allowMergeRetry = true) {
-  const response = await backendFetch("/api/state", {
-    method: "PUT",
-    headers: backendHeaders({"Content-Type": "application/json"}),
-    body: JSON.stringify({state: snapshot, base_updated_at: backendLastUpdatedAt || ""})
-  });
-  if (response.status === 409 && allowMergeRetry) {
-    const conflict = await response.json().catch(() => ({}));
-    const mergedState = mergeStateSnapshots(conflict?.state || {}, snapshot);
-    backendLastUpdatedAt = conflict?.updated_at || backendLastUpdatedAt;
-    if (canApplyBackendSaveResult()) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(mergedState));
-      applySavedState(mergedState);
-    }
-    const retryResponse = await backendFetch("/api/state", {
+  let attemptSnapshot = snapshot;
+  let attempts = 0;
+  while (attempts < 4) {
+    attempts += 1;
+    const response = await backendFetch("/api/state", {
       method: "PUT",
       headers: backendHeaders({"Content-Type": "application/json"}),
-      body: JSON.stringify({state: mergedState, base_updated_at: backendLastUpdatedAt || ""})
+      body: JSON.stringify({state: attemptSnapshot, base_updated_at: backendLastUpdatedAt || ""})
     });
-    if (!retryResponse.ok) throw new Error(`Backend merge save failed ${retryResponse.status}`);
-    const retryResult = await retryResponse.json().catch(() => ({}));
-    if (retryResult?.state && typeof retryResult.state === "object" && canApplyBackendSaveResult()) {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(retryResult.state));
-      applySavedState(retryResult.state);
+    if (response.status === 409 && allowMergeRetry) {
+      const conflict = await response.json().catch(() => ({}));
+      attemptSnapshot = mergeStateSnapshots(conflict?.state || {}, attemptSnapshot);
+      backendLastUpdatedAt = conflict?.updated_at || backendLastUpdatedAt;
+      if (canApplyBackendSaveResult()) {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(attemptSnapshot));
+        applySavedState(attemptSnapshot);
+      }
+      continue;
     }
-    return retryResult;
+    if (!response.ok) throw new Error(`Backend save failed ${response.status}`);
+    const result = await response.json().catch(() => ({}));
+    if (result?.updated_at) backendLastUpdatedAt = result.updated_at;
+    if (result?.state && typeof result.state === "object" && canApplyBackendSaveResult()) {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(result.state));
+      applySavedState(result.state);
+    }
+    return result;
   }
-  if (!response.ok) throw new Error(`Backend save failed ${response.status}`);
-  const result = await response.json().catch(() => ({}));
-  if (result?.state && typeof result.state === "object" && canApplyBackendSaveResult()) {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(result.state));
-    applySavedState(result.state);
-  }
-  return result;
+  throw new Error("Backend merge save failed after conflict retries");
 }
 
 function storePendingBackendSnapshot(snapshot = getAppStateSnapshot()) {
@@ -14592,14 +14588,13 @@ async function initializeBackendSync() {
     if (!flushedPending && backendState && Object.keys(backendState).length) {
       const localSnapshot = getAppStateSnapshot();
       const mergedState = mergeSetupSafeState(backendState, localSnapshot);
-      const shouldResaveSetup = hasSetupSafeMergeChanges(mergedState, backendState);
       backendHydrating = true;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(mergedState));
       applySavedState(mergedState);
       const restoredStaff = await hydrateStaffFromBackendModule();
       refreshAllAfterSecurityClean();
       backendHydrating = false;
-      if (restoredStaff || shouldResaveSetup) queueBackendSave(getAppStateSnapshot());
+      if (restoredStaff) queueBackendSave(getAppStateSnapshot());
       showToast("Backend database connected.");
     } else if (!backendState || !Object.keys(backendState).length) {
       queueBackendSave(getAppStateSnapshot());
