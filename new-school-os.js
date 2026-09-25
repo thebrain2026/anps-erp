@@ -5070,7 +5070,7 @@ function applyTimetableTimingToAllBlankEntries(options = {}) {
 }
 
 function loadTimetableBuilderForSelection(options = {}) {
-  const shouldLoadExisting = Boolean(options.loadExisting);
+  const shouldLoadExisting = options.loadExisting !== false;
   const className = String(classTimetableForm.elements.className?.value || "").trim();
   const sectionName = String(classTimetableForm.elements.sectionName?.value || "").trim();
   const day = String(classTimetableForm.elements.day?.value || activeTimetableDay || "Monday");
