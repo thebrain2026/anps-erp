@@ -22,6 +22,14 @@ from anps_bsfv_outbox import (
     initialize_outbox,
     pilot_metrics,
 )
+from anps_db import (
+    connect,
+    database_label,
+    db_error_types,
+    table_exists,
+    table_has_column,
+    using_postgres,
+)
 
 try:
     from google.auth.transport.requests import Request as GoogleAuthRequest
@@ -85,25 +93,6 @@ SESSION_TTL_DAYS = 7
 EMERGENCY_STAFF_RESTORE_ENABLED = os.environ.get("ANPS_EMERGENCY_STAFF_RESTORE_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
 AUTO_STAFF_BACKUP_RESTORE_ENABLED = os.environ.get("ANPS_AUTO_STAFF_BACKUP_RESTORE_ENABLED", "").strip().lower() in {"1", "true", "yes", "on"}
 FEE_APPEND_API_ENABLED = os.environ.get("ANPS_FEE_APPEND_API", "").strip().lower() in {"1", "true", "yes", "on"}
-_WRITE_DISABLED_RAW = os.environ.get("ANPS_WRITE_DISABLED", "").strip().lower()
-if _WRITE_DISABLED_RAW in {"1", "true", "yes", "on"}:
-    WRITE_DISABLED = True
-elif _WRITE_DISABLED_RAW in {"0", "false", "no", "off"}:
-    WRITE_DISABLED = False
-else:
-    # Render-hosted copies default to read-only so forgotten bookmarks cannot dual-write.
-    WRITE_DISABLED = (
-        os.environ.get("RENDER", "").strip().lower() in {"1", "true", "yes", "on"}
-        or bool(os.environ.get("RENDER_SERVICE_ID", "").strip())
-    )
-WRITE_DISABLED_MESSAGE = (
-    os.environ.get("ANPS_WRITE_DISABLED_MESSAGE", "").strip()
-    or "This Render copy is in maintenance (read-only). Use https://anps.thebrainerp.com for live work."
-)
-CANONICAL_LIVE_HOST = (
-    os.environ.get("ANPS_CANONICAL_LIVE_HOST", "").strip().rstrip("/")
-    or "https://anps.thebrainerp.com"
-)
 STATE_IO_LOCK = threading.RLock()
 EMERGENCY_STAFF_RESTORE_SEED = []
 TENANT_TABLES = {
@@ -207,8 +196,11 @@ def create_session_token(user):
         with connect() as conn:
             conn.execute(
                 """
-                INSERT OR REPLACE INTO auth_sessions (token, user_json, expires_at)
+                INSERT INTO auth_sessions (token, user_json, expires_at)
                 VALUES (?, ?, ?)
+                ON CONFLICT(token) DO UPDATE SET
+                    user_json = excluded.user_json,
+                    expires_at = excluded.expires_at
                 """,
                 (token, json.dumps(user_data, ensure_ascii=False, separators=(",", ":")), expires_at),
             )
@@ -234,9 +226,41 @@ def normalize_school_id(value):
     return clean or DEFAULT_SCHOOL_ID
 
 
+DEBUG_PROBE_SUBJECTS = {
+    "syncprobesubject",
+    "assistantaddedsubject",
+}
+
+
+def scrub_debug_probe_subjects(value):
+    """Remove temporary sync-test subjects that must never persist in production."""
+    if not isinstance(value, dict):
+        return value
+    subjects = value.get("customSubjects")
+    if isinstance(subjects, list):
+        value["customSubjects"] = [
+            item for item in subjects
+            if str(item or "").strip().lower() not in DEBUG_PROBE_SUBJECTS
+        ]
+    assignments = value.get("classSubjectAssignments")
+    if isinstance(assignments, dict):
+        cleaned = {}
+        for class_name, class_subjects in assignments.items():
+            if not isinstance(class_subjects, list):
+                cleaned[class_name] = class_subjects
+                continue
+            cleaned[class_name] = [
+                item for item in class_subjects
+                if str(item or "").strip().lower() not in DEBUG_PROBE_SUBJECTS
+            ]
+        value["classSubjectAssignments"] = cleaned
+    return value
+
+
 def ensure_state_school(value):
     if not isinstance(value, dict):
         return value
+    value = scrub_debug_probe_subjects(value)
     schools = value.get("schools")
     if not isinstance(schools, list):
         schools = []
@@ -1287,26 +1311,9 @@ def sync_smart_bus_master_data():
     }
 
 
-def connect():
-    conn = sqlite3.connect(DB_PATH, timeout=20)
-    conn.row_factory = sqlite3.Row
-    conn.execute("PRAGMA journal_mode = WAL")
-    conn.execute("PRAGMA busy_timeout = 5000")
-    conn.execute("PRAGMA foreign_keys = ON")
-    return conn
-
-
-def table_has_column(conn, table, column):
-    return any(row["name"] == column for row in conn.execute(f"PRAGMA table_info({table})").fetchall())
-
-
 def ensure_tenant_columns(conn):
     for table in sorted(TENANT_TABLES):
-        exists = conn.execute(
-            "SELECT 1 FROM sqlite_master WHERE type='table' AND name = ?",
-            (table,),
-        ).fetchone()
-        if not exists:
+        if not table_exists(conn, table):
             continue
         if not table_has_column(conn, table, "school_id"):
             conn.execute(f"ALTER TABLE {table} ADD COLUMN school_id TEXT DEFAULT '{DEFAULT_SCHOOL_ID}'")
@@ -1676,6 +1683,7 @@ def init_db():
         )
         ensure_default_school_row(conn)
         ensure_tenant_columns(conn)
+        # Postgres uses trigger-free BSFV DDL so state saves can capture outbox safely.
         initialize_outbox(conn)
         conn.execute(
             """
@@ -1687,6 +1695,8 @@ def init_db():
             """,
             (str(DB_SCHEMA_VERSION),),
         )
+        # Postgres DDL is transactional; commit before read_state opens a new connection.
+        conn.commit()
         state = read_state()
         if state:
             sync_state_tables(conn, state)
@@ -1934,6 +1944,8 @@ def deleted_staff_map(*maps):
     return merged
 
 
+
+
 def admission_delete_key(value):
     """Canonical admission key for deletedStudents (matches ERP client normalizeAdmissionNo)."""
     clean = re.sub(r"\s*/\s*", "/", str(value or "").strip())
@@ -1984,7 +1996,6 @@ def deleted_timetable_entry_ids(*maps):
                     merged[key] = datetime.now().isoformat(timespec="seconds")
     return merged
 
-
 def filter_deleted_staff(staff_list, deleted_map):
     deleted_map = deleted_map if isinstance(deleted_map, dict) else {}
     return [
@@ -2017,7 +2028,9 @@ EDITABLE_OBJECT_MERGE_RULES = {
     "teacherNoticeRequests": ["id", "title", "teacherId"],
     "teacherLeaves": ["id", "teacherId", "from", "to", "type"],
     "teacherAdvisories": ["id", "teacherId", "subject"],
+    "homework": ["id"],
     "homeworkDoubts": ["id", "homeworkId", "studentAdmissionNo"],
+    "upiPaymentRequests": ["id", "upiTxnId", "utr", "admissionNo"],
 }
 
 
@@ -2029,15 +2042,8 @@ PRIMITIVE_SETUP_LIST_UPDATED_AT = {
 
 
 def merge_primitive_setup_list(server_state, incoming_state, key):
-    updated_key = PRIMITIVE_SETUP_LIST_UPDATED_AT.get(key)
-    if updated_key:
-        server_time = record_updated_time({"updatedAt": (server_state or {}).get(updated_key)})
-        incoming_time = record_updated_time({"updatedAt": (incoming_state or {}).get(updated_key)})
-        if server_time or incoming_time:
-            return merge_primitive_lists(
-                [],
-                (incoming_state if incoming_time >= server_time else server_state).get(key) or [],
-            )
+    # Always union both sides. A newer timestamp must not wipe subjects/classes
+    # added by another role with an older timestamp.
     return merge_primitive_lists(
         (server_state or {}).get(key) or [],
         (incoming_state or {}).get(key) or [],
@@ -2070,7 +2076,6 @@ def class_timetable_entry_slot_key(entry):
     subject = str(entry.get("subject") or entry.get("entryType") or "").strip().lower()
     return f"{period}|{subject}" if subject else period
 
-
 def dedupe_class_timetable_entries(entries):
     by_slot = {}
     for entry in entries or []:
@@ -2083,7 +2088,6 @@ def dedupe_class_timetable_entries(entries):
         if existing is None or record_updated_time(entry) >= record_updated_time(existing):
             by_slot[slot] = entry
     return list(by_slot.values())
-
 
 def merge_class_timetable_entries(server_entries, incoming_entries, deleted_ids=None):
     """Merge timetables by class+day with builder-style day replacement.
@@ -2134,7 +2138,6 @@ def merge_class_timetable_entries(server_entries, incoming_entries, deleted_ids=
         ),
     )
 
-
 def merge_class_subject_assignments(server_state, incoming_state):
     server_assignments = server_state.get("classSubjectAssignments") if isinstance(server_state.get("classSubjectAssignments"), dict) else {}
     incoming_assignments = incoming_state.get("classSubjectAssignments") if isinstance(incoming_state.get("classSubjectAssignments"), dict) else {}
@@ -2183,6 +2186,70 @@ def transport_pickup_point_key(item):
     )
 
 
+def merge_finance_sessions(server_sessions, incoming_sessions):
+    merged = {}
+    server_sessions = server_sessions if isinstance(server_sessions, dict) else {}
+    incoming_sessions = incoming_sessions if isinstance(incoming_sessions, dict) else {}
+    sessions = set(server_sessions) | set(incoming_sessions)
+
+    def fee_master_updated_at(item):
+        return record_updated_time(item if isinstance(item, dict) else {})
+
+    def fee_master_key(item):
+        if not isinstance(item, dict):
+            return ""
+        class_name = str(item.get("className") or "").strip().lower()
+        student_type = str(item.get("studentType") or "New Student").strip().lower()
+        if class_name:
+            return f"{class_name}|{student_type}"
+        item_id = str(item.get("id") or "").strip().lower()
+        return f"id:{item_id}" if item_id else ""
+
+    def merge_fee_master_list(server_list, incoming_list):
+        rows = []
+        index_by_key = {}
+        for item in [*(server_list or []), *(incoming_list or [])]:
+            if not isinstance(item, dict):
+                continue
+            key = fee_master_key(item) or json.dumps(item, sort_keys=True, default=str)
+            existing_index = index_by_key.get(key)
+            if existing_index is None:
+                index_by_key[key] = len(rows)
+                rows.append(item)
+                continue
+            existing = rows[existing_index]
+            rows[existing_index] = (
+                {**existing, **item}
+                if fee_master_updated_at(item) >= fee_master_updated_at(existing)
+                else {**item, **existing}
+            )
+        return rows
+
+    for session_name in sessions:
+        server_session = server_sessions.get(session_name) or {}
+        incoming_session = incoming_sessions.get(session_name) or {}
+        if not isinstance(server_session, dict):
+            server_session = {}
+        if not isinstance(incoming_session, dict):
+            incoming_session = {}
+        merged[session_name] = {
+            **server_session,
+            **incoming_session,
+            "feeMaster": merge_fee_master_list(server_session.get("feeMaster") or [], incoming_session.get("feeMaster") or []),
+            "feeGroups": merge_object_lists(
+                server_session.get("feeGroups") or [],
+                incoming_session.get("feeGroups") or [],
+                ["id", "groupName"],
+            ),
+            "dues": merge_object_lists(
+                server_session.get("dues") or [],
+                incoming_session.get("dues") or [],
+                ["id", "admissionNo", "feeHead"],
+            ),
+        }
+    return merged
+
+
 def merge_state_without_losing_receipts(server_state, incoming_state):
     if not isinstance(server_state, dict):
         server_state = {}
@@ -2213,6 +2280,21 @@ def merge_state_without_losing_receipts(server_state, incoming_state):
         incoming_state.get("collectedPayments") or {},
         merged["deletedPaymentReceipts"],
     )
+    merged["financeSessions"] = merge_finance_sessions(
+        server_state.get("financeSessions") or {},
+        incoming_state.get("financeSessions") or {},
+    )
+    try:
+        merged["receiptSerial"] = max(
+            int(server_state.get("receiptSerial") or 0),
+            int(incoming_state.get("receiptSerial") or 0),
+        )
+    except (TypeError, ValueError):
+        merged["receiptSerial"] = incoming_state.get("receiptSerial") or server_state.get("receiptSerial") or 0
+    merged["tuitionFineSetup"] = {
+        **(server_state.get("tuitionFineSetup") if isinstance(server_state.get("tuitionFineSetup"), dict) else {}),
+        **(incoming_state.get("tuitionFineSetup") if isinstance(incoming_state.get("tuitionFineSetup"), dict) else {}),
+    }
     merged["mobileAppSettings"] = {
         **(server_state.get("mobileAppSettings") if isinstance(server_state.get("mobileAppSettings"), dict) else {}),
         **(incoming_state.get("mobileAppSettings") if isinstance(incoming_state.get("mobileAppSettings"), dict) else {}),
@@ -3308,7 +3390,7 @@ def hydrate_collected_payments_from_fee_tables(conn, state):
             """,
             (school_id_from_state(state),),
         ).fetchall()
-    except sqlite3.Error:
+    except db_error_types():
         return state
     if not receipt_rows:
         return state
@@ -3386,7 +3468,7 @@ def hydrate_student_user_accounts_from_user_table(conn):
             ORDER BY full_name COLLATE NOCASE, login_id COLLATE NOCASE
             """
         ).fetchall()
-    except sqlite3.Error:
+    except db_error_types():
         return []
     accounts = []
     for row in rows:
@@ -3415,7 +3497,7 @@ def hydrate_staff_user_accounts_from_user_table(conn):
             ORDER BY full_name COLLATE NOCASE, login_id COLLATE NOCASE
             """
         ).fetchall()
-    except sqlite3.Error:
+    except db_error_types():
         return []
     accounts = []
     for row in rows:
@@ -3445,7 +3527,7 @@ def hydrate_role_permissions_from_table(conn):
             ORDER BY role_name COLLATE NOCASE
             """
         ).fetchall()
-    except sqlite3.Error:
+    except db_error_types():
         return {}
     hydrated = {}
     for row in rows:
@@ -3611,12 +3693,12 @@ def staff_restore_candidate_from_backup_db(path):
     try:
         backup_conn = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
         backup_conn.row_factory = sqlite3.Row
-    except sqlite3.Error:
+    except db_error_types():
         return None
     with backup_conn:
         try:
             rows = backup_conn.execute("SELECT value FROM app_state WHERE key = ?", (STATE_KEY,)).fetchall()
-        except sqlite3.Error:
+        except db_error_types():
             rows = []
         for row in rows:
             try:
@@ -3625,7 +3707,7 @@ def staff_restore_candidate_from_backup_db(path):
                 continue
         try:
             rows = backup_conn.execute("SELECT value FROM state_backups ORDER BY id DESC LIMIT 100").fetchall()
-        except sqlite3.Error:
+        except db_error_types():
             rows = []
         for row in rows:
             try:
@@ -3651,7 +3733,7 @@ def staff_restore_candidate_from_backup_db(path):
                     "status": item.get("status") or row["status"] or "Active",
                 },
             )
-        except sqlite3.Error:
+        except db_error_types():
             staff = []
         if staff:
             candidates.append({"staffMembers": staff, "source": str(path), "count": len(staff)})
@@ -3769,6 +3851,10 @@ def verify_login(username, password):
 @serialized_state_io
 def write_state(value):
     value = ensure_state_school(value)
+    if isinstance(value, dict):
+        deleted = deleted_students_map(value.get("deletedStudents"))
+        value["deletedStudents"] = deleted
+        value["students"] = filter_deleted_students(value.get("students") or [], deleted)
     raw = json.dumps(value, ensure_ascii=False, separators=(",", ":"))
     with connect() as conn:
         previous_row = conn.execute("SELECT value FROM app_state WHERE key = ?", (STATE_KEY,)).fetchone()
@@ -3798,7 +3884,32 @@ def write_state(value):
             (STATE_KEY, raw),
         )
         sync_state_tables(conn, value)
-        capture_state_changes(conn, previous_state, value, IntegrationConfig.from_env())
+        # Isolate BSFV capture so a missing/failed outbox never aborts the ERP save txn.
+        try:
+            conn.execute("SAVEPOINT anps_bsfv_capture")
+            capture_state_changes(conn, previous_state, value, IntegrationConfig.from_env())
+            conn.execute("RELEASE SAVEPOINT anps_bsfv_capture")
+        except Exception as exc:
+            try:
+                conn.execute("ROLLBACK TO SAVEPOINT anps_bsfv_capture")
+            except Exception:
+                pass
+            try:
+                conn.execute(
+                    """
+                    INSERT INTO audit_events (actor, action, entity_type, entity_id, details)
+                    VALUES (?, ?, ?, ?, ?)
+                    """,
+                    (
+                        "system",
+                        "BSFV Capture Warning",
+                        "app_state",
+                        STATE_KEY,
+                        str(exc)[:500],
+                    ),
+                )
+            except Exception:
+                pass
         state_row = conn.execute("SELECT updated_at FROM app_state WHERE key = ?", (STATE_KEY,)).fetchone()
         conn.execute(
             """
@@ -4362,7 +4473,7 @@ def summary():
         state = conn.execute("SELECT length(value) size, updated_at FROM app_state WHERE key = ?", (STATE_KEY,)).fetchone()
     return {
         "ok": True,
-        "database": str(DB_PATH),
+        "database": database_label(),
         "tenant": {
             "mode": "single-school-ready",
             "default_school_id": DEFAULT_SCHOOL_ID,
@@ -4387,10 +4498,7 @@ def summary():
         "state_size": state["size"] if state else 0,
         "updated_at": state["updated_at"] if state else None,
         "fee_append_api": FEE_APPEND_API_ENABLED,
-        "write_disabled": WRITE_DISABLED,
-        "maintenance": WRITE_DISABLED,
-        "canonical_host": CANONICAL_LIVE_HOST,
-        "message": WRITE_DISABLED_MESSAGE if WRITE_DISABLED else None,
+        "db_engine": "postgres" if using_postgres() else "sqlite",
     }
 
 
@@ -4506,7 +4614,7 @@ def readiness_report():
         "ready": not blockers,
         "blockers": blockers,
         "warnings": warnings,
-        "database": str(DB_PATH),
+        "database": database_label(),
         "schema_version": str(DB_SCHEMA_VERSION),
         "tenant": {
             "mode": "single-school-ready",
@@ -4658,6 +4766,9 @@ def state_backup_payload(state, reason):
 
 
 def write_sqlite_db_snapshot(target):
+    if using_postgres():
+        # Postgres backups are handled by pg_dump / volume snapshots on the host.
+        return False
     target.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = target.with_suffix(target.suffix + ".tmp")
     try:
@@ -4673,6 +4784,7 @@ def write_sqlite_db_snapshot(target):
         dest.close()
         source.close()
     tmp_path.replace(target)
+    return True
 
 
 def file_is_recent(path, minutes):
@@ -5198,22 +5310,7 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
         self.send_response(204)
         self.end_headers()
 
-    def write_frozen_response(self):
-        self.json_response(
-            {
-                "ok": False,
-                "error": "write_disabled",
-                "maintenance": True,
-                "message": WRITE_DISABLED_MESSAGE,
-                "canonical_host": CANONICAL_LIVE_HOST,
-            },
-            status=503,
-        )
-        return False
-
     def authorized(self, write=False):
-        if write and WRITE_DISABLED:
-            return self.write_frozen_response()
         origin = self.headers.get("Origin", "")
         if write and origin and not origin_allowed(origin):
             self.json_response({"ok": False, "error": "Origin not allowed"}, status=403)
@@ -5397,14 +5494,6 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
         path = urlparse(self.path).path
         if path == "/api/login":
             return self.login_request()
-        if path == "/api/logout":
-            if not self.authorized():
-                return
-            token = self.headers.get("Authorization", "").replace("Bearer ", "", 1).strip()
-            remove_session_token(token)
-            return self.json_response({"ok": True})
-        if WRITE_DISABLED:
-            return self.write_frozen_response()
         if path == "/api/payments/icici/callback":
             return self.icici_payment_callback_request()
         if path == "/api/staff-biometric/punches":
@@ -5419,6 +5508,10 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
             return self.json_response({"ok": True, **clear_state_backups()})
         if path == "/api/reset-data":
             return self.json_response(reset_live_data())
+        if path == "/api/logout":
+            token = self.headers.get("Authorization", "").replace("Bearer ", "", 1).strip()
+            remove_session_token(token)
+            return self.json_response({"ok": True})
         if path == "/api/schools":
             return self.school_upsert_request()
         if path == "/api/whatsapp/send":
@@ -5450,8 +5543,6 @@ class SchoolERPHandler(SimpleHTTPRequestHandler):
         self.save_state_request()
 
     def do_PUT(self):
-        if WRITE_DISABLED:
-            return self.write_frozen_response()
         if not self.authorized(write=True):
             return
         self.save_state_request()
@@ -5828,7 +5919,7 @@ def main():
         ).start()
     server = BoundedThreadingHTTPServer((HOST, PORT), SchoolERPHandler)
     print(f"School ERP backend running at http://{HOST}:{PORT}/")
-    print(f"SQLite database: {DB_PATH}")
+    print(f"Database: {database_label()} (engine={'postgres' if using_postgres() else 'sqlite'})")
     server.serve_forever()
 
 
