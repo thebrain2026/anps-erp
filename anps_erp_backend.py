@@ -1934,6 +1934,22 @@ def deleted_staff_map(*maps):
     return merged
 
 
+def deleted_timetable_entry_ids(*maps):
+    merged = {}
+    for map_value in maps:
+        if isinstance(map_value, dict):
+            for entry_id, deleted_at in map_value.items():
+                key = str(entry_id or "").strip()
+                if key:
+                    merged[key] = deleted_at or datetime.now().isoformat(timespec="seconds")
+        elif isinstance(map_value, list):
+            for entry_id in map_value:
+                key = str(entry_id or "").strip()
+                if key and key not in merged:
+                    merged[key] = datetime.now().isoformat(timespec="seconds")
+    return merged
+
+
 def filter_deleted_staff(staff_list, deleted_map):
     deleted_map = deleted_map if isinstance(deleted_map, dict) else {}
     return [
@@ -2011,39 +2027,75 @@ def class_timetable_group_key(entry):
     return f"{class_section}|{day}" if class_section or day else ""
 
 
-def merge_class_timetable_entries(server_entries, incoming_entries):
-    """Merge timetables without dropping periods.
+def class_timetable_entry_slot_key(entry):
+    """Period + subject so parallel Hindi/Bengali in one slot both survive."""
+    if not isinstance(entry, dict):
+        return ""
+    period = str(int(numeric_value(entry.get("period")) or 0))
+    subject = str(entry.get("subject") or entry.get("entryType") or "").strip().lower()
+    return f"{period}|{subject}" if subject else period
 
-    Groups by classSection+day, then keeps the newest entry per period.
-    A newer but incomplete day must not wipe other periods on that day
-    (matches frontend mergeClassTimetableEntries).
+
+def dedupe_class_timetable_entries(entries):
+    by_slot = {}
+    for entry in entries or []:
+        if not isinstance(entry, dict):
+            continue
+        slot = class_timetable_entry_slot_key(entry)
+        if not slot:
+            continue
+        existing = by_slot.get(slot)
+        if existing is None or record_updated_time(entry) >= record_updated_time(existing):
+            by_slot[slot] = entry
+    return list(by_slot.values())
+
+
+def merge_class_timetable_entries(server_entries, incoming_entries, deleted_ids=None):
+    """Merge timetables by class+day with builder-style day replacement.
+
+    - Newer class+day snapshot replaces that day (so deletes/orphan periods stick).
+    - Within a day, slots are period+subject (Hindi + Bengali can share a period).
+    - deleted_ids tombstones always win.
     """
+    deleted = {
+        str(entry_id).strip()
+        for entry_id in (deleted_ids or [])
+        if str(entry_id).strip()
+    }
     groups = {}
     for source, entries in (("server", server_entries or []), ("incoming", incoming_entries or [])):
         if not isinstance(entries, list):
             continue
         for entry in entries:
+            if not isinstance(entry, dict):
+                continue
+            entry_id = str(entry.get("id") or "").strip()
+            if entry_id and entry_id in deleted:
+                continue
             key = class_timetable_group_key(entry)
             if not key:
                 continue
             groups.setdefault(key, {"server": [], "incoming": []})[source].append(entry)
     merged = []
     for group in groups.values():
-        by_period = {}
-        for entry in (group["server"] + group["incoming"]):
-            if not isinstance(entry, dict):
-                continue
-            period_key = str(int(numeric_value(entry.get("period")) or 0))
-            existing = by_period.get(period_key)
-            if existing is None or record_updated_time(entry) >= record_updated_time(existing):
-                by_period[period_key] = entry
-        merged.extend(by_period.values())
+        server_group = dedupe_class_timetable_entries(group["server"])
+        incoming_group = dedupe_class_timetable_entries(group["incoming"])
+        if incoming_group and server_group:
+            server_max = max(record_updated_time(entry) for entry in server_group)
+            incoming_max = max(record_updated_time(entry) for entry in incoming_group)
+            chosen = incoming_group if incoming_max >= server_max else server_group
+        elif incoming_group:
+            chosen = incoming_group
+        else:
+            chosen = server_group
+        merged.extend(chosen)
     return sorted(
         merged,
         key=lambda entry: (
             str(entry.get("classSection") or ""),
             str(entry.get("day") or ""),
             numeric_value(entry.get("period")),
+            str(entry.get("subject") or ""),
         ),
     )
 
@@ -2142,9 +2194,14 @@ def merge_state_without_losing_receipts(server_state, incoming_state):
         **(server_state.get("rolePermissionAudit") if isinstance(server_state.get("rolePermissionAudit"), dict) else {}),
         **(incoming_state.get("rolePermissionAudit") if isinstance(incoming_state.get("rolePermissionAudit"), dict) else {}),
     }
+    merged["deletedTimetableEntryIds"] = deleted_timetable_entry_ids(
+        server_state.get("deletedTimetableEntryIds"),
+        incoming_state.get("deletedTimetableEntryIds"),
+    )
     merged["classTimetableEntries"] = merge_class_timetable_entries(
         server_state.get("classTimetableEntries") or [],
         incoming_state.get("classTimetableEntries") or [],
+        deleted_ids=merged["deletedTimetableEntryIds"],
     )
     merged["classSubjectAssignments"], merged["classSubjectAssignmentsUpdatedAt"] = merge_class_subject_assignments(server_state, incoming_state)
     for key, updated_key in PRIMITIVE_SETUP_LIST_UPDATED_AT.items():

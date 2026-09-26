@@ -1,4 +1,4 @@
-"""Timetable merge must not drop periods on class/day conflict."""
+"""Timetable merge: day replace, parallel languages, delete tombstones."""
 
 from __future__ import annotations
 
@@ -42,7 +42,6 @@ def _install_import_stubs():
 
 def _load_backend():
     _install_import_stubs()
-    # Ensure a previously failed real import cannot stick around.
     sys.modules.pop("anps_erp_backend_under_test", None)
     path = Path(__file__).resolve().parents[1] / "anps_erp_backend.py"
     spec = importlib.util.spec_from_file_location("anps_erp_backend_under_test", path)
@@ -66,32 +65,45 @@ def _entry(class_section, day, period, subject, teacher, updated_at, entry_id=No
     }
 
 
-def test_partial_newer_day_does_not_drop_other_periods():
+def test_newer_day_replace_drops_removed_period():
     backend = _load_backend()
     server = [
-        _entry("Class V A", "Monday", 1, "Eng", "T1", "2026-09-20T10:00:00Z"),
-        _entry("Class V A", "Monday", 2, "Math", "T2", "2026-09-20T10:00:00Z"),
-        _entry("Class V A", "Monday", 3, "Sci", "T3", "2026-09-20T10:00:00Z"),
+        _entry("Class IV Amber", "Wednesday", 1, "Science", "T1", "2026-09-20T10:00:00Z"),
+        _entry("Class IV Amber", "Wednesday", 7, "Mathematics", "T2", "2026-09-20T10:00:00Z"),
+        _entry("Class IV Amber", "Wednesday", 8, "Mathematics", "T2", "2026-09-20T10:00:00Z", "orphan-math"),
     ]
     incoming = [
-        _entry("Class V A", "Monday", 1, "Eng", "T1", "2026-09-24T12:00:00Z"),
-        _entry("Class V A", "Monday", 2, "Math", "T2", "2026-09-24T12:00:00Z"),
+        _entry("Class IV Amber", "Wednesday", 1, "Science", "T1", "2026-09-26T12:00:00Z"),
+        _entry("Class IV Amber", "Wednesday", 7, "Mathematics", "T2", "2026-09-26T12:00:00Z"),
     ]
     merged = backend.merge_class_timetable_entries(server, incoming)
-    periods = {(e["day"], int(e["period"]), e["subject"]) for e in merged}
-    assert ("Monday", 1, "Eng") in periods
-    assert ("Monday", 2, "Math") in periods
-    assert ("Monday", 3, "Sci") in periods
+    periods = {(int(e["period"]), e["subject"]) for e in merged}
+    assert periods == {(1, "Science"), (7, "Mathematics")}
+    assert "orphan-math" not in {e["id"] for e in merged}
 
 
-def test_same_period_newer_wins():
+def test_parallel_hindi_bengali_same_period_both_kept():
+    backend = _load_backend()
+    server = [
+        _entry("Class IV Amber", "Thursday", 5, "Hindi", "T1", "2026-09-20T10:00:00Z", "hindi"),
+    ]
+    incoming = [
+        _entry("Class IV Amber", "Thursday", 5, "Hindi", "T1", "2026-09-26T12:00:00Z", "hindi"),
+        _entry("Class IV Amber", "Thursday", 5, "Bengali", "T2", "2026-09-26T12:00:00Z", "bengali"),
+    ]
+    merged = backend.merge_class_timetable_entries(server, incoming)
+    subjects = {e["subject"] for e in merged if int(e["period"]) == 5}
+    assert subjects == {"Hindi", "Bengali"}
+
+
+def test_same_period_same_subject_newer_wins():
     backend = _load_backend()
     server = [_entry("Class V A", "Tuesday", 1, "Eng", "T1", "2026-09-20T10:00:00Z", "a")]
-    incoming = [_entry("Class V A", "Tuesday", 1, "Hin", "T9", "2026-09-24T12:00:00Z", "b")]
+    incoming = [_entry("Class V A", "Tuesday", 1, "Eng", "T9", "2026-09-24T12:00:00Z", "b")]
     merged = backend.merge_class_timetable_entries(server, incoming)
     assert len(merged) == 1
-    assert merged[0]["subject"] == "Hin"
     assert merged[0]["id"] == "b"
+    assert merged[0]["teacher"] == "T9"
 
 
 def test_different_days_are_preserved():
@@ -112,3 +124,17 @@ def test_older_client_cannot_overwrite_newer_day():
     merged = backend.merge_class_timetable_entries(server, incoming)
     periods = {(int(e["period"]), e["subject"]) for e in merged if e["day"] == "Wednesday"}
     assert periods == {(1, "Eng"), (2, "Math")}
+
+
+def test_deleted_ids_are_removed():
+    backend = _load_backend()
+    server = [
+        _entry("Class IV Amber", "Thursday", 5, "Hindi", "T1", "2026-09-26T12:00:00Z", "keep"),
+        _entry("Class IV Amber", "Thursday", 8, "Mathematics", "T2", "2026-09-26T12:00:00Z", "drop"),
+    ]
+    incoming = [
+        _entry("Class IV Amber", "Thursday", 5, "Hindi", "T1", "2026-09-26T12:00:00Z", "keep"),
+        _entry("Class IV Amber", "Thursday", 8, "Mathematics", "T2", "2026-09-26T12:00:00Z", "drop"),
+    ]
+    merged = backend.merge_class_timetable_entries(server, incoming, deleted_ids={"drop": "2026-09-26T12:01:00Z"})
+    assert {e["id"] for e in merged} == {"keep"}

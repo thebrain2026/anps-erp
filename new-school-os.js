@@ -109,6 +109,7 @@ const collectedPayments = {};
 const deletedPaymentReceipts = {};
 const deletedStudents = {};
 const deletedStaff = {};
+const deletedTimetableEntryIds = {};
 const deletedTransportRecords = {
   routes: {},
   vehicles: {},
@@ -509,6 +510,7 @@ function getAppStateSnapshot() {
     studentAbsenceRequests,
     staffMembers,
     deletedStaff,
+    deletedTimetableEntryIds: {...deletedTimetableEntryIds},
     schools,
     school_id: activeSchoolId,
     schoolId: activeSchoolId,
@@ -1175,9 +1177,52 @@ function mergeEditableObjectLists(remoteState = {}, localState = {}) {
   ]));
 }
 
-function mergeClassTimetableEntries(remoteEntries = [], localEntries = []) {
+function getDeletedTimetableEntryIdMap(...maps) {
+  const merged = {};
+  maps.forEach(map => {
+    if (!map || typeof map !== "object") return;
+    if (Array.isArray(map)) {
+      map.forEach(entryId => {
+        const key = String(entryId || "").trim();
+        if (key && !merged[key]) merged[key] = new Date().toISOString();
+      });
+      return;
+    }
+    Object.entries(map).forEach(([entryId, deletedAt]) => {
+      const key = String(entryId || "").trim();
+      if (key) merged[key] = deletedAt || new Date().toISOString();
+    });
+  });
+  return merged;
+}
+
+function markTimetableEntryDeleted(entryId = "") {
+  const key = String(entryId || "").trim();
+  if (key) deletedTimetableEntryIds[key] = new Date().toISOString();
+}
+
+function timetableEntrySlotKey(entry = {}) {
+  const period = String(Number(entry?.period || 0));
+  const subject = String(entry?.subject || entry?.entryType || "").trim().toLowerCase();
+  return subject ? `${period}|${subject}` : period;
+}
+
+function dedupeClassTimetableEntries(entries = []) {
+  const bySlot = new Map();
+  (Array.isArray(entries) ? entries : []).forEach(entry => {
+    if (!entry || typeof entry !== "object") return;
+    const key = timetableEntrySlotKey(entry);
+    if (!key) return;
+    const existing = bySlot.get(key);
+    if (!existing || getRecordUpdatedTime(entry) >= getRecordUpdatedTime(existing)) bySlot.set(key, entry);
+  });
+  return [...bySlot.values()];
+}
+
+function mergeClassTimetableEntries(remoteEntries = [], localEntries = [], deletedMap = deletedTimetableEntryIds) {
   const remoteList = Array.isArray(remoteEntries) ? remoteEntries : [];
   const localList = Array.isArray(localEntries) ? localEntries : [];
+  const deleted = getDeletedTimetableEntryIdMap(deletedMap);
   const groups = new Map();
   const groupKey = entry => [
     String(entry?.classSection || `${entry?.className || ""} ${entry?.sectionName || ""}`).trim().replace(/\s+/g, " ").toLowerCase(),
@@ -1185,6 +1230,8 @@ function mergeClassTimetableEntries(remoteEntries = [], localEntries = []) {
   ].join("|");
   const addGroup = (entry, source) => {
     if (!entry || typeof entry !== "object") return;
+    const entryId = String(entry.id || "").trim();
+    if (entryId && deleted[entryId]) return;
     const key = groupKey(entry);
     if (!key || key === "|") return;
     if (!groups.has(key)) groups.set(key, {remote: [], local: []});
@@ -1194,19 +1241,23 @@ function mergeClassTimetableEntries(remoteEntries = [], localEntries = []) {
   localList.forEach(entry => addGroup(entry, "local"));
   const merged = [];
   groups.forEach(group => {
-    const periodKey = entry => String(Number(entry?.period || 0));
-    const byPeriod = new Map();
-    [...group.remote, ...group.local].forEach(entry => {
-      const key = periodKey(entry);
-      const existing = byPeriod.get(key);
-      if (!existing || getRecordUpdatedTime(entry) >= getRecordUpdatedTime(existing)) byPeriod.set(key, entry);
-    });
-    merged.push(...byPeriod.values());
+    const remoteGroup = dedupeClassTimetableEntries(group.remote);
+    const localGroup = dedupeClassTimetableEntries(group.local);
+    let chosen = remoteGroup;
+    if (localGroup.length && remoteGroup.length) {
+      const remoteMax = Math.max(...remoteGroup.map(entry => getRecordUpdatedTime(entry)));
+      const localMax = Math.max(...localGroup.map(entry => getRecordUpdatedTime(entry)));
+      chosen = localMax >= remoteMax ? localGroup : remoteGroup;
+    } else if (localGroup.length) {
+      chosen = localGroup;
+    }
+    merged.push(...chosen);
   });
   return merged.sort((a, b) =>
     String(a.classSection || "").localeCompare(String(b.classSection || ""), undefined, {numeric: true}) ||
     String(a.day || "").localeCompare(String(b.day || ""), undefined, {numeric: true}) ||
-    Number(a.period || 0) - Number(b.period || 0)
+    Number(a.period || 0) - Number(b.period || 0) ||
+    String(a.subject || "").localeCompare(String(b.subject || ""), undefined, {numeric: true})
   );
 }
 
@@ -1214,6 +1265,7 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
   const merged = {...remoteState, ...localState};
   merged.deletedStudents = getDeletedStudentMap(remoteState.deletedStudents, localState.deletedStudents);
   merged.deletedStaff = getDeletedStaffMap(remoteState.deletedStaff, localState.deletedStaff);
+  merged.deletedTimetableEntryIds = getDeletedTimetableEntryIdMap(remoteState.deletedTimetableEntryIds, localState.deletedTimetableEntryIds);
   merged.deletedTransportRecords = mergeDeletedTransportRecords(remoteState.deletedTransportRecords, localState.deletedTransportRecords);
   const primitiveKeys = [
     "customAdmissionClasses",
@@ -1267,7 +1319,7 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
   merged.classSubjectAssignmentsUpdatedAt = getRecordUpdatedTime({updatedAt: localState.classSubjectAssignmentsUpdatedAt}) >= getRecordUpdatedTime({updatedAt: remoteState.classSubjectAssignmentsUpdatedAt})
     ? localState.classSubjectAssignmentsUpdatedAt || remoteState.classSubjectAssignmentsUpdatedAt || ""
     : remoteState.classSubjectAssignmentsUpdatedAt || localState.classSubjectAssignmentsUpdatedAt || "";
-  merged.classTimetableEntries = mergeClassTimetableEntries(remoteState.classTimetableEntries, localState.classTimetableEntries);
+  merged.classTimetableEntries = mergeClassTimetableEntries(remoteState.classTimetableEntries, localState.classTimetableEntries, merged.deletedTimetableEntryIds);
   merged.deletedPaymentReceipts = getDeletedPaymentReceiptMap(remoteState.deletedPaymentReceipts, localState.deletedPaymentReceipts);
   merged.collectedPayments = mergeCollectedPayments(remoteState.collectedPayments || {}, localState.collectedPayments || {}, merged.deletedPaymentReceipts);
   merged.financeSessions = mergeFinanceSessions(remoteState.financeSessions || {}, localState.financeSessions || {});
@@ -1278,6 +1330,7 @@ function mergeSetupSafeState(backendState = {}, localSnapshot = {}) {
   const deletedMap = getDeletedPaymentReceiptMap(backendState.deletedPaymentReceipts, localSnapshot.deletedPaymentReceipts);
   const deletedTransportMap = mergeDeletedTransportRecords(backendState.deletedTransportRecords, localSnapshot.deletedTransportRecords);
   const deletedStaffMap = getDeletedStaffMap(backendState.deletedStaff, localSnapshot.deletedStaff);
+  const deletedTimetableMap = getDeletedTimetableEntryIdMap(backendState.deletedTimetableEntryIds, localSnapshot.deletedTimetableEntryIds);
   return {
     ...backendState,
     customAdmissionClasses: mergePrimitiveSetupList(backendState, localSnapshot, "customAdmissionClasses"),
@@ -1307,13 +1360,14 @@ function mergeSetupSafeState(backendState = {}, localSnapshot = {}) {
     transportFineSetup: {...(backendState.transportFineSetup || {}), ...(localSnapshot.transportFineSetup || {})},
     deletedTransportRecords: deletedTransportMap,
     deletedStaff: deletedStaffMap,
+    deletedTimetableEntryIds: deletedTimetableMap,
     students: mergeStudentList(backendState.students || [], localSnapshot.students || [], getDeletedStudentMap(backendState.deletedStudents, localSnapshot.deletedStudents)),
     ...mergeEditableObjectLists(backendState, localSnapshot),
     staffMembers: filterDeletedStaff(
       mergeObjectListByKey(backendState.staffMembers || [], localSnapshot.staffMembers || [], EDITABLE_OBJECT_MERGE_RULES.staffMembers),
       deletedStaffMap
     ),
-    classTimetableEntries: mergeClassTimetableEntries(backendState.classTimetableEntries, localSnapshot.classTimetableEntries),
+    classTimetableEntries: mergeClassTimetableEntries(backendState.classTimetableEntries, localSnapshot.classTimetableEntries, deletedTimetableMap),
     rolePermissions: {...(backendState.rolePermissions || {}), ...(localSnapshot.rolePermissions || {})},
     rolePermissionAudit: {...(backendState.rolePermissionAudit || {}), ...(localSnapshot.rolePermissionAudit || {})},
     staffBiometricDevice: {...(backendState.staffBiometricDevice || {}), ...(localSnapshot.staffBiometricDevice || {})},
@@ -1613,6 +1667,10 @@ function applySavedState(saved = {}) {
       Object.keys(deletedStaff).forEach(staffId => delete deletedStaff[staffId]);
       Object.assign(deletedStaff, getDeletedStaffMap(saved.deletedStaff));
     }
+    if (saved.deletedTimetableEntryIds && typeof saved.deletedTimetableEntryIds === "object") {
+      Object.keys(deletedTimetableEntryIds).forEach(entryId => delete deletedTimetableEntryIds[entryId]);
+      Object.assign(deletedTimetableEntryIds, getDeletedTimetableEntryIdMap(saved.deletedTimetableEntryIds));
+    }
     if (saved.deletedStudents && typeof saved.deletedStudents === "object") {
       Object.keys(deletedStudents).forEach(admissionNo => delete deletedStudents[admissionNo]);
       Object.assign(deletedStudents, getDeletedStudentMap(saved.deletedStudents));
@@ -1750,6 +1808,7 @@ function applySavedState(saved = {}) {
         classTimetableEntries.length,
         ...saved.classTimetableEntries
           .filter(entry => !isMobileOnlyTimetableEntry(entry))
+          .filter(entry => !deletedTimetableEntryIds[String(entry?.id || "").trim()])
           .map(normalizeMainErpTimetableEntry)
       );
     }
@@ -17000,6 +17059,7 @@ classTimetableForm.addEventListener("submit", event => {
   const classSection = `${className} ${sectionName}`.trim();
   for (let index = classTimetableEntries.length - 1; index >= 0; index -= 1) {
     if (classTimetableEntries[index].classSection === classSection && classTimetableEntries[index].day === day) {
+      markTimetableEntryDeleted(classTimetableEntries[index].id);
       classTimetableEntries.splice(index, 1);
     }
   }
@@ -18407,6 +18467,7 @@ document.body.addEventListener("click", event => {
   if (deleteTimetable) {
     const index = classTimetableEntries.findIndex(entry => entry.id === deleteTimetable.dataset.deleteTimetable);
     if (index >= 0 && confirm("Delete this timetable entry?")) {
+      markTimetableEntryDeleted(classTimetableEntries[index].id);
       classTimetableEntries.splice(index, 1);
       const saved = saveAppState();
       renderClassTimetable();
