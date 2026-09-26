@@ -1934,6 +1934,41 @@ def deleted_staff_map(*maps):
     return merged
 
 
+def admission_delete_key(value):
+    """Canonical admission key for deletedStudents (matches ERP client normalizeAdmissionNo)."""
+    clean = re.sub(r"\s*/\s*", "/", str(value or "").strip())
+    clean = re.sub(r"\s+", "", clean)
+    match = re.match(r"^(anps-adm/[^/]+/)(.+)$", clean, re.IGNORECASE)
+    if match:
+        serial = match.group(2).strip()
+        canonical_serial = str(int(serial)) if serial.isdigit() else serial.lower()
+        return f"{match.group(1).lower()}{canonical_serial}"
+    return clean.lower()
+
+
+def deleted_students_map(*maps):
+    merged = {}
+    for map_value in maps:
+        if not isinstance(map_value, dict):
+            continue
+        for admission_no, deleted_at in map_value.items():
+            key = admission_delete_key(admission_no)
+            if key:
+                merged[key] = deleted_at or datetime.now().isoformat(timespec="seconds")
+    return merged
+
+
+def filter_deleted_students(student_list, deleted_map):
+    deleted_map = deleted_map if isinstance(deleted_map, dict) else {}
+    return [
+        student for student in (student_list if isinstance(student_list, list) else [])
+        if isinstance(student, dict)
+        and not deleted_map.get(
+            admission_delete_key(student.get("admissionNo") or student.get("id") or student.get("admission_no") or "")
+        )
+    ]
+
+
 def deleted_timetable_entry_ids(*maps):
     merged = {}
     for map_value in maps:
@@ -2158,9 +2193,16 @@ def merge_state_without_losing_receipts(server_state, incoming_state):
         server_state.get("deletedStaff"),
         incoming_state.get("deletedStaff"),
     )
-    merged["students"] = merge_student_lists(
-        server_state.get("students") or [],
-        incoming_state.get("students") or [],
+    merged["deletedStudents"] = deleted_students_map(
+        server_state.get("deletedStudents"),
+        incoming_state.get("deletedStudents"),
+    )
+    merged["students"] = filter_deleted_students(
+        merge_student_lists(
+            server_state.get("students") or [],
+            incoming_state.get("students") or [],
+        ),
+        merged["deletedStudents"],
     )
     merged["deletedPaymentReceipts"] = deleted_payment_receipt_map(
         server_state.get("deletedPaymentReceipts") or {},
