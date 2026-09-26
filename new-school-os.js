@@ -9013,10 +9013,22 @@ function dueFeesStudentMatchesSearch(student, query = "") {
   return rawMatch || compactMatch || admissionLastMatch;
 }
 
+function getMonthlyFeeHeadDueAmount(student, row, month) {
+  const monthlyAmount = Number(row?.monthlyAmount || 0);
+  if (!student || !row || !month || monthlyAmount <= 0) return 0;
+  if (row.name === "Tuition Fee") {
+    return Math.max(monthlyAmount - Number(getTuitionMonthPaidInfo(student, row, month).tuition || 0), 0);
+  }
+  if (row.name === "Transport Fees") {
+    return Math.max(monthlyAmount - Number(getTransportMonthPaidInfo(student, row, month).transport || 0), 0);
+  }
+  const paid = Math.min(monthlyAmount, Number(getLedgerMonthFeePaidAmount(student, row, month) || 0));
+  return Math.max(monthlyAmount - paid, 0);
+}
+
 function getSearchDueMonthDetails(student, row, selectedMonth = "") {
   const monthCutoff = selectedMonth ? ACADEMIC_MONTHS.indexOf(selectedMonth) : -1;
   const today = new Date();
-  const paidMonths = getPaidLedgerMonths(student, row);
   return (row.months || [])
     .filter(month => {
       const monthIndex = ACADEMIC_MONTHS.indexOf(month);
@@ -9024,19 +9036,13 @@ function getSearchDueMonthDetails(student, row, selectedMonth = "") {
       return getAcademicMonthDate(month, 1) <= today;
     })
     .map(month => {
-      if (row.name === "Tuition Fee") {
-        const paid = getTuitionMonthPaidInfo(student, row, month);
-        const amount = Math.max(Number(row.monthlyAmount || 0) - paid.tuition, 0);
-        const fineDue = getTuitionMonthFineDue(student, row, month);
-        return {month, amount, fine: fineDue, total: amount + fineDue};
-      }
-      if (row.name === "Transport Fees") {
-        const paid = getTransportMonthPaidInfo(student, row, month);
-        const amount = Math.max(Number(row.monthlyAmount || 0) - Number(paid.transport || 0), 0);
-        const fineDue = getTransportMonthFineDue(student, row, month);
-        return {month, amount, fine: fineDue, total: amount + fineDue};
-      }
-      return paidMonths.has(month) ? null : {month, amount: Number(row.monthlyAmount || 0), fine: 0, total: Number(row.monthlyAmount || 0)};
+      const amount = getMonthlyFeeHeadDueAmount(student, row, month);
+      const fineDue = row.name === "Tuition Fee"
+        ? getTuitionMonthFineDue(student, row, month)
+        : row.name === "Transport Fees"
+          ? getTransportMonthFineDue(student, row, month)
+          : 0;
+      return amount + fineDue > 0 ? {month, amount, fine: fineDue, total: amount + fineDue} : null;
     })
     .filter(item => item && item.total > 0);
 }
@@ -9044,22 +9050,13 @@ function getSearchDueMonthDetails(student, row, selectedMonth = "") {
 function getSearchDueMonthItem(student, row, month) {
   if (!Array.isArray(row.months) || !row.months.includes(month)) return null;
   if (getAcademicMonthDate(month, 1) > new Date()) return null;
-  const paidMonths = getPaidLedgerMonths(student, row);
-  if (row.name === "Tuition Fee") {
-    const paid = getTuitionMonthPaidInfo(student, row, month);
-    const amount = Math.max(Number(row.monthlyAmount || 0) - paid.tuition, 0);
-    const fineDue = getTuitionMonthFineDue(student, row, month);
-    return amount + fineDue > 0 ? {month, amount, fine: fineDue, total: amount + fineDue} : null;
-  }
-  if (row.name === "Transport Fees") {
-    const paid = getTransportMonthPaidInfo(student, row, month);
-    const amount = Math.max(Number(row.monthlyAmount || 0) - Number(paid.transport || 0), 0);
-    const fineDue = getTransportMonthFineDue(student, row, month);
-    return amount + fineDue > 0 ? {month, amount, fine: fineDue, total: amount + fineDue} : null;
-  }
-  if (paidMonths.has(month)) return null;
-  const amount = Number(row.monthlyAmount || 0);
-  return amount > 0 ? {month, amount, fine: 0, total: amount} : null;
+  const amount = getMonthlyFeeHeadDueAmount(student, row, month);
+  const fineDue = row.name === "Tuition Fee"
+    ? getTuitionMonthFineDue(student, row, month)
+    : row.name === "Transport Fees"
+      ? getTransportMonthFineDue(student, row, month)
+      : 0;
+  return amount + fineDue > 0 ? {month, amount, fine: fineDue, total: amount + fineDue} : null;
 }
 
 function getDueFeesStudentClassSections() {
@@ -12648,30 +12645,19 @@ function getCombinedCollectionItems(student, month, paymentDate = new Date(), in
           return rowMonthIndex >= 0 && rowMonthIndex <= selectedMonthIndex;
         })
         : [month];
-      if (row.name === "Tuition Fee") {
-        return collectMonths.map(collectMonth => {
-          const paid = getTuitionMonthPaidInfo(student, row, collectMonth);
-          const amount = Math.max(Number(row.monthlyAmount || 0) - Number(paid.tuition || 0), 0);
-          const fine = getTuitionMonthCollectFineDue(student, row, collectMonth, parseDateDDMMYYYY(paymentDate));
-          return amount + fine > 0
-            ? {head: row.name, month: collectMonth, amount, fine, total: amount + fine, partial: Number(paid.tuition || 0) > 0 && amount > 0}
-            : null;
-        });
-      }
-      if (row.name === "Transport Fees") {
-        return collectMonths.map(collectMonth => {
-          const paid = getTransportMonthPaidInfo(student, row, collectMonth);
-          const amount = Math.max(Number(row.monthlyAmount || 0) - Number(paid.transport || 0), 0);
-          const fine = getTransportMonthCollectFineDue(student, row, collectMonth, parseDateDDMMYYYY(paymentDate));
-          return amount + fine > 0
-            ? {head: row.name, month: collectMonth, amount, fine, total: amount + fine, partial: Number(paid.transport || 0) > 0 && amount > 0}
-            : null;
-        });
-      }
-      const paidMonths = getPaidLedgerMonths(student, row);
-      if (paidMonths.has(month)) return null;
-      const amount = Number(row.monthlyAmount || 0);
-      return amount > 0 ? {head: row.name, month, amount, fine: 0, total: amount, partial: isLedgerMonthPartiallyPaid(student, row, month)} : null;
+      return collectMonths.map(collectMonth => {
+        const amount = getMonthlyFeeHeadDueAmount(student, row, collectMonth);
+        const monthlyAmount = Number(row.monthlyAmount || 0);
+        const paidAmount = Math.max(monthlyAmount - amount, 0);
+        const fine = row.name === "Tuition Fee"
+          ? getTuitionMonthCollectFineDue(student, row, collectMonth, parseDateDDMMYYYY(paymentDate))
+          : row.name === "Transport Fees"
+            ? getTransportMonthCollectFineDue(student, row, collectMonth, parseDateDDMMYYYY(paymentDate))
+            : 0;
+        return amount + fine > 0
+          ? {head: row.name, month: collectMonth, amount, fine, total: amount + fine, partial: paidAmount > 0 && amount > 0}
+          : null;
+      });
     })
     .filter(item => item && item.total > 0);
 }
