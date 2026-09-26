@@ -4865,6 +4865,61 @@ function createTimetableBuilderRow() {
   return {id: `tt-row-${Date.now()}-${Math.random().toString(16).slice(2)}`, subject: "", teacher: "", startTime: "", endTime: "", room: ""};
 }
 
+function getMondayTimetableRooms(classSection = "") {
+  const mondayEntries = classTimetableEntries
+    .filter(entry => entry.classSection === classSection && entry.day === "Monday")
+    .sort((a, b) => Number(a.period || 0) - Number(b.period || 0));
+  const roomsByPeriod = new Map();
+  const roomsByIndex = [];
+  mondayEntries.forEach((entry, index) => {
+    const room = String(entry.room || "").trim();
+    roomsByIndex[index] = room;
+    const period = Number(entry.period || 0);
+    if (period && room && !roomsByPeriod.has(period)) roomsByPeriod.set(period, room);
+  });
+  return {roomsByPeriod, roomsByIndex};
+}
+
+function fillBuilderRoomsFromMonday(classSection = "") {
+  if (!classSection || !timetableBuilderRows.length) return false;
+  const {roomsByPeriod, roomsByIndex} = getMondayTimetableRooms(classSection);
+  if (!roomsByPeriod.size && !roomsByIndex.some(Boolean)) return false;
+  const logicalPeriods = getTimetableLogicalPeriods(timetableBuilderRows);
+  let filled = false;
+  timetableBuilderRows = timetableBuilderRows.map((row, index) => {
+    if (String(row.room || "").trim()) return row;
+    const period = Number(logicalPeriods[index] || index + 1);
+    const room = roomsByPeriod.get(period) || roomsByIndex[index] || "";
+    if (!room) return row;
+    filled = true;
+    return {...row, room};
+  });
+  return filled;
+}
+
+function fillSavedOtherDayRoomsFromMonday(classSection = "") {
+  if (!classSection) return 0;
+  const {roomsByPeriod, roomsByIndex} = getMondayTimetableRooms(classSection);
+  if (!roomsByPeriod.size && !roomsByIndex.some(Boolean)) return 0;
+  const otherDays = ["Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+  let updated = 0;
+  otherDays.forEach(day => {
+    const dayEntries = classTimetableEntries
+      .filter(entry => entry.classSection === classSection && entry.day === day)
+      .sort((a, b) => Number(a.period || 0) - Number(b.period || 0));
+    dayEntries.forEach((entry, index) => {
+      if (String(entry.room || "").trim()) return;
+      const period = Number(entry.period || 0);
+      const room = (period && roomsByPeriod.get(period)) || roomsByIndex[index] || "";
+      if (!room) return;
+      entry.room = room;
+      entry.updatedAt = new Date().toISOString();
+      updated += 1;
+    });
+  });
+  return updated;
+}
+
 function getParallelLanguageGroup(row = {}) {
   const subject = normalizeText(row.subject || row.entryType || "").toLowerCase();
   const isLanguage = subject.includes("language") || subject.includes("laguage");
@@ -5153,20 +5208,22 @@ function loadTimetableBuilderForSelection(options = {}) {
     renderTimetableBuilderSavedEntries();
     return;
   }
+  const classSection = `${className} ${sectionName}`.trim();
   if (!shouldLoadExisting) {
     timetableBuilderRows = [createTimetableBuilderRow()];
     timetableIntervalMap = {};
+    if (day !== "Monday") fillBuilderRoomsFromMonday(classSection);
     renderTimetableBuilderRows();
     renderTimetableBuilderSavedEntries();
     return;
   }
-  const classSection = `${className} ${sectionName}`.trim();
   const existingEntries = classTimetableEntries
     .filter(entry => entry.classSection === classSection && entry.day === day)
     .sort((a, b) => Number(a.period || 0) - Number(b.period || 0));
   if (!existingEntries.length) {
     timetableBuilderRows = [createTimetableBuilderRow()];
     timetableIntervalMap = {};
+    if (day !== "Monday") fillBuilderRoomsFromMonday(classSection);
     renderTimetableBuilderRows();
     renderTimetableBuilderSavedEntries();
     return;
@@ -5180,6 +5237,7 @@ function loadTimetableBuilderForSelection(options = {}) {
     room: entry.room || ""
   }));
   timetableIntervalMap = {};
+  if (day !== "Monday") fillBuilderRoomsFromMonday(classSection);
   renderTimetableBuilderRows();
   renderTimetableBuilderSavedEntries();
 }
@@ -17102,6 +17160,8 @@ classTimetableForm.addEventListener("submit", event => {
   const className = String(classTimetableForm.elements.className?.value || "").trim();
   const sectionName = String(classTimetableForm.elements.sectionName?.value || "").trim();
   const day = String(classTimetableForm.elements.day?.value || activeTimetableDay || "Monday");
+  const classSection = `${className} ${sectionName}`.trim();
+  if (day !== "Monday") fillBuilderRoomsFromMonday(classSection);
   const validRows = timetableBuilderRows.filter(row => row.subject || row.teacher || row.startTime || row.endTime || row.room);
   if (!className || !sectionName || !day) {
     showToast("Class, section and day required.");
@@ -17115,7 +17175,6 @@ classTimetableForm.addEventListener("submit", event => {
     showToast("If timing is entered, both time from and time to are required.");
     return;
   }
-  const classSection = `${className} ${sectionName}`.trim();
   for (let index = classTimetableEntries.length - 1; index >= 0; index -= 1) {
     if (classTimetableEntries[index].classSection === classSection && classTimetableEntries[index].day === day) {
       markTimetableEntryDeleted(classTimetableEntries[index].id);
@@ -17143,6 +17202,7 @@ classTimetableForm.addEventListener("submit", event => {
     note: ""
   }));
   classTimetableEntries.unshift(...entries);
+  if (day === "Monday") fillSavedOtherDayRoomsFromMonday(classSection);
   const saved = saveAppState();
   renderClassTimetable();
   renderClassTimetableOptions();
@@ -17179,6 +17239,12 @@ document.getElementById("closeClassTimetableBuilder").addEventListener("click", 
 document.getElementById("addTimetableRow").addEventListener("click", () => {
   syncTimetableBuilderRowsFromDom();
   timetableBuilderRows.push(createTimetableBuilderRow());
+  const className = String(classTimetableForm.elements.className?.value || "").trim();
+  const sectionName = String(classTimetableForm.elements.sectionName?.value || "").trim();
+  const day = String(classTimetableForm.elements.day?.value || activeTimetableDay || "Monday");
+  if (day !== "Monday" && className && sectionName) {
+    fillBuilderRoomsFromMonday(`${className} ${sectionName}`.trim());
+  }
   renderTimetableBuilderRows();
 });
 document.getElementById("applyTimetableQuick").addEventListener("click", applyTimetableQuickParameters);
