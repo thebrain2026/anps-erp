@@ -972,8 +972,9 @@ h2 { font-size: 1.15rem; }
 
 .due-students-kpi-card small span:first-child {
   color: #14798b;
-  font-weight: 950;
-  text-transform: uppercase;
+  font-weight: 900;
+  text-transform: none;
+  letter-spacing: 0;
 }
 
 .kpi-card span {

@@ -6946,7 +6946,10 @@ function getRunningAcademicMonth() {
 
 function getDashboardDueStudentsSummary() {
   const dueStudents = new Map();
-  const monthsWithDue = new Set();
+  const monthStudentKeys = ACADEMIC_MONTHS.reduce((map, month) => {
+    map[month] = new Set();
+    return map;
+  }, {});
   const today = new Date();
   getActiveStudents().forEach(student => {
     const admissionKey = normalizeAdmissionNo(student.admissionNo || "");
@@ -6959,17 +6962,20 @@ function getDashboardDueStudentsSummary() {
         const item = getSearchDueMonthItem(student, row, month);
         if (!item) return;
         studentDue += Number(item.total || 0);
-        monthsWithDue.add(month);
+        monthStudentKeys[month]?.add(key);
       });
     });
     if (studentDue > 0) dueStudents.set(key, studentDue);
   });
   const totalDue = [...dueStudents.values()].reduce((sum, amount) => sum + Number(amount || 0), 0);
+  const monthBreakdown = ACADEMIC_MONTHS
+    .map(month => ({month, count: monthStudentKeys[month]?.size || 0}))
+    .filter(item => item.count > 0);
   return {
     studentCount: dueStudents.size,
     totalDue,
-    monthCount: monthsWithDue.size,
-    months: ACADEMIC_MONTHS.filter(month => monthsWithDue.has(month))
+    monthCount: monthBreakdown.length,
+    monthBreakdown
   };
 }
 
@@ -6979,10 +6985,10 @@ function renderDashboardDueStudents() {
   const amountEl = document.getElementById("dashboardDueStudentsAmount");
   if (!monthEl || !countEl || !amountEl) return;
   const summary = getDashboardDueStudentsSummary();
-  // Keep the same compact subtitle shape; show how many months still have dues.
-  monthEl.textContent = summary.monthCount
-    ? `${summary.monthCount} month${summary.monthCount === 1 ? "" : "s"} due`
-    : "No month due";
+  // Example: Apr-10, May-13, Jun-16 — months with zero dues stay hidden.
+  monthEl.textContent = summary.monthBreakdown.length
+    ? summary.monthBreakdown.map(item => `${item.month}-${item.count}`).join(", ")
+    : "No dues";
   countEl.textContent = summary.studentCount.toLocaleString("en-IN");
   amountEl.textContent = `Due amount ${formatRs(summary.totalDue)}`;
 }
