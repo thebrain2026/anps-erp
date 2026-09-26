@@ -5047,10 +5047,16 @@ function applyTimetableQuickParameters(options = {}) {
   syncTimetableBuilderRowsFromDom();
   const startTime = classTimetableForm.elements.periodStartTime?.value || "";
   const duration = Number(classTimetableForm.elements.periodDuration?.value || 0);
-  const room = classTimetableForm.elements.quickRoom?.value || "";
+  const room = String(classTimetableForm.elements.quickRoom?.value || "").trim();
   const fillMode = classTimetableForm.elements.timeFillMode?.value || "blank";
   const fillBlankOnly = !options.forceOverwrite && fillMode !== "overwrite";
   if (!startTime || duration <= 0) {
+    if (room) {
+      timetableBuilderRows = timetableBuilderRows.map(row => ({...row, room: room || row.room}));
+      renderTimetableBuilderRows();
+      showToast(`Room ${room} applied to open rows.`);
+      return true;
+    }
     showToast("Period start time and duration required.");
     renderTimetableIntervalOptions();
     return false;
@@ -5216,6 +5222,8 @@ function renderClassTimetableOptions() {
     sectionFilter.innerHTML = `<option value="">All Sections</option>${sections.map(section => `<option value="${escapeHtml(section)}">${escapeHtml(section)}</option>`).join("")}`;
     if (selected && sections.includes(selected)) sectionFilter.value = selected;
   }
+  // Keep in-progress builder edits when options refresh (e.g. after remote sync / save).
+  syncTimetableBuilderRowsFromDom();
   renderTimetableBuilderRows();
   renderTimetableBuilderSavedEntries();
 }
@@ -17132,18 +17140,23 @@ classTimetableForm.addEventListener("submit", event => {
   const saved = saveAppState();
   renderClassTimetable();
   renderClassTimetableOptions();
-  if (!saved) {
-    renderTimetableBuilderRows();
-    renderTimetableBuilderSavedEntries();
-    renderTeacherTimetable();
-    return;
-  }
-  timetableBuilderRows = [createTimetableBuilderRow()];
-  timetableIntervalMap = {};
-  renderTimetableBuilderRows();
-  renderTimetableBuilderSavedEntries();
+  // Keep the just-saved day loaded in the builder so room/subject edits do not look wiped.
+  loadTimetableBuilderForSelection({loadExisting: true});
   renderTeacherTimetable();
+  if (!saved) return;
   showToast(`${classSection} ${day} timetable saved.`);
+});
+
+// Enter in Room / time fields must not accidentally submit and clear the builder.
+classTimetableForm.addEventListener("keydown", event => {
+  if (event.key !== "Enter") return;
+  const target = event.target;
+  if (!(target instanceof HTMLElement)) return;
+  if (target.matches("textarea, button, [type='submit']")) return;
+  event.preventDefault();
+  if (target.matches("[name='quickRoom'], [name='periodStartTime'], [name='periodDuration'], [name='periodInterval']")) {
+    applyTimetableQuickParameters();
+  }
 });
 
 classTimetableForm.elements.className.addEventListener("change", () => {
@@ -17151,7 +17164,10 @@ classTimetableForm.elements.className.addEventListener("change", () => {
   renderClassTimetableOptions();
   loadTimetableBuilderForSelection();
 });
-classTimetableForm.elements.sectionName.addEventListener("change", loadTimetableBuilderForSelection);
+classTimetableForm.elements.sectionName.addEventListener("change", () => {
+  syncTimetableBuilderRowsFromDom();
+  loadTimetableBuilderForSelection();
+});
 document.getElementById("openClassTimetableBuilder").addEventListener("click", () => setClassTimetableBuilderVisible(true));
 document.getElementById("closeClassTimetableBuilder").addEventListener("click", () => setClassTimetableBuilderVisible(false));
 document.getElementById("addTimetableRow").addEventListener("click", () => {
@@ -17180,6 +17196,7 @@ document.getElementById("timetableIntervalList").addEventListener("click", event
 document.getElementById("classTimetableDayTabs").addEventListener("click", event => {
   const button = event.target.closest("[data-timetable-day]");
   if (!button) return;
+  syncTimetableBuilderRowsFromDom();
   activeTimetableDay = button.dataset.timetableDay || "Monday";
   classTimetableForm.elements.day.value = activeTimetableDay;
   const savedDayFilter = document.getElementById("classTimetableSavedDayFilter");
