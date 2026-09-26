@@ -1131,6 +1131,23 @@ h2 { font-size: 1.15rem; }
   font-weight: 800;
 }
 
+.monthly-fee-head-list .monthly-fee-head-row {
+  align-items: flex-start;
+}
+
+.monthly-fee-head-list .monthly-fee-head-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.monthly-fee-head-list .monthly-fee-head-copy small {
+  color: #64748b;
+  font-size: .68rem;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
 .monthly-fee-head-list div.discount {
   color: #92400e;
 }

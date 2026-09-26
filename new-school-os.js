@@ -9323,6 +9323,37 @@ function getDashboardMonthlyFeeCollectionSummary() {
   };
 }
 
+function getDashboardFeeHeadStudentStatKey(head = "") {
+  const normalized = normalizePaymentFeeHead(head).toLowerCase();
+  if (["tuition fee", "tuition fees"].includes(normalized)) return "tuition";
+  if (["transport fees", "transport fee", "transport"].includes(normalized)) return "transport";
+  if (["day boarding fees", "day boarding fee", "day boarding"].includes(normalized)) return "dayBoarding";
+  if (["robotics fees", "robotics fee", "robotics"].includes(normalized)) return "robotics";
+  if (["tiffin fees", "tiffin fee", "tiffin", "tiffin/lunch/other", "tiffin lunch other"].includes(normalized)) return "tiffin";
+  return "";
+}
+
+function addDashboardFeeHeadAmount(heads, head, amount = 0, studentKey = "") {
+  const label = normalizePaymentFeeHead(head || "Payment");
+  const current = heads.get(label) || {amount: 0, students: new Set()};
+  current.amount += Number(amount || 0);
+  if (studentKey && Number(amount || 0) > 0 && !/late fine/i.test(label)) {
+    current.students.add(String(studentKey));
+  }
+  heads.set(label, current);
+}
+
+function formatDashboardFeeHeadStudentMeta(head = "", amount = 0, studentCount = 0) {
+  const statKey = getDashboardFeeHeadStudentStatKey(head);
+  if (!statKey || !studentCount) return "";
+  const studentLabel = `${studentCount.toLocaleString("en-IN")} student${studentCount === 1 ? "" : "s"}`;
+  if (statKey === "tuition") {
+    const average = Math.round(Number(amount || 0) / studentCount);
+    return `${studentLabel} · Avg ${formatRs(average)}`;
+  }
+  return studentLabel;
+}
+
 function getDashboardFeeMonthDetails(month = "") {
   const selectedMonth = String(month || "").trim();
   const monthTotals = {
@@ -9341,6 +9372,7 @@ function getDashboardFeeMonthDetails(month = "") {
   const sessionPayments = collectedPayments[activeSession] || {};
   Object.entries(sessionPayments).forEach(([admissionNo, payments]) => {
     const student = findStudentByAdmissionNo(admissionNo);
+    const studentKey = String(admissionNo || student?.admissionNo || student?.name || "").trim();
     (payments || []).forEach(payment => {
       const paymentMonth = calendarMonths[parseDateDDMMYYYY(payment.date).getMonth()] || "";
       if (paymentMonth !== selectedMonth) return;
@@ -9360,15 +9392,15 @@ function getDashboardFeeMonthDetails(month = "") {
       monthTotals.fine += fine;
       monthTotals.discount += discount;
       if (payment.receipt) monthTotals.receipts.add(String(payment.receipt));
-      if (student?.name || admissionNo) monthTotals.students.add(student?.name || admissionNo);
+      if (studentKey) monthTotals.students.add(studentKey);
       if (!allocations.length) {
         const fallbackHead = normalizePaymentFeeHead(payment.head || payment.feeHead || payment.fee_head || "Payment");
-        monthTotals.heads.set(fallbackHead, (monthTotals.heads.get(fallbackHead) || 0) + total);
+        addDashboardFeeHeadAmount(monthTotals.heads, fallbackHead, total, studentKey);
         return;
       }
       allocations.forEach(allocation => {
         const head = normalizePaymentFeeHead(allocation.head || "Payment");
-        monthTotals.heads.set(head, (monthTotals.heads.get(head) || 0) + Number(allocation.amount || 0));
+        addDashboardFeeHeadAmount(monthTotals.heads, head, Number(allocation.amount || 0), studentKey);
       });
     });
   });
@@ -9387,13 +9419,18 @@ function openDashboardFeeMonthDetails(month = "") {
   }
   const details = getDashboardFeeMonthDetails(selectedMonth);
   const headRows = [...details.heads.entries()]
+    .map(([head, info]) => {
+      const amount = Number(info?.amount || 0);
+      const studentCount = info?.students instanceof Set ? info.students.size : Number(info?.students || 0);
+      return [head, amount, studentCount];
+    })
     .sort((a, b) => Number(b[1] || 0) - Number(a[1] || 0))
     .slice(0, 8);
   if (title) title.textContent = `${selectedMonth} Collection Details`;
   box.innerHTML = `
     <div class="monthly-fee-detail-head">
       <strong>${escapeHtml(selectedMonth)} Collection Details</strong>
-      <span>${details.receipts.size} receipt(s)</span>
+      <span>${details.receipts.size} receipt(s) · ${details.students.size} student(s)</span>
     </div>
     <div class="monthly-fee-detail-stats">
       <article><span>Bank</span><b>${formatRs(details.bank)}</b></article>
@@ -9402,9 +9439,17 @@ function openDashboardFeeMonthDetails(month = "") {
       <article><span>Total</span><b>${formatRs(details.total)}</b></article>
     </div>
     <div class="monthly-fee-head-list">
-      ${headRows.map(([head, amount]) => `
-        <div><span>${escapeHtml(head)}</span><strong>${formatRs(amount)}</strong></div>
-      `).join("") || `<p>No collection found for ${escapeHtml(selectedMonth)}.</p>`}
+      ${headRows.map(([head, amount, studentCount]) => {
+        const meta = formatDashboardFeeHeadStudentMeta(head, amount, studentCount);
+        return `
+        <div class="monthly-fee-head-row">
+          <div class="monthly-fee-head-copy">
+            <span>${escapeHtml(head)}</span>
+            ${meta ? `<small>${escapeHtml(meta)}</small>` : ""}
+          </div>
+          <strong>${formatRs(amount)}</strong>
+        </div>`;
+      }).join("") || `<p>No collection found for ${escapeHtml(selectedMonth)}.</p>`}
       ${details.discount > 0 ? `<div class="discount"><span>Discount adjusted</span><strong>${formatRs(details.discount)}</strong></div>` : ""}
     </div>
   `;
