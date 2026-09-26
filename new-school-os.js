@@ -6944,24 +6944,33 @@ function getRunningAcademicMonth() {
   return ACADEMIC_MONTHS[getAcademicMonthIndexForDate(new Date())] || ACADEMIC_MONTHS[0];
 }
 
-function getDashboardRunningMonthDueSummary(month = getRunningAcademicMonth()) {
+function getDashboardDueStudentsSummary() {
   const dueStudents = new Map();
+  const monthsWithDue = new Set();
+  const today = new Date();
   getActiveStudents().forEach(student => {
     const admissionKey = normalizeAdmissionNo(student.admissionNo || "");
     const key = admissionKey || `name:${String(student.name || "").trim().toLowerCase()}` || `student-${dueStudents.size}`;
-    if (dueStudents.has(key)) return;
     let studentDue = 0;
     getLedgerRows(student).forEach(row => {
-      const item = getSearchDueMonthItem(student, row, month);
-      if (!item) return;
-      studentDue += Number(item.total || 0);
+      if (!Array.isArray(row.months) || !row.months.length) return;
+      row.months.forEach(month => {
+        if (getAcademicMonthDate(month, 1) > today) return;
+        const item = getSearchDueMonthItem(student, row, month);
+        if (!item) return;
+        studentDue += Number(item.total || 0);
+        monthsWithDue.add(month);
+      });
     });
-    if (studentDue > 0) {
-      dueStudents.set(key, studentDue);
-    }
+    if (studentDue > 0) dueStudents.set(key, studentDue);
   });
   const totalDue = [...dueStudents.values()].reduce((sum, amount) => sum + Number(amount || 0), 0);
-  return {month, studentCount: dueStudents.size, totalDue};
+  return {
+    studentCount: dueStudents.size,
+    totalDue,
+    monthCount: monthsWithDue.size,
+    months: ACADEMIC_MONTHS.filter(month => monthsWithDue.has(month))
+  };
 }
 
 function renderDashboardDueStudents() {
@@ -6969,9 +6978,11 @@ function renderDashboardDueStudents() {
   const countEl = document.getElementById("dashboardDueStudentsCount");
   const amountEl = document.getElementById("dashboardDueStudentsAmount");
   if (!monthEl || !countEl || !amountEl) return;
-  const summary = getDashboardRunningMonthDueSummary();
-  const monthDate = getAcademicMonthDate(summary.month, 1);
-  monthEl.textContent = `${summary.month} ${monthDate.getFullYear()} due summary`;
+  const summary = getDashboardDueStudentsSummary();
+  // Keep the same compact subtitle shape; show how many months still have dues.
+  monthEl.textContent = summary.monthCount
+    ? `${summary.monthCount} month${summary.monthCount === 1 ? "" : "s"} due`
+    : "No month due";
   countEl.textContent = summary.studentCount.toLocaleString("en-IN");
   amountEl.textContent = `Due amount ${formatRs(summary.totalDue)}`;
 }
