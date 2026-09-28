@@ -905,6 +905,22 @@
     }
 
     .card-head { display: flex; justify-content: space-between; gap: 12px; align-items: start; }
+    .card-tools { display: flex; align-items: center; gap: 8px; }
+    .work-edit {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 36px;
+      height: 36px;
+      min-height: 36px;
+      padding: 0;
+      border: 0;
+      border-radius: 12px;
+      background: #0f766e;
+      color: #fff;
+      box-shadow: 0 8px 16px rgba(15, 118, 110, .22);
+    }
+    .work-edit svg { width: 18px; height: 18px; fill: currentColor; }
     .card h3 { margin-bottom: 4px; font-size: 1rem; }
     .card p { margin-bottom: 0; color: var(--muted); font-weight: 650; }
 
@@ -2558,6 +2574,30 @@
         state.erpUpdatedAt = saved.updated_at || "";
         return entry;
       },
+      async update(collection, id, patch) {
+        const recordId = normalizeText(id);
+        if (!recordId) throw new Error("This entry cannot be edited.");
+        let updated = null;
+        await this.saveMutatedState(erpState => {
+          const collectionName = mobileCollectionName(collection);
+          const list = Array.isArray(erpState[collectionName]) ? erpState[collectionName] : [];
+          const index = list.findIndex(item => normalizeText(item.id) === recordId);
+          if (index < 0) throw new Error("Saved entry was not found.");
+          const current = list[index] || {};
+          if (!teacherCanEditWork(current)) throw new Error("You can edit only your own entry.");
+          updated = {
+            ...current,
+            ...patch,
+            id: current.id,
+            createdAt: current.createdAt || new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          };
+          list[index] = updated;
+          erpState[collectionName] = list;
+          return updated;
+        });
+        return updated;
+      },
       async saveMutatedState(mutator) {
         const latest = await this.request("/state", { method: "GET" });
         const firstState = latest.state || {};
@@ -3550,8 +3590,26 @@
       window.setTimeout(() => el.classList.remove("show"), 1700);
     }
 
-    function card({ title, meta, body, badge, status = "ok", className = "" }) {
-      return `<article class="card ${className}"><div class="card-head"><div><h3>${title}</h3><p>${meta}</p></div>${badge ? `<span class="status ${status}">${badge}</span>` : ""}</div>${body ? `<p>${body}</p>` : ""}</article>`;
+    function card({ title, meta, body, badge, status = "ok", className = "", actions = "" }) {
+      const tools = `${actions || ""}${badge ? `<span class="status ${status}">${badge}</span>` : ""}`;
+      return `<article class="card ${className}"><div class="card-head"><div><h3>${title}</h3><p>${meta}</p></div>${tools ? `<div class="card-tools">${tools}</div>` : ""}</div>${body ? `<p>${body}</p>` : ""}</article>`;
+    }
+
+    function workEditButton(kind, id) {
+      const recordId = normalizeText(id);
+      if (!recordId) return "";
+      const label = kind === "classwork" ? "Edit classwork" : "Edit homework";
+      return `<button class="work-edit" type="button" data-edit-${kind}="${escapeHtml(recordId)}" title="${label}" aria-label="${label}"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 20h4.7L19.3 9.4a2.1 2.1 0 0 0 0-3L17.6 4.7a2.1 2.1 0 0 0-3 0L4 15.3V20Zm3.8-2H6v-1.8l8.5-8.5 1.8 1.8L7.8 18Zm7.9-11.5.4-.4 1.8 1.8-.4.4-1.8-1.8Z"/></svg></button>`;
+    }
+
+    function teacherCanEditWork(item = {}) {
+      const teacherId = normalizeText(item.teacherId);
+      const teacherName = normalizeText(item.teacherName || item.teacher || item.createdBy).toLowerCase();
+      const myId = normalizeText(state.user?.id);
+      const myName = normalizeText(state.user?.name).toLowerCase();
+      if (teacherId && myId && teacherId === myId) return true;
+      if (teacherName && myName && teacherName === myName) return true;
+      return false;
     }
 
     const voiceFeeMonthAliases = {
@@ -5642,15 +5700,23 @@
       $("#syllabusTotal").textContent = `${ws.syllabus.length} entries`;
       $("#syllabusList").innerHTML = ws.syllabus.map(item => card({ title: `${item.className} - ${item.subject}`, meta: item.topic, badge: item.progress, status: item.progress === "Completed" ? "ok" : "warn" })).join("");
       $("#homeworkTitle").textContent = "Homework Entry";
-      const initialHomeworkClass = firstTeacherClass();
-      $("#homeworkFormHost").innerHTML = `<article class="card homework-card"><form class="form-grid" id="homeworkForm"><label>Class<select id="homeworkClass" required>${teacherClassOptions(initialHomeworkClass)}</select></label><label>Subject<select id="homeworkSubject" required>${teacherSubjectOptionsForClass(initialHomeworkClass)}</select></label><label>Homework<textarea id="homeworkText" placeholder="Homework details" required></textarea></label><label>Due Date<input id="homeworkDue" type="date" value="${todayIso}" required /></label><label>Attachment<input id="homeworkAttachment" type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" /><small>PDF, DOC, and DOCX files can be attached.</small></label><button class="primary" type="submit">Assign Homework</button></form></article>`;
+      const editingHomework = (ws.homework || []).find(item => state.editingHomeworkId && normalizeText(item.id) === normalizeText(state.editingHomeworkId) && teacherCanEditWork(item));
+      if (state.editingHomeworkId && !editingHomework) state.editingHomeworkId = "";
+      const initialHomeworkClass = editingHomework?.className || firstTeacherClass();
+      const homeworkTextValue = escapeHtml(editingHomework?.text || "");
+      const homeworkDueValue = editingHomework?.due || todayIso;
+      $("#homeworkFormHost").innerHTML = `<article class="card homework-card"><form class="form-grid" id="homeworkForm"><label>Class<select id="homeworkClass" required>${teacherClassOptions(initialHomeworkClass)}</select></label><label>Subject<select id="homeworkSubject" required>${teacherSubjectOptionsForClass(initialHomeworkClass, editingHomework?.subject || "")}</select></label><label>Homework<textarea id="homeworkText" placeholder="Homework details" required>${homeworkTextValue}</textarea></label><label>Due Date<input id="homeworkDue" type="date" value="${escapeHtml(homeworkDueValue)}" required /></label><label>Attachment<input id="homeworkAttachment" type="file" accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" /><small>${editingHomework?.attachment?.name ? `Current file: ${escapeHtml(editingHomework.attachment.name)}. Choose a new file only if you want to replace it.` : "PDF, DOC, and DOCX files can be attached."}</small></label><button class="primary" type="submit">${editingHomework ? "Update Homework" : "Assign Homework"}</button>${editingHomework ? `<button class="ghost" id="cancelHomeworkEdit" type="button">Cancel</button>` : ""}</form></article>`;
       $("#homeworkTotal").textContent = `${ws.homework.length} assigned`;
-      $("#homeworkList").innerHTML = ws.homework.map(item => card({ title: `${item.className || "Class"} - ${item.subject || "Homework"}`, meta: `Due ${item.due || "-"}`, body: `${item.text || ""}${homeworkAttachmentLink(item.attachment)}`, badge: "Active", status: "warn", className: "homework-card" })).join("");
+      $("#homeworkList").innerHTML = ws.homework.map(item => card({ title: `${item.className || "Class"} - ${item.subject || "Homework"}`, meta: `Due ${item.due || "-"}`, body: `${item.text || ""}${homeworkAttachmentLink(item.attachment)}`, badge: "Active", status: "warn", className: "homework-card", actions: teacherCanEditWork(item) ? workEditButton("homework", item.id) : "" })).join("");
       $("#classworkTitle").textContent = "Classwork Entry";
-      const initialClassworkClass = firstTeacherClass();
-      $("#classworkFormHost").innerHTML = `<article class="card homework-card"><form class="form-grid" id="classworkForm"><label>Class<select id="classworkClass" required>${teacherClassOptions(initialClassworkClass)}</select></label><label>Subject<select id="classworkSubject" required>${teacherSubjectOptionsForClass(initialClassworkClass)}</select></label><label>Classwork<textarea id="classworkText" placeholder="What was taught in class today" required></textarea></label><label>Date<input id="classworkDate" type="date" value="${todayIso}" required /></label><button class="primary" type="submit">Save Classwork</button></form></article>`;
+      const editingClasswork = (ws.classwork || []).find(item => state.editingClassworkId && normalizeText(item.id) === normalizeText(state.editingClassworkId) && teacherCanEditWork(item));
+      if (state.editingClassworkId && !editingClasswork) state.editingClassworkId = "";
+      const initialClassworkClass = editingClasswork?.className || firstTeacherClass();
+      const classworkTextValue = escapeHtml(editingClasswork?.text || "");
+      const classworkDateValue = editingClasswork?.date || todayIso;
+      $("#classworkFormHost").innerHTML = `<article class="card homework-card"><form class="form-grid" id="classworkForm"><label>Class<select id="classworkClass" required>${teacherClassOptions(initialClassworkClass)}</select></label><label>Subject<select id="classworkSubject" required>${teacherSubjectOptionsForClass(initialClassworkClass, editingClasswork?.subject || "")}</select></label><label>Classwork<textarea id="classworkText" placeholder="What was taught in class today" required>${classworkTextValue}</textarea></label><label>Date<input id="classworkDate" type="date" value="${escapeHtml(classworkDateValue)}" required /></label><button class="primary" type="submit">${editingClasswork ? "Update Classwork" : "Save Classwork"}</button>${editingClasswork ? `<button class="ghost" id="cancelClassworkEdit" type="button">Cancel</button>` : ""}</form></article>`;
       $("#classworkTotal").textContent = `${ws.classwork.length} entries`;
-      $("#classworkList").innerHTML = ws.classwork.map(item => card({ title: `${item.className} - ${item.subject}`, meta: item.date, body: item.text, badge: "Classwork" })).join("");
+      $("#classworkList").innerHTML = ws.classwork.map(item => card({ title: `${item.className} - ${item.subject}`, meta: item.date, body: item.text, badge: "Classwork", actions: teacherCanEditWork(item) ? workEditButton("classwork", item.id) : "" })).join("");
       $("#noticeFormHost").innerHTML = `<article class="card notice-card"><div class="card-head"><div><h3>ERP Notices</h3><p>Notices from the school notice board are read-only here.</p></div><span class="status ok">Read Only</span></div></article><article class="card homework-card"><form class="form-grid" id="teacherNoticeRequestForm"><label>Class<select id="teacherNoticeClass" required>${teacherClassOptions(firstTeacherClass())}</select></label><label>Title<input id="teacherNoticeTitle" placeholder="Notice title" required /></label><label>Message<textarea id="teacherNoticeMessage" placeholder="Write a notice for students" required></textarea></label><label>Priority<select id="teacherNoticePriority"><option>Normal</option><option>Important</option><option>Urgent</option></select></label><button class="primary" type="submit">Send for ERP Approval</button></form></article>`;
       $("#noticeTotal").textContent = `${ws.notices.length} ERP notices`;
       const requestCards = (ws.teacherNoticeRequests || []).map(item => card({
@@ -5851,6 +5917,24 @@
         renderTeacherViews();
         toast("Marks sent to ERP for review");
       });
+      document.querySelectorAll("[data-edit-homework]").forEach(button => button.addEventListener("click", () => {
+        state.editingHomeworkId = button.dataset.editHomework || "";
+        renderTeacherViews();
+        $("#homeworkForm")?.scrollIntoView({behavior: "smooth", block: "start"});
+      }));
+      $("#cancelHomeworkEdit")?.addEventListener("click", () => {
+        state.editingHomeworkId = "";
+        renderTeacherViews();
+      });
+      document.querySelectorAll("[data-edit-classwork]").forEach(button => button.addEventListener("click", () => {
+        state.editingClassworkId = button.dataset.editClasswork || "";
+        renderTeacherViews();
+        $("#classworkForm")?.scrollIntoView({behavior: "smooth", block: "start"});
+      }));
+      $("#cancelClassworkEdit")?.addEventListener("click", () => {
+        state.editingClassworkId = "";
+        renderTeacherViews();
+      });
       $("#homeworkForm")?.addEventListener("submit", async event => {
         event.preventDefault();
         const className = $("#homeworkClass").value;
@@ -5866,10 +5950,22 @@
           toast(error.message || "Attachment could not be saved.");
           return;
         }
-        await AppApi.create("homework", { teacherId: state.user.id, teacherName: state.user.name, className, subject, text: $("#homeworkText").value, due: $("#homeworkDue").value, attachment });
-        state.workspace = await AppApi.workspace("teacher", state.user.id);
-        renderTeacherViews();
-        toast("Homework assigned");
+        const fields = { teacherId: state.user.id, teacherName: state.user.name, className, subject, text: $("#homeworkText").value, due: $("#homeworkDue").value, source: "Teacher App" };
+        if (attachment) fields.attachment = attachment;
+        try {
+          if (state.editingHomeworkId) {
+            await AppApi.update("homework", state.editingHomeworkId, fields);
+            state.editingHomeworkId = "";
+            toast("Homework updated");
+          } else {
+            await AppApi.create("homework", fields);
+            toast("Homework assigned");
+          }
+          state.workspace = await AppApi.workspace("teacher", state.user.id);
+          renderTeacherViews();
+        } catch (error) {
+          toast(error.message || "Homework could not be saved.");
+        }
       });
       $("#classworkForm")?.addEventListener("submit", async event => {
         event.preventDefault();
@@ -5879,10 +5975,21 @@
           toast("This class and subject is not assigned to this teacher.");
           return;
         }
-        await AppApi.create("classwork", { teacherId: state.user.id, className, subject, text: $("#classworkText").value, date: $("#classworkDate").value });
-        state.workspace = await AppApi.workspace("teacher", state.user.id);
-        renderTeacherViews();
-        toast("Classwork saved");
+        const fields = { teacherId: state.user.id, teacherName: state.user.name, className, subject, text: $("#classworkText").value, date: $("#classworkDate").value, source: "Teacher App" };
+        try {
+          if (state.editingClassworkId) {
+            await AppApi.update("classwork", state.editingClassworkId, fields);
+            state.editingClassworkId = "";
+            toast("Classwork updated");
+          } else {
+            await AppApi.create("classwork", fields);
+            toast("Classwork saved");
+          }
+          state.workspace = await AppApi.workspace("teacher", state.user.id);
+          renderTeacherViews();
+        } catch (error) {
+          toast(error.message || "Classwork could not be saved.");
+        }
       });
       $("#teacherNoticeRequestForm")?.addEventListener("submit", async event => {
         event.preventDefault();
