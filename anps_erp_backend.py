@@ -2592,18 +2592,41 @@ def merge_student_services(primary, secondary):
     return services
 
 
+def merge_session_enrollments(left, right):
+    merged = {}
+    for source in (left, right):
+        if not isinstance(source, dict):
+            continue
+        for session, enrollment in source.items():
+            session_name = str(session or "").strip()
+            if not session_name:
+                continue
+            existing = merged.get(session_name) if isinstance(merged.get(session_name), dict) else {}
+            incoming = enrollment if isinstance(enrollment, dict) else {}
+            merged[session_name] = {**existing, **incoming}
+    return merged
+
+
 def merge_student_record(server_student, incoming_student):
     server_time = record_updated_time(server_student)
     incoming_time = record_updated_time(incoming_student)
     if server_time or incoming_time:
         if incoming_time >= server_time:
-            return {**server_student, **incoming_student}
-        return {**incoming_student, **server_student}
-    merged = {**server_student, **incoming_student}
-    merged["otherServices"] = merge_student_services(server_student, incoming_student)
-    merged["transportRequired"] = "Transport" in merged["otherServices"] and "Special/Custom" not in merged["otherServices"]
-    if not numeric_value(merged.get("transportFee")):
-        merged["transportFee"] = incoming_student.get("transportFee") or server_student.get("transportFee") or 0
+            merged = {**server_student, **incoming_student}
+        else:
+            merged = {**incoming_student, **server_student}
+    else:
+        merged = {**server_student, **incoming_student}
+        merged["otherServices"] = merge_student_services(server_student, incoming_student)
+        merged["transportRequired"] = "Transport" in merged["otherServices"] and "Special/Custom" not in merged["otherServices"]
+        if not numeric_value(merged.get("transportFee")):
+            merged["transportFee"] = incoming_student.get("transportFee") or server_student.get("transportFee") or 0
+    enrollments = merge_session_enrollments(
+        server_student.get("sessionEnrollments"),
+        incoming_student.get("sessionEnrollments"),
+    )
+    if enrollments:
+        merged["sessionEnrollments"] = enrollments
     return merged
 
 

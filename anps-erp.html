@@ -14,7 +14,7 @@
       location.replace("http://127.0.0.1:4174/anps-erp.html#dashboard");
     }
   </script>
-  <link rel="stylesheet" href="./new-school-os.css?v=20261015-covered-fine" />
+  <link rel="stylesheet" href="./new-school-os.css?v=20261027-session-roster" />
 </head>
 <body>
   <div class="shell">
@@ -47,6 +47,7 @@
           <div class="nav-sub">
             <button data-view="students" type="button">Student Details</button>
             <button data-view="studentAdmission" type="button">Student Admission</button>
+            <button data-view="promoteStudents" type="button">Promote Students</button>
             <button data-view="disableStudent" type="button">Disable Student</button>
             <button data-view="bulkDeleteStudent" type="button">Bulk Delete</button>
             <button data-view="studentAbsence" type="button">Student Absence</button>
@@ -367,6 +368,7 @@
             <div>
               <p class="eyebrow">Student registry</p>
               <h2>Student Details</h2>
+              <p class="eyebrow" id="studentSessionRosterNote">Session roster</p>
             </div>
             <div class="student-header-actions">
               <button class="icon-action excel-action" id="exportStudentsExcel" type="button" title="Export Excel" aria-label="Export student details to Excel">
@@ -388,9 +390,50 @@
           <div class="table-wrap">
             <table>
               <thead>
-                <tr><th>Admission No.</th><th>Student Name</th><th>Class</th><th>Section</th><th>Guardian</th><th>Mobile</th><th>Action</th></tr>
+                <tr><th>Admission No.</th><th>Student Name</th><th>Class</th><th>Section</th><th>Origin</th><th>Guardian</th><th>Mobile</th><th>Action</th></tr>
               </thead>
               <tbody id="studentTable"></tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+
+      <section class="view" id="promoteStudents">
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Student information</p>
+              <h2>Promote Students</h2>
+              <p class="eyebrow" id="promoteStudentsNote">Students stay in their current session until you promote them.</p>
+            </div>
+            <button class="primary-action" id="promoteSelectedStudents" type="button">Promote Selected</button>
+          </div>
+          <div class="student-filter-bar promote-filter-bar">
+            <label>From session
+              <select id="promoteFromSession"></select>
+            </label>
+            <label>To session
+              <select id="promoteToSession"></select>
+            </label>
+            <label>Class
+              <select id="promoteClassFilter">
+                <option value="">All Classes</option>
+              </select>
+            </label>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th><input id="promoteSelectAll" type="checkbox" aria-label="Select all students" /></th>
+                  <th>Admission No.</th>
+                  <th>Student Name</th>
+                  <th>Current Class</th>
+                  <th>Next Class</th>
+                  <th>Origin</th>
+                </tr>
+              </thead>
+              <tbody id="promoteStudentRows"></tbody>
             </table>
           </div>
         </div>
@@ -4035,6 +4078,6 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="./new-school-os.js?v=20261027-paid-on-entry-only"></script>
+  <script src="./new-school-os.js?v=20261027-session-roster"></script>
 </body>
 </html>

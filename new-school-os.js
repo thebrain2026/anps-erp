@@ -303,6 +303,7 @@ const titleMap = {
   complaintsDesk: "Complaint Book",
   students: "Student Details",
   studentAdmission: "Student Admission",
+  promoteStudents: "Promote Students",
   disableStudent: "Disable Student",
   bulkDeleteStudent: "Bulk Delete",
   studentAbsence: "Student Absence",
@@ -379,7 +380,7 @@ const ACCESS_ACTIONS = ["view", "add", "edit", "delete", "print"];
 const ACCESS_PERMISSION_GROUPS = [
   {name: "Dashboard", modules: ["dashboard", "dashboardFeesCollection"]},
   {name: "Front Office", modules: ["admissionEnquiry", "complaintRegister", "complaintsDesk"]},
-  {name: "Student Information", modules: ["students", "studentAdmission", "disableStudent", "bulkDeleteStudent", "studentAbsence"]},
+  {name: "Student Information", modules: ["students", "studentAdmission", "promoteStudents", "disableStudent", "bulkDeleteStudent", "studentAbsence"]},
   {name: "Fees Collection", modules: ["finance", "feeBook", "bankBook", "bankReconciliation", "dueFeesSearch", "upiPaymentVerification", "feeMaster", "feeGroup", "addClassSection", "tuitionFineSetup", "feeReminder"]},
   {name: "Human Resources", modules: ["staffDetails", "staffAttendance", "applyLeave", "leaveType", "approveLeave", "teachersRating", "teacherAdvisory", "department", "designation", "disabledStaff"]},
   {name: "Communication", modules: ["noticeBoard", "teacherNoticeRequests", "sendSms"]},
@@ -686,20 +687,40 @@ function mergeStudentServicesForLegacyConflict(primary = {}, secondary = {}) {
   return [...services];
 }
 
+function mergeSessionEnrollments(existing = {}, incoming = {}) {
+  const merged = {};
+  [existing, incoming].forEach(source => {
+    if (!source || typeof source !== "object") return;
+    Object.entries(source).forEach(([session, enrollment]) => {
+      const sessionName = String(session || "").trim();
+      if (!sessionName) return;
+      merged[sessionName] = {
+        ...(merged[sessionName] && typeof merged[sessionName] === "object" ? merged[sessionName] : {}),
+        ...(enrollment && typeof enrollment === "object" ? enrollment : {})
+      };
+    });
+  });
+  return merged;
+}
+
 function mergeStudentRecord(existing = {}, incoming = {}) {
   const existingTime = getRecordUpdatedTime(existing);
   const incomingTime = getRecordUpdatedTime(incoming);
+  let merged;
   if (existingTime || incomingTime) {
     const newer = incomingTime >= existingTime ? incoming : existing;
     const older = newer === incoming ? existing : incoming;
-    return {...older, ...newer};
+    merged = {...older, ...newer};
+  } else {
+    merged = {...existing, ...incoming};
+    merged.otherServices = mergeStudentServicesForLegacyConflict(existing, incoming);
+    merged.transportRequired = merged.otherServices.includes("Transport") && !merged.otherServices.includes("Special/Custom");
+    if (!Number(merged.transportFee || 0)) {
+      merged.transportFee = Number(incoming.transportFee || existing.transportFee || 0);
+    }
   }
-  const merged = {...existing, ...incoming};
-  merged.otherServices = mergeStudentServicesForLegacyConflict(existing, incoming);
-  merged.transportRequired = merged.otherServices.includes("Transport") && !merged.otherServices.includes("Special/Custom");
-  if (!Number(merged.transportFee || 0)) {
-    merged.transportFee = Number(incoming.transportFee || existing.transportFee || 0);
-  }
+  const enrollments = mergeSessionEnrollments(existing.sessionEnrollments, incoming.sessionEnrollments);
+  if (Object.keys(enrollments).length) merged.sessionEnrollments = enrollments;
   return merged;
 }
 
@@ -1680,6 +1701,7 @@ function applySavedState(saved = {}) {
     }
     if (Array.isArray(saved.students)) {
       students.splice(0, students.length, ...filterDeletedStudents(saved.students, deletedStudents));
+      migrateAllStudentSessionEnrollments();
     }
     if (saved.financeSessions && typeof saved.financeSessions === "object") {
       Object.keys(financeSessions).forEach(session => delete financeSessions[session]);
@@ -2411,6 +2433,7 @@ function renderActiveView(viewName = document.querySelector(".view.active")?.id 
     return;
   }
   if (viewName === "students") renderStudents();
+  if (viewName === "promoteStudents") renderPromoteStudents();
   if (viewName === "studentAbsence") renderStudentAbsence();
   if (viewName === "studentAdmission") {
     renderAdmissionVillageTownOptions();
@@ -2802,7 +2825,7 @@ function openStudentEditForm(admissionNo, focusSection = "") {
   renderAdmissionSectionOptions();
   renderAdmissionStudentTypeOptions(student.studentType || "New Student");
   renderAdmissionVillageTownOptions(student.villageTown || "");
-  const {klass, section} = splitStudentClassSection(student.klass || "");
+  const {klass, section} = splitStudentClassSection(getStudentSessionEnrollment(student, activeSession)?.klass || student.klass || "");
   setSelectValue(admissionForm.elements.klass, klass || "");
   setSelectValue(admissionForm.elements.section, section || "");
   setSelectValue(admissionForm.elements.studentType, student.studentType || "New Student");
@@ -2892,13 +2915,132 @@ function isStudentDisabled(student) {
   return Boolean(student && student.disabled);
 }
 
+function getStudentSessionOriginLabel(origin = "") {
+  const value = String(origin || "").trim().toLowerCase();
+  if (value === "promoted") return "Promoted";
+  if (value === "admission") return "New Admission";
+  return "Existing";
+}
+
+function inferStudentHomeSession(student = {}) {
+  const admissionNo = String(student.admissionNo || "");
+  const prefixMatch = admissionNo.match(/ANPS-ADM\/(\d{2})-(\d{2})\//i);
+  if (prefixMatch) return `20${prefixMatch[1]}-${prefixMatch[2]}`;
+  const normalized = normalizeAdmissionNo(admissionNo);
+  const paidSession = Object.keys(collectedPayments || {}).find(session => {
+    const rows = collectedPayments[session] || {};
+    return Object.keys(rows).some(key => normalizeAdmissionNo(key) === normalized && Array.isArray(rows[key]) && rows[key].length);
+  });
+  if (paidSession) return paidSession;
+  if (financeSessions["2026-27"]) return "2026-27";
+  return Object.keys(financeSessions)[0] || "2026-27";
+}
+
+function getStudentSessionEnrollment(student = {}, session = activeSession) {
+  const enrollments = student?.sessionEnrollments;
+  if (!enrollments || typeof enrollments !== "object") return null;
+  const match = enrollments[session];
+  return match && typeof match === "object" ? match : null;
+}
+
+function isStudentEnrolledInSession(student = {}, session = activeSession) {
+  return Boolean(getStudentSessionEnrollment(student, session));
+}
+
+function enrollStudentInSession(student, session, details = {}) {
+  if (!student || !session) return student;
+  if (!student.sessionEnrollments || typeof student.sessionEnrollments !== "object") {
+    student.sessionEnrollments = {};
+  }
+  const previous = getStudentSessionEnrollment(student, session) || {};
+  student.sessionEnrollments[session] = {
+    klass: details.klass ?? previous.klass ?? student.klass ?? "",
+    studentType: details.studentType ?? previous.studentType ?? student.studentType ?? "New Student",
+    origin: details.origin ?? previous.origin ?? "admission",
+    fromSession: details.fromSession ?? previous.fromSession ?? "",
+    enrolledAt: previous.enrolledAt || details.enrolledAt || new Date().toISOString()
+  };
+  return student;
+}
+
+function ensureStudentEnrollmentsMigrated(student) {
+  if (!student || typeof student !== "object") return false;
+  if (student.sessionEnrollments && Object.keys(student.sessionEnrollments).length) return false;
+  enrollStudentInSession(student, inferStudentHomeSession(student), {
+    klass: student.klass || "",
+    studentType: student.studentType || "New Student",
+    origin: "existing"
+  });
+  return true;
+}
+
+function migrateAllStudentSessionEnrollments() {
+  let changed = false;
+  students.forEach(student => {
+    if (ensureStudentEnrollmentsMigrated(student)) changed = true;
+  });
+  return changed;
+}
+
+function overlaySessionStudent(student, session = activeSession) {
+  const enrollment = getStudentSessionEnrollment(student, session);
+  if (!enrollment) return student;
+  return {
+    ...student,
+    klass: enrollment.klass || student.klass || "",
+    studentType: enrollment.studentType || student.studentType || "New Student",
+    sessionOrigin: enrollment.origin || "existing",
+    enrolledSession: session
+  };
+}
+
+function getSessionStudents(session = activeSession) {
+  migrateAllStudentSessionEnrollments();
+  return students
+    .filter(student => isStudentEnrolledInSession(student, session))
+    .map(student => overlaySessionStudent(student, session));
+}
+
 function getActiveStudents() {
-  return students.filter(student => !isStudentDisabled(student));
+  return getSessionStudents(activeSession).filter(student => !isStudentDisabled(student));
+}
+
+function getSessionRosterCounts(session = activeSession) {
+  const sessionStudents = getSessionStudents(session).filter(student => !isStudentDisabled(student));
+  return {
+    total: sessionStudents.length,
+    newAdmission: sessionStudents.filter(student => student.sessionOrigin === "admission").length,
+    promoted: sessionStudents.filter(student => student.sessionOrigin === "promoted").length,
+    existing: sessionStudents.filter(student => student.sessionOrigin !== "admission" && student.sessionOrigin !== "promoted").length
+  };
+}
+
+function getNextFinanceSessionName(session = activeSession) {
+  const names = Object.keys(financeSessions);
+  const index = names.indexOf(session);
+  if (index >= 0 && index < names.length - 1) return names[index + 1];
+  const {startYear, endYear} = getSessionYears();
+  return `${startYear + 1}-${String(endYear + 1).slice(-2)}`;
+}
+
+function getPreviousFinanceSessionName(session = activeSession) {
+  const names = Object.keys(financeSessions);
+  const index = names.indexOf(session);
+  if (index > 0) return names[index - 1];
+  return names[0] || session;
+}
+
+function getNextClassName(klassName = "") {
+  const classes = getAdmissionClassOptions();
+  const index = classes.findIndex(item => String(item).trim().toLowerCase() === String(klassName || "").trim().toLowerCase());
+  if (index >= 0 && index < classes.length - 1) return classes[index + 1];
+  return klassName || "";
 }
 
 function findActiveStudentByAdmissionNo(admissionNo) {
   const student = findStudentByAdmissionNo(admissionNo);
-  return isStudentDisabled(student) ? null : student;
+  if (!student || isStudentDisabled(student) || !isStudentEnrolledInSession(student, activeSession)) return null;
+  return overlaySessionStudent(student, activeSession);
 }
 
 function findActiveStudentByAdmissionOrName(value) {
@@ -3567,6 +3709,12 @@ function renderStudents() {
     return matchesSearch && matchesClass;
   });
 
+  const rosterCounts = getSessionRosterCounts(activeSession);
+  const studentRosterNote = document.getElementById("studentSessionRosterNote");
+  if (studentRosterNote) {
+    studentRosterNote.textContent = `Session ${activeSession}: ${rosterCounts.total} students | New admission ${rosterCounts.newAdmission} | Promoted ${rosterCounts.promoted}`;
+  }
+
   document.getElementById("studentTable").innerHTML = filtered.map(student => `
     ${(() => {
       const classInfo = splitStudentClassSection(student.klass || "");
@@ -3578,6 +3726,7 @@ function renderStudents() {
       <td><button class="student-name-link" type="button" data-open-fee-book="${admissionAttr}"><strong>${escapeHtml(student.name || "-")}</strong></button></td>
       <td>${escapeHtml(classInfo.klass || "-")}</td>
       <td>${escapeHtml(classInfo.section || "-")}</td>
+      <td>${escapeHtml(getStudentSessionOriginLabel(student.sessionOrigin))}</td>
       <td>${escapeHtml(getStudentGuardianName(student) || "-")}</td>
       <td>${escapeHtml(getStudentContactMobile(student) || "-")}</td>
       <td>
@@ -3599,7 +3748,7 @@ function renderStudents() {
     </tr>
       `;
     })()}
-  `).join("") || `<tr><td colspan="7">No matching students found.</td></tr>`;
+  `).join("") || `<tr><td colspan="8">No students in session ${escapeHtml(activeSession)}. Admit new students here or promote from the previous session.</td></tr>`;
 
   document.getElementById("studentCount").textContent = getActiveStudents().length.toLocaleString("en-IN");
   renderClassSectionReport();
@@ -3621,6 +3770,140 @@ function focusReturnedStudentRow() {
     row.classList.add("student-return-highlight-pulse");
     setTimeout(() => row.classList.remove("student-return-highlight-pulse"), 1600);
   }, 80);
+}
+
+function getPromoteFromSession() {
+  return document.getElementById("promoteFromSession")?.value || getPreviousFinanceSessionName(activeSession);
+}
+
+function getPromoteToSession() {
+  return document.getElementById("promoteToSession")?.value || activeSession;
+}
+
+function getPromotableStudents(fromSession = getPromoteFromSession(), toSession = getPromoteToSession()) {
+  migrateAllStudentSessionEnrollments();
+  return getSessionStudents(fromSession)
+    .filter(student => !isStudentDisabled(student) && !isStudentEnrolledInSession(student, toSession));
+}
+
+function renderPromoteSessionOptions() {
+  const fromSelect = document.getElementById("promoteFromSession");
+  const toSelect = document.getElementById("promoteToSession");
+  if (!fromSelect || !toSelect) return;
+  const sessions = Object.keys(financeSessions);
+  const fromValue = fromSelect.value || getPreviousFinanceSessionName(activeSession);
+  const toValue = toSelect.value || activeSession;
+  fromSelect.innerHTML = sessions.map(session => `<option value="${escapeHtml(session)}">${escapeHtml(session)}</option>`).join("");
+  toSelect.innerHTML = sessions.map(session => `<option value="${escapeHtml(session)}">${escapeHtml(session)}</option>`).join("");
+  fromSelect.value = sessions.includes(fromValue) ? fromValue : (getPreviousFinanceSessionName(activeSession) || sessions[0] || "");
+  toSelect.value = sessions.includes(toValue) ? toValue : (activeSession || sessions[sessions.length - 1] || "");
+}
+
+function renderPromoteClassFilter() {
+  const select = document.getElementById("promoteClassFilter");
+  if (!select) return;
+  const current = select.value;
+  const classes = [...new Set(getPromotableStudents().map(student => splitStudentClassSection(student.klass || "").klass).filter(Boolean))]
+    .sort((a, b) => a.localeCompare(b, undefined, {numeric: true}));
+  select.innerHTML = `<option value="">All Classes</option>${classes.map(className => `<option value="${escapeHtml(className)}">${escapeHtml(className)}</option>`).join("")}`;
+  if (current && classes.includes(current)) select.value = current;
+}
+
+function renderPromoteStudents() {
+  const rows = document.getElementById("promoteStudentRows");
+  if (!rows) return;
+  renderPromoteSessionOptions();
+  renderPromoteClassFilter();
+  const fromSession = getPromoteFromSession();
+  const toSession = getPromoteToSession();
+  const selectedClass = String(document.getElementById("promoteClassFilter")?.value || "").trim();
+  const classOptions = getAdmissionClassOptions();
+  const note = document.getElementById("promoteStudentsNote");
+  const roster = getSessionRosterCounts(toSession);
+  if (note) {
+    note.textContent = fromSession === toSession
+      ? "Choose a different From and To session. Students already in the destination session are hidden."
+      : `From ${fromSession} → ${toSession}. Destination now has ${roster.total} students (${roster.newAdmission} new admission, ${roster.promoted} promoted).`;
+  }
+  if (fromSession === toSession) {
+    rows.innerHTML = `<tr><td colspan="6">Select a previous session in From and ${escapeHtml(toSession)} in To, then promote.</td></tr>`;
+    return;
+  }
+  const visible = getPromotableStudents(fromSession, toSession).filter(student => {
+    const {klass} = splitStudentClassSection(student.klass || "");
+    return !selectedClass || klass === selectedClass;
+  });
+  rows.innerHTML = visible.map(student => {
+    const classInfo = splitStudentClassSection(student.klass || "");
+    const nextClass = getNextClassName(classInfo.klass);
+    const admissionAttr = escapeHtml(student.admissionNo || "");
+    return `
+      <tr>
+        <td><input type="checkbox" data-promote-admission="${admissionAttr}" aria-label="Promote ${escapeHtml(student.name || "student")}" /></td>
+        <td>${escapeHtml(student.admissionNo || "-")}</td>
+        <td><strong>${escapeHtml(student.name || "-")}</strong></td>
+        <td>${escapeHtml(student.klass || "-")}</td>
+        <td>
+          <select data-promote-next-class="${admissionAttr}" aria-label="Next class for ${escapeHtml(student.name || "student")}">
+            ${classOptions.map(className => `<option value="${escapeHtml(className)}" ${className === nextClass ? "selected" : ""}>${escapeHtml(className)}</option>`).join("")}
+          </select>
+        </td>
+        <td>${escapeHtml(getStudentSessionOriginLabel(student.sessionOrigin))}</td>
+      </tr>
+    `;
+  }).join("") || `<tr><td colspan="6">No students left to promote from ${escapeHtml(fromSession)} to ${escapeHtml(toSession)}.</td></tr>`;
+  const selectAll = document.getElementById("promoteSelectAll");
+  if (selectAll) selectAll.checked = false;
+}
+
+function promoteSelectedStudents() {
+  const fromSession = getPromoteFromSession();
+  const toSession = getPromoteToSession();
+  if (!fromSession || !toSession || fromSession === toSession) {
+    showToast("Choose different From and To sessions before promoting.", "error");
+    return;
+  }
+  if (!financeSessions[toSession]) {
+    showToast(`Create session ${toSession} first.`, "error");
+    return;
+  }
+  const selected = [...document.querySelectorAll("[data-promote-admission]:checked")];
+  if (!selected.length) {
+    showToast("Select at least one student to promote.");
+    return;
+  }
+  let promoted = 0;
+  selected.forEach(input => {
+    const admissionNo = input.dataset.promoteAdmission || "";
+    const student = findStudentByAdmissionNo(admissionNo);
+    if (!student || isStudentDisabled(student) || isStudentEnrolledInSession(student, toSession)) return;
+    const currentClass = splitStudentClassSection(getStudentSessionEnrollment(student, fromSession)?.klass || student.klass || "");
+    const nextClassName = [...document.querySelectorAll("[data-promote-next-class]")]
+      .find(select => normalizeAdmissionNo(select.dataset.promoteNextClass) === normalizeAdmissionNo(student.admissionNo || ""))
+      ?.value || getNextClassName(currentClass.klass);
+    const nextKlass = `${nextClassName} ${currentClass.section}`.trim();
+    enrollStudentInSession(student, toSession, {
+      klass: nextKlass,
+      studentType: "Promoted Student",
+      origin: "promoted",
+      fromSession
+    });
+    student.klass = nextKlass;
+    student.studentType = "Promoted Student";
+    student.updatedAt = new Date().toISOString();
+    promoted += 1;
+  });
+  if (!promoted) {
+    showToast("No eligible students were promoted.");
+    return;
+  }
+  saveAppState();
+  renderPromoteStudents();
+  renderStudents();
+  renderFeeBookStudentOptions();
+  renderDueFeesSearch();
+  renderFinanceSession();
+  showToast(`${promoted} student${promoted === 1 ? "" : "s"} promoted to ${toSession}.`);
 }
 
 function renderStudentClassFilter() {
@@ -5656,8 +5939,18 @@ function importStudentsExcelFile(file) {
       clearStudentDeletedMark(imported.admissionNo);
       if (existingIndex >= 0) {
         students[existingIndex] = {...students[existingIndex], ...imported};
+        enrollStudentInSession(students[existingIndex], activeSession, {
+          klass: imported.klass || students[existingIndex].klass || "",
+          studentType: imported.studentType || "New Student",
+          origin: getStudentSessionEnrollment(students[existingIndex], activeSession)?.origin || "admission"
+        });
         updated += 1;
       } else {
+        enrollStudentInSession(imported, activeSession, {
+          klass: imported.klass || "",
+          studentType: imported.studentType || "New Student",
+          origin: "admission"
+        });
         students.unshift(imported);
         added += 1;
       }
@@ -14931,6 +15224,16 @@ document.getElementById("globalSearch").addEventListener("input", () => {
 });
 
 document.getElementById("studentClassFilter")?.addEventListener("change", renderStudents);
+document.getElementById("promoteFromSession")?.addEventListener("change", renderPromoteStudents);
+document.getElementById("promoteToSession")?.addEventListener("change", renderPromoteStudents);
+document.getElementById("promoteClassFilter")?.addEventListener("change", renderPromoteStudents);
+document.getElementById("promoteSelectAll")?.addEventListener("change", event => {
+  const checked = Boolean(event.target.checked);
+  document.querySelectorAll("[data-promote-admission]").forEach(input => {
+    input.checked = checked;
+  });
+});
+document.getElementById("promoteSelectedStudents")?.addEventListener("click", promoteSelectedStudents);
 document.getElementById("studentTransportClassFilter")?.addEventListener("change", renderStudentTransportFees);
 document.getElementById("studentTransportFeeRows")?.addEventListener("change", event => {
   const input = event.target.closest("[data-transport-fee-match]");
@@ -15289,6 +15592,9 @@ sessionSelect.addEventListener("change", () => {
   setNextReceiptNo();
   renderFinanceSession();
   renderFeeBook();
+  renderStudents();
+  renderPromoteStudents();
+  renderActiveView(document.querySelector(".view.active")?.id || "dashboard");
   showToast(`Session ${activeSession} loaded.`);
 });
 
@@ -17381,8 +17687,25 @@ admissionForm.addEventListener("submit", event => {
   const transportChanged = studentTakesTransport(previousStudent || {}) !== studentTakesTransport(studentData);
   if (transportChanged || studentTakesTransport(studentData)) requestSmartBusSyncAfterSave();
   clearStudentDeletedMark(admissionNo);
-  if (editIndex >= 0) students[editIndex] = {...students[editIndex], ...studentData};
-  else students.unshift(studentData);
+  if (editIndex >= 0) {
+    students[editIndex] = {
+      ...students[editIndex],
+      ...studentData,
+      sessionEnrollments: previousStudent?.sessionEnrollments || {}
+    };
+    enrollStudentInSession(students[editIndex], activeSession, {
+      klass: studentData.klass,
+      studentType,
+      origin: getStudentSessionEnrollment(students[editIndex], activeSession)?.origin || "admission"
+    });
+  } else {
+    enrollStudentInSession(studentData, activeSession, {
+      klass: studentData.klass,
+      studentType,
+      origin: "admission"
+    });
+    students.unshift(studentData);
+  }
 
   saveAppState();
   renderStudents();
@@ -18911,6 +19234,7 @@ document.getElementById("studentAbsenceClear")?.addEventListener("click", () => 
 });
 
 loadAppState();
+if (migrateAllStudentSessionEnrollments()) saveAppState();
 refreshBankAccountSelectors();
 applyProductionCleanSeedOnce();
 setNextReceiptNo();

@@ -6389,6 +6389,17 @@ th { color: var(--muted); font-size: .78rem; text-transform: uppercase; }
   margin: 0 0 10px;
 }
 
+.promote-filter-bar {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  margin: 0 0 14px;
+}
+
+.promote-filter-bar select {
+  min-width: 140px;
+}
+
 .student-filter-bar label {
   display: flex;
   align-items: center;
