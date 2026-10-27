@@ -9912,58 +9912,6 @@ function getTuitionMonthPayments(admissionNo) {
   }, {});
 }
 
-function buildUnassignedFeeChunks(student, row) {
-  const chunks = [];
-  if (!student || !row) return chunks;
-  getSessionPayments(student.admissionNo).slice().reverse().forEach(payment => {
-    getPaymentAllocationsWithFallback(payment)
-      .filter(allocation => (
-        allocationMatchesHead(allocation, row.name)
-        && !normalizePaymentMonth(allocation.month)
-        && !/fine/i.test(normalizePaymentFeeHead(allocation.head))
-      ))
-      .forEach(allocation => {
-        const amount = Number(allocation.amount || 0);
-        if (amount <= 0) return;
-        const split = getPaymentSplitForAmount(payment, amount);
-        chunks.push({
-          amount,
-          bank: Number(split.bank || 0),
-          cash: Number(split.cash || 0),
-          date: payment.date || allocation.date || new Date()
-        });
-      });
-  });
-  return chunks;
-}
-
-function consumeUnassignedFeeChunksForMonth(chunks, month, needed) {
-  const applied = {amount: 0, bank: 0, cash: 0};
-  let remaining = Number(needed || 0);
-  if (!month || remaining <= 0 || !Array.isArray(chunks) || !chunks.length) return applied;
-  for (let index = 0; index < chunks.length && remaining > 0; ) {
-    const chunk = chunks[index];
-    if (!chunk?.amount || !isAcademicMonthOnOrBefore(month, chunk.date)) {
-      index += 1;
-      continue;
-    }
-    const used = Math.min(remaining, chunk.amount);
-    const ratio = chunk.amount > 0 ? used / chunk.amount : 0;
-    const usedBank = Math.min(used, Math.round(Number(chunk.bank || 0) * ratio));
-    const usedCash = Math.max(used - usedBank, 0);
-    applied.amount += used;
-    applied.bank += usedBank;
-    applied.cash += usedCash;
-    chunk.amount -= used;
-    chunk.bank = Math.max(Number(chunk.bank || 0) - usedBank, 0);
-    chunk.cash = Math.max(Number(chunk.cash || 0) - usedCash, 0);
-    remaining -= used;
-    if (chunk.amount <= 0) chunks.splice(index, 1);
-    else index += 1;
-  }
-  return applied;
-}
-
 function getExactMonthFeePaidAmount(student, row, month) {
   if (!student || !row || !month) return 0;
   return getSessionPayments(student.admissionNo).reduce((sum, payment) => {
@@ -9974,25 +9922,7 @@ function getExactMonthFeePaidAmount(student, row, month) {
 }
 
 function getMonthlyFeePaidAmount(student, row, month) {
-  if (!student || !row || !month || !Array.isArray(row.months)) return 0;
-  const monthlyAmount = Number(row.monthlyAmount || 0);
-  const exactMonthAmounts = row.months.reduce((totals, itemMonth) => {
-    totals[itemMonth] = getExactMonthFeePaidAmount(student, row, itemMonth);
-    return totals;
-  }, {});
-  const exact = Number(exactMonthAmounts[month] || 0);
-  if (!monthlyAmount || exact >= monthlyAmount) return exact;
-  const chunks = buildUnassignedFeeChunks(student, row);
-  let applied = 0;
-  for (const itemMonth of row.months) {
-    const needed = Math.max(monthlyAmount - Number(exactMonthAmounts[itemMonth] || 0), 0);
-    const filled = consumeUnassignedFeeChunksForMonth(chunks, itemMonth, needed);
-    if (itemMonth === month) {
-      applied = filled.amount;
-      break;
-    }
-  }
-  return exact + applied;
+  return getExactMonthFeePaidAmount(student, row, month);
 }
 
 function getTuitionMonthPaidInfo(student, row, month) {
@@ -10563,8 +10493,7 @@ function getLedgerPaymentDetails(student, row) {
 function getLedgerMonthPaymentSplit(student, row, month) {
   if (!student || !row || !month) return {amount: 0, bank: 0, cash: 0};
   const matchingHeads = getFeeHeadMatchingHeads(row.name);
-  const payments = getSessionPayments(student.admissionNo);
-  const exact = payments.reduce((total, payment) => {
+  return getSessionPayments(student.admissionNo).reduce((total, payment) => {
     const amount = getPaymentAllocationsWithFallback(payment)
       .filter(allocation => matchingHeads.includes(allocation.head) && allocationMatchesMonth(allocation, month))
       .reduce((sum, allocation) => sum + Number(allocation.amount || 0), 0);
@@ -10575,27 +10504,6 @@ function getLedgerMonthPaymentSplit(student, row, month) {
     total.cash += split.cash;
     return total;
   }, {amount: 0, bank: 0, cash: 0});
-  if (!Array.isArray(row.months) || !row.months.includes(month) || !row.monthlyAmount) return exact;
-  const monthlyAmount = Number(row.monthlyAmount || 0);
-  if (exact.amount >= monthlyAmount) return exact;
-  const chunks = buildUnassignedFeeChunks(student, row);
-  const target = {...exact};
-  for (const itemMonth of row.months) {
-    const exactMonthAmount = getExactMonthFeePaidAmount(student, row, itemMonth);
-    if (exactMonthAmount >= monthlyAmount) {
-      if (itemMonth === month) return exact;
-      continue;
-    }
-    const needed = Math.max(monthlyAmount - exactMonthAmount, 0);
-    const filled = consumeUnassignedFeeChunksForMonth(chunks, itemMonth, needed);
-    if (itemMonth === month) {
-      target.amount += filled.amount;
-      target.bank += filled.bank;
-      target.cash += filled.cash;
-      return target.amount >= monthlyAmount ? target : {amount: 0, bank: 0, cash: 0};
-    }
-  }
-  return target;
 }
 
 function getLedgerMonthFineAmount(student, row, month) {
@@ -10627,15 +10535,8 @@ function getPaidLedgerMonths(student, row) {
   if (!student || !row || !Array.isArray(row.months) || !row.months.length || !row.monthlyAmount) return new Set();
   const paidMonths = new Set();
   const monthlyAmount = Number(row.monthlyAmount || 0);
-  const chunks = buildUnassignedFeeChunks(student, row);
   row.months.forEach(month => {
-    const exact = getExactMonthFeePaidAmount(student, row, month);
-    if (exact >= monthlyAmount) {
-      paidMonths.add(month);
-      return;
-    }
-    const filled = consumeUnassignedFeeChunksForMonth(chunks, month, Math.max(monthlyAmount - exact, 0));
-    if (exact + filled.amount >= monthlyAmount) paidMonths.add(month);
+    if (getExactMonthFeePaidAmount(student, row, month) >= monthlyAmount) paidMonths.add(month);
   });
   return paidMonths;
 }
