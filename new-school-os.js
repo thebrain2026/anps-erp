@@ -8860,6 +8860,13 @@ function getAcademicMonthDate(month, day) {
   return new Date(year, calendarMonth, day);
 }
 
+function isAcademicMonthOnOrBefore(month, asOfDate = new Date()) {
+  const monthStart = getAcademicMonthDate(month, 1);
+  if (!(monthStart instanceof Date) || Number.isNaN(monthStart.getTime())) return false;
+  const asOf = parseDateDDMMYYYY(asOfDate);
+  return monthStart.getTime() <= asOf.getTime();
+}
+
 function getFineDays(fromDate, toDate) {
   if (toDate < fromDate) return 0;
   const dayMs = 24 * 60 * 60 * 1000;
@@ -9905,39 +9912,87 @@ function getTuitionMonthPayments(admissionNo) {
   }, {});
 }
 
+function buildUnassignedFeeChunks(student, row) {
+  const chunks = [];
+  if (!student || !row) return chunks;
+  getSessionPayments(student.admissionNo).slice().reverse().forEach(payment => {
+    getPaymentAllocationsWithFallback(payment)
+      .filter(allocation => (
+        allocationMatchesHead(allocation, row.name)
+        && !normalizePaymentMonth(allocation.month)
+        && !/fine/i.test(normalizePaymentFeeHead(allocation.head))
+      ))
+      .forEach(allocation => {
+        const amount = Number(allocation.amount || 0);
+        if (amount <= 0) return;
+        const split = getPaymentSplitForAmount(payment, amount);
+        chunks.push({
+          amount,
+          bank: Number(split.bank || 0),
+          cash: Number(split.cash || 0),
+          date: payment.date || allocation.date || new Date()
+        });
+      });
+  });
+  return chunks;
+}
+
+function consumeUnassignedFeeChunksForMonth(chunks, month, needed) {
+  const applied = {amount: 0, bank: 0, cash: 0};
+  let remaining = Number(needed || 0);
+  if (!month || remaining <= 0 || !Array.isArray(chunks) || !chunks.length) return applied;
+  for (let index = 0; index < chunks.length && remaining > 0; ) {
+    const chunk = chunks[index];
+    if (!chunk?.amount || !isAcademicMonthOnOrBefore(month, chunk.date)) {
+      index += 1;
+      continue;
+    }
+    const used = Math.min(remaining, chunk.amount);
+    const ratio = chunk.amount > 0 ? used / chunk.amount : 0;
+    const usedBank = Math.min(used, Math.round(Number(chunk.bank || 0) * ratio));
+    const usedCash = Math.max(used - usedBank, 0);
+    applied.amount += used;
+    applied.bank += usedBank;
+    applied.cash += usedCash;
+    chunk.amount -= used;
+    chunk.bank = Math.max(Number(chunk.bank || 0) - usedBank, 0);
+    chunk.cash = Math.max(Number(chunk.cash || 0) - usedCash, 0);
+    remaining -= used;
+    if (chunk.amount <= 0) chunks.splice(index, 1);
+    else index += 1;
+  }
+  return applied;
+}
+
+function getExactMonthFeePaidAmount(student, row, month) {
+  if (!student || !row || !month) return 0;
+  return getSessionPayments(student.admissionNo).reduce((sum, payment) => {
+    return sum + getPaymentAllocationsWithFallback(payment)
+      .filter(allocation => allocationMatchesHead(allocation, row.name) && allocationMatchesMonth(allocation, month) && !/fine/i.test(normalizePaymentFeeHead(allocation.head)))
+      .reduce((allocationSum, allocation) => allocationSum + Number(allocation.amount || 0), 0);
+  }, 0);
+}
+
 function getMonthlyFeePaidAmount(student, row, month) {
   if (!student || !row || !month || !Array.isArray(row.months)) return 0;
   const monthlyAmount = Number(row.monthlyAmount || 0);
-  const payments = getSessionPayments(student.admissionNo);
   const exactMonthAmounts = row.months.reduce((totals, itemMonth) => {
-    totals[itemMonth] = payments.reduce((sum, payment) => {
-      return sum + getPaymentAllocationsWithFallback(payment)
-        .filter(allocation => allocationMatchesHead(allocation, row.name) && allocationMatchesMonth(allocation, itemMonth) && !/fine/i.test(normalizePaymentFeeHead(allocation.head)))
-        .reduce((allocationSum, allocation) => allocationSum + Number(allocation.amount || 0), 0);
-    }, 0);
+    totals[itemMonth] = getExactMonthFeePaidAmount(student, row, itemMonth);
     return totals;
   }, {});
   const exact = Number(exactMonthAmounts[month] || 0);
   if (!monthlyAmount || exact >= monthlyAmount) return exact;
-  const chunks = [];
-  payments.slice().reverse().forEach(payment => {
-    (payment.allocations || [])
-      .filter(allocation => allocationMatchesHead(allocation, row.name) && !normalizePaymentMonth(allocation.month) && !/fine/i.test(normalizePaymentFeeHead(allocation.head)))
-      .forEach(allocation => chunks.push(Number(allocation.amount || 0)));
-  });
+  const chunks = buildUnassignedFeeChunks(student, row);
+  let applied = 0;
   for (const itemMonth of row.months) {
-    let needed = Math.max(monthlyAmount - Number(exactMonthAmounts[itemMonth] || 0), 0);
-    let applied = 0;
-    while (needed > 0 && chunks.length) {
-      const used = Math.min(needed, chunks[0]);
-      if (itemMonth === month) applied += used;
-      chunks[0] -= used;
-      needed -= used;
-      if (chunks[0] <= 0) chunks.shift();
+    const needed = Math.max(monthlyAmount - Number(exactMonthAmounts[itemMonth] || 0), 0);
+    const filled = consumeUnassignedFeeChunksForMonth(chunks, itemMonth, needed);
+    if (itemMonth === month) {
+      applied = filled.amount;
+      break;
     }
-    if (itemMonth === month) return exact + applied;
   }
-  return exact;
+  return exact + applied;
 }
 
 function getTuitionMonthPaidInfo(student, row, month) {
@@ -10510,9 +10565,9 @@ function getLedgerMonthPaymentSplit(student, row, month) {
   const matchingHeads = getFeeHeadMatchingHeads(row.name);
   const payments = getSessionPayments(student.admissionNo);
   const exact = payments.reduce((total, payment) => {
-    const amount = payment.allocations
-      .filter(allocation => matchingHeads.includes(allocation.head) && allocation.month === month)
-      .reduce((sum, allocation) => sum + allocation.amount, 0);
+    const amount = getPaymentAllocationsWithFallback(payment)
+      .filter(allocation => matchingHeads.includes(allocation.head) && allocationMatchesMonth(allocation, month))
+      .reduce((sum, allocation) => sum + Number(allocation.amount || 0), 0);
     if (amount <= 0) return total;
     const split = getPaymentSplitForAmount(payment, amount);
     total.amount += amount;
@@ -10523,49 +10578,22 @@ function getLedgerMonthPaymentSplit(student, row, month) {
   if (!Array.isArray(row.months) || !row.months.includes(month) || !row.monthlyAmount) return exact;
   const monthlyAmount = Number(row.monthlyAmount || 0);
   if (exact.amount >= monthlyAmount) return exact;
-  const exactMonthAmounts = row.months.reduce((totals, itemMonth) => {
-    totals[itemMonth] = payments.reduce((sum, payment) => {
-      return sum + payment.allocations
-        .filter(allocation => allocation.head === row.name && allocation.month === itemMonth)
-        .reduce((allocationSum, allocation) => allocationSum + allocation.amount, 0);
-    }, 0);
-    return totals;
-  }, {});
-  const exactPaidMonths = new Set();
-  row.months.forEach(itemMonth => {
-    if ((exactMonthAmounts[itemMonth] || 0) >= monthlyAmount) exactPaidMonths.add(itemMonth);
-  });
-  const chunks = [];
-  payments.slice().reverse().forEach(payment => {
-    payment.allocations
-      .filter(allocation => allocation.head === row.name && !allocation.month)
-      .forEach(allocation => {
-        const split = getPaymentSplitForAmount(payment, allocation.amount);
-        chunks.push({amount: Number(allocation.amount || 0), bank: split.bank, cash: split.cash});
-      });
-  });
+  const chunks = buildUnassignedFeeChunks(student, row);
   const target = {...exact};
   for (const itemMonth of row.months) {
-    if (exactPaidMonths.has(itemMonth)) continue;
-    let needed = Math.max(monthlyAmount - Number(exactMonthAmounts[itemMonth] || 0), 0);
-    while (needed > 0 && chunks.length) {
-      const chunk = chunks[0];
-      const used = Math.min(needed, chunk.amount);
-      const ratio = chunk.amount > 0 ? used / chunk.amount : 0;
-      const bank = Math.min(used, Math.round(chunk.bank * ratio));
-      const cash = Math.max(used - bank, 0);
-      if (itemMonth === month) {
-        target.amount += used;
-        target.bank += bank;
-        target.cash += cash;
-      }
-      chunk.amount -= used;
-      chunk.bank = Math.max(chunk.bank - bank, 0);
-      chunk.cash = Math.max(chunk.cash - cash, 0);
-      needed -= used;
-      if (chunk.amount <= 0) chunks.shift();
+    const exactMonthAmount = getExactMonthFeePaidAmount(student, row, itemMonth);
+    if (exactMonthAmount >= monthlyAmount) {
+      if (itemMonth === month) return exact;
+      continue;
     }
-    if (itemMonth === month) return target.amount >= monthlyAmount ? target : {amount: 0, bank: 0, cash: 0};
+    const needed = Math.max(monthlyAmount - exactMonthAmount, 0);
+    const filled = consumeUnassignedFeeChunksForMonth(chunks, itemMonth, needed);
+    if (itemMonth === month) {
+      target.amount += filled.amount;
+      target.bank += filled.bank;
+      target.cash += filled.cash;
+      return target.amount >= monthlyAmount ? target : {amount: 0, bank: 0, cash: 0};
+    }
   }
   return target;
 }
@@ -10598,26 +10626,16 @@ function getLedgerRowFineAmount(student, row) {
 function getPaidLedgerMonths(student, row) {
   if (!student || !row || !Array.isArray(row.months) || !row.months.length || !row.monthlyAmount) return new Set();
   const paidMonths = new Set();
-  const paymentInfo = getSessionPayments(student.admissionNo).reduce((info, payment) => {
-    payment.allocations.forEach(allocation => {
-      if (!allocationMatchesHead(allocation, row.name) || /fine/i.test(normalizePaymentFeeHead(allocation.head))) return;
-      const month = normalizePaymentMonth(allocation.month);
-      if (month) {
-        info.exactMonthTotals[month] = (info.exactMonthTotals[month] || 0) + allocation.amount;
-      } else {
-        info.unassignedPaid += allocation.amount;
-      }
-    });
-    return info;
-  }, {exactMonthTotals: {}, unassignedPaid: 0});
+  const monthlyAmount = Number(row.monthlyAmount || 0);
+  const chunks = buildUnassignedFeeChunks(student, row);
   row.months.forEach(month => {
-    if ((paymentInfo.exactMonthTotals[month] || 0) >= Number(row.monthlyAmount || 0)) paidMonths.add(month);
-  });
-  let unassignedMonthCount = Math.floor(Number(paymentInfo.unassignedPaid || 0) / Number(row.monthlyAmount || 1));
-  row.months.forEach(month => {
-    if (unassignedMonthCount <= 0 || paidMonths.has(month)) return;
-    paidMonths.add(month);
-    unassignedMonthCount -= 1;
+    const exact = getExactMonthFeePaidAmount(student, row, month);
+    if (exact >= monthlyAmount) {
+      paidMonths.add(month);
+      return;
+    }
+    const filled = consumeUnassignedFeeChunksForMonth(chunks, month, Math.max(monthlyAmount - exact, 0));
+    if (exact + filled.amount >= monthlyAmount) paidMonths.add(month);
   });
   return paidMonths;
 }
@@ -11144,9 +11162,9 @@ function getLedgerMonthlyPaymentReport(student, row) {
   ];
   return orderedMonths.map(month => ({
     ...reports[month],
-    receipts: [...reports[month].receipts],
-    dates: [...reports[month].dates]
-  }));
+    receipts: [...(reports[month]?.receipts || [])],
+    dates: [...(reports[month]?.dates || [])]
+  })).filter(report => Number(report.total || 0) > 0 || report.receipts.length);
 }
 
 function printLedgerPaymentPreviewContent() {
@@ -12499,6 +12517,52 @@ function renderLedgerDateCell(student, row) {
   `;
 }
 
+function splitAmountAcrossDueMonths(student, row, amount, paymentDate = new Date()) {
+  const allocations = [];
+  let remaining = Number(amount || 0);
+  const months = Array.isArray(row?.months) ? row.months : [];
+  if (!student || !row || remaining <= 0) return allocations;
+  if (!months.length) {
+    allocations.push({head: row.name, amount: remaining});
+    return allocations;
+  }
+  months.forEach(month => {
+    if (remaining <= 0 || !isAcademicMonthOnOrBefore(month, paymentDate)) return;
+    const due = getMonthlyFeeHeadDueAmount(student, row, month);
+    const take = Math.min(due, remaining);
+    if (take <= 0) return;
+    allocations.push({head: row.name, amount: take, month});
+    remaining -= take;
+  });
+  if (remaining > 0) allocations.push({head: "Advance Payment", amount: remaining});
+  return allocations;
+}
+
+function expandMonthlessCollectionItems(student, items, paymentDate = new Date()) {
+  return (items || []).flatMap(item => {
+    if (!item) return [];
+    if (String(item.month || "").trim()) return [item];
+    const row = getLedgerRows(student).find(candidate => candidate.name === item.head);
+    if (!row || !Array.isArray(row.months) || !row.months.length) return [item];
+    const split = splitAmountAcrossDueMonths(student, row, Number(item.amount || 0), paymentDate);
+    if (!split.length) return [item];
+    const fine = Number(item.fine || 0);
+    return split.map((allocation, index) => {
+      const amount = Number(allocation.amount || 0);
+      const appliedFine = index === 0 ? fine : 0;
+      return {
+        ...item,
+        head: allocation.head,
+        month: allocation.month || "",
+        amount,
+        fine: appliedFine,
+        total: amount + appliedFine,
+        date: item.date || formatDateDDMMYYYY(paymentDate)
+      };
+    });
+  });
+}
+
 function collectStudentPayment(student, amount, date, mode, preferredHead = "", fineAmount = 0, preferredMonth = "", receiptNo = "", paymentBreakdown = {}) {
   const totalAmount = Number(amount || 0);
   const discountAmount = Number(paymentBreakdown.discountAmount || 0);
@@ -12510,14 +12574,18 @@ function collectStudentPayment(student, amount, date, mode, preferredHead = "", 
   const preferredRow = feeItems.find(row => row.name === preferredHead && row.due > 0);
   if (preferredRow) {
     const collected = Math.min(preferredRow.due, remainingAmount);
-    allocations.push({head: preferredRow.name, amount: collected, month: preferredMonth || undefined});
+    if (preferredMonth) {
+      allocations.push({head: preferredRow.name, amount: collected, month: preferredMonth});
+    } else {
+      allocations.push(...splitAmountAcrossDueMonths(student, preferredRow, collected, date));
+    }
     remainingAmount -= collected;
   }
   feeItems.forEach(row => {
     if (remainingAmount <= 0 || row.due <= 0) return;
     if (preferredRow && row.name === preferredRow.name) return;
     const collected = Math.min(row.due, remainingAmount);
-    allocations.push({head: row.name, amount: collected});
+    allocations.push(...splitAmountAcrossDueMonths(student, row, collected, date));
     remainingAmount -= collected;
   });
   if (remainingAmount > 0) allocations.push({head: "Advance Payment", amount: remainingAmount});
@@ -17769,7 +17837,7 @@ combinedCollectionForm.addEventListener("submit", async event => {
   try {
     const useAppendApi = await ensureFeeAppendApiEnabled();
     if (editingReceipt) deletePaymentByReceipt(student.admissionNo, editingReceipt, editingPaymentId);
-    const payment = collectCombinedStudentPayment(student, selected, form.elements.date.value, receiptNo, {
+    const payment = collectCombinedStudentPayment(student, expandMonthlessCollectionItems(student, selected, form.elements.date.value), form.elements.date.value, receiptNo, {
       bankAmount,
       cashAmount,
       discountAmount,
