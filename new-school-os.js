@@ -9616,8 +9616,8 @@ function renderFinanceSessionHeavyAggregates() {
   const monthlyBreakdown = document.getElementById("kpiFeesMonthlyBreakdown");
   if (monthlyBreakdown) {
     monthlyBreakdown.innerHTML = dashboardMonthly.monthlyBreakdown.map(item => `
-      <button class="monthly-fee-pill ${activeDashboardFeeMonth === item.month ? "active" : ""}" type="button" data-dashboard-fee-month="${escapeHtml(item.month)}" aria-pressed="${activeDashboardFeeMonth === item.month ? "true" : "false"}">
-        <span>${item.month}</span>
+      <button class="monthly-fee-pill ${activeDashboardFeeMonth === item.key ? "active" : ""}" type="button" data-dashboard-fee-month="${escapeHtml(item.key)}" aria-pressed="${activeDashboardFeeMonth === item.key ? "true" : "false"}">
+        <span>${escapeHtml(item.label)}</span>
         <strong>${Number(item.amount || 0).toLocaleString("en-IN")}</strong>
       </button>
     `).join("");
@@ -9677,6 +9677,57 @@ function renderFinanceSession(includeTables = true, options = {}) {
   renderDueFeesSearch();
 }
 
+function getCalendarMonthName(dateValue = new Date()) {
+  return ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][parseDateDDMMYYYY(dateValue).getMonth()] || "";
+}
+
+function getAcademicMonthYear(month) {
+  const {startYear, endYear} = getSessionYears();
+  const index = ACADEMIC_MONTHS.indexOf(month);
+  return index >= 0 && index <= 8 ? startYear : endYear;
+}
+
+function getDashboardFeeMonthInfo(month, year) {
+  const cleanMonth = String(month || "").trim();
+  const cleanYear = Number(year || 0);
+  if (!cleanMonth || !cleanYear) return null;
+  return {
+    month: cleanMonth,
+    year: cleanYear,
+    key: `${cleanMonth}-${cleanYear}`,
+    label: `${cleanMonth} ${cleanYear}`
+  };
+}
+
+function parseDashboardFeeMonthKey(value = "") {
+  const clean = String(value || "").trim();
+  const tagged = clean.match(/^(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[-\s](\d{4})$/i);
+  if (tagged) {
+    const month = tagged[1][0].toUpperCase() + tagged[1].slice(1, 3).toLowerCase();
+    return getDashboardFeeMonthInfo(month, tagged[2]);
+  }
+  if (ACADEMIC_MONTHS.includes(clean)) {
+    return getDashboardFeeMonthInfo(clean, getAcademicMonthYear(clean));
+  }
+  return null;
+}
+
+function getDashboardCollectionMonthInfo(dateValue) {
+  const date = parseDateDDMMYYYY(dateValue);
+  return getDashboardFeeMonthInfo(getCalendarMonthName(date), date.getFullYear());
+}
+
+function compareDashboardFeeMonthKeys(left, right) {
+  const a = parseDashboardFeeMonthKey(left);
+  const b = parseDashboardFeeMonthKey(right);
+  if (!a && !b) return 0;
+  if (!a) return 1;
+  if (!b) return -1;
+  if (a.year !== b.year) return a.year - b.year;
+  const calendarMonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  return calendarMonths.indexOf(a.month) - calendarMonths.indexOf(b.month);
+}
+
 function getDashboardMonthlyFeeCollectionSummary() {
   const activeStudents = getActiveStudents();
   const expected = activeStudents.reduce((sum, student) => {
@@ -9684,25 +9735,30 @@ function getDashboardMonthlyFeeCollectionSummary() {
       .filter(item => Array.isArray(item.months) && item.months.length)
       .reduce((itemSum, item) => itemSum + Number(item.total || 0), 0);
   }, 0);
-  const monthlyTotals = ACADEMIC_MONTHS.reduce((totals, month) => {
-    totals[month] = 0;
-    return totals;
-  }, {});
+  const monthlyTotals = {};
   getDailyCollectionReportRows().forEach(row => {
-    const collectionDate = parseDateDDMMYYYY(row.date);
-    const month = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"][collectionDate.getMonth()] || "";
-    if (!Object.prototype.hasOwnProperty.call(monthlyTotals, month)) return;
-    monthlyTotals[month] += Number(row.total || 0);
+    const info = getDashboardCollectionMonthInfo(row.date);
+    if (!info) return;
+    monthlyTotals[info.key] = (monthlyTotals[info.key] || 0) + Number(row.total || 0);
   });
+  const sessionKeys = ACADEMIC_MONTHS.map(month => getDashboardFeeMonthInfo(month, getAcademicMonthYear(month))?.key).filter(Boolean);
+  const extraKeys = Object.keys(monthlyTotals).filter(key => !sessionKeys.includes(key) && Number(monthlyTotals[key] || 0) > 0);
+  const monthKeys = [...sessionKeys, ...extraKeys].sort(compareDashboardFeeMonthKeys);
   const collected = Object.values(monthlyTotals).reduce((sum, amount) => sum + Number(amount || 0), 0);
   return {
     expected,
     collected,
     percent: expected > 0 ? Math.min(100, Math.round((collected / expected) * 100)) : 0,
-    monthlyBreakdown: ACADEMIC_MONTHS.map(month => ({
-      month,
-      amount: monthlyTotals[month] || 0
-    }))
+    monthlyBreakdown: monthKeys.map(key => {
+      const info = parseDashboardFeeMonthKey(key);
+      return {
+        key,
+        month: info?.month || key,
+        year: info?.year || "",
+        label: info?.label || key,
+        amount: monthlyTotals[key] || 0
+      };
+    })
   };
 }
 
@@ -9738,7 +9794,8 @@ function formatDashboardFeeHeadStudentMeta(head = "", amount = 0, studentCount =
 }
 
 function getDashboardFeeMonthDetails(month = "") {
-  const selectedMonth = String(month || "").trim();
+  const selected = parseDashboardFeeMonthKey(month);
+  const selectedMonth = selected?.label || String(month || "").trim();
   const monthTotals = {
     month: selectedMonth,
     total: 0,
@@ -9750,15 +9807,14 @@ function getDashboardFeeMonthDetails(month = "") {
     students: new Set(),
     heads: new Map()
   };
-  if (!selectedMonth) return monthTotals;
-  const calendarMonths = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+  if (!selected) return monthTotals;
   const sessionPayments = collectedPayments[activeSession] || {};
   Object.entries(sessionPayments).forEach(([admissionNo, payments]) => {
     const student = findStudentByAdmissionNo(admissionNo);
     const studentKey = String(admissionNo || student?.admissionNo || student?.name || "").trim();
     (payments || []).forEach(payment => {
-      const paymentMonth = calendarMonths[parseDateDDMMYYYY(payment.date).getMonth()] || "";
-      if (paymentMonth !== selectedMonth) return;
+      const paymentMonth = getDashboardCollectionMonthInfo(payment.date);
+      if (!paymentMonth || paymentMonth.key !== selected.key) return;
       const allocations = dedupePaymentAllocations(payment.allocations || []);
       const grossTotal = allocations.length
         ? allocations.reduce((sum, allocation) => sum + Number(allocation.amount || 0), 0)

@@ -1029,9 +1029,10 @@ h2 { font-size: 1.15rem; }
 
 .kpi-card.fees-kpi .monthly-fee-pill span {
   color: #92400e;
-  font-size: .72rem !important;
+  font-size: .68rem !important;
   font-weight: 950;
-  line-height: 1;
+  line-height: 1.15;
+  white-space: nowrap;
 }
 
 .kpi-card.fees-kpi .monthly-fee-pill strong {
