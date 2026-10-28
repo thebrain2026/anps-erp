@@ -2922,18 +2922,22 @@ function getStudentSessionOriginLabel(origin = "") {
   return "Existing";
 }
 
+function getLegacyHomeSession() {
+  return financeSessions["2026-27"] ? "2026-27" : (Object.keys(financeSessions)[0] || "2026-27");
+}
+
 function inferStudentHomeSession(student = {}) {
-  const admissionNo = String(student.admissionNo || "");
-  const prefixMatch = admissionNo.match(/ANPS-ADM\/(\d{2})-(\d{2})\//i);
-  if (prefixMatch) return `20${prefixMatch[1]}-${prefixMatch[2]}`;
-  const normalized = normalizeAdmissionNo(admissionNo);
-  const paidSession = Object.keys(collectedPayments || {}).find(session => {
-    const rows = collectedPayments[session] || {};
-    return Object.keys(rows).some(key => normalizeAdmissionNo(key) === normalized && Array.isArray(rows[key]) && rows[key].length);
+  return getLegacyHomeSession();
+}
+
+function hasExplicitLaterSessionPlacement(student = {}, afterSession = getLegacyHomeSession()) {
+  const enrollments = student?.sessionEnrollments;
+  if (!enrollments || typeof enrollments !== "object") return false;
+  return Object.entries(enrollments).some(([session, enrollment]) => {
+    if (String(session || "") <= String(afterSession || "")) return false;
+    const origin = String(enrollment?.origin || "").trim().toLowerCase();
+    return origin === "admission" || origin === "promoted";
   });
-  if (paidSession) return paidSession;
-  if (financeSessions["2026-27"]) return "2026-27";
-  return Object.keys(financeSessions)[0] || "2026-27";
 }
 
 function getStudentSessionEnrollment(student = {}, session = activeSession) {
@@ -2944,7 +2948,10 @@ function getStudentSessionEnrollment(student = {}, session = activeSession) {
 }
 
 function isStudentEnrolledInSession(student = {}, session = activeSession) {
-  return Boolean(getStudentSessionEnrollment(student, session));
+  if (getStudentSessionEnrollment(student, session)) return true;
+  const homeSession = getLegacyHomeSession();
+  if (session === homeSession && !hasExplicitLaterSessionPlacement(student, homeSession)) return true;
+  return false;
 }
 
 function enrollStudentInSession(student, session, details = {}) {
@@ -2984,7 +2991,16 @@ function migrateAllStudentSessionEnrollments() {
 
 function overlaySessionStudent(student, session = activeSession) {
   const enrollment = getStudentSessionEnrollment(student, session);
-  if (!enrollment) return student;
+  if (!enrollment) {
+    if (session === getLegacyHomeSession()) {
+      return {
+        ...student,
+        sessionOrigin: "existing",
+        enrolledSession: session
+      };
+    }
+    return student;
+  }
   return {
     ...student,
     klass: enrollment.klass || student.klass || "",
