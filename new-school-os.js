@@ -106,6 +106,10 @@ let feeBookReturnStudentAdmissionNo = "";
 let activeDailyCollectionDate = "";
 const viewHistoryStack = [];
 const collectedPayments = {};
+const serverCollectedPayments = {};
+let canonicalFeeReceiptRows = null;
+let canonicalFeeReceiptsAt = 0;
+let canonicalFeeReceiptsRefresh = null;
 const deletedPaymentReceipts = {};
 const deletedStudents = {};
 const deletedStaff = {};
@@ -1015,6 +1019,120 @@ function getNextAvailableReceiptForMerge(session = activeSession, usedReceipts =
   } while (usedReceipts.has(candidate));
   usedReceipts.add(candidate);
   return candidate;
+}
+
+function rememberServerCollectedPayments(remoteCollected = {}) {
+  Object.keys(serverCollectedPayments).forEach(session => delete serverCollectedPayments[session]);
+  Object.entries(remoteCollected && typeof remoteCollected === "object" ? remoteCollected : {}).forEach(([session, rows]) => {
+    if (!rows || typeof rows !== "object") return;
+    serverCollectedPayments[session] = {};
+    Object.entries(rows).forEach(([admissionNo, payments]) => {
+      serverCollectedPayments[session][admissionNo] = Array.isArray(payments) ? payments.slice() : [];
+    });
+  });
+}
+
+function getDailyCollectionSessionPayments() {
+  const serverSession = serverCollectedPayments[activeSession];
+  if (serverSession && Object.keys(serverSession).length) return serverSession;
+  return collectedPayments[activeSession] || {};
+}
+
+function parseFeeReceiptRawJson(row = {}) {
+  try {
+    const raw = JSON.parse(row.raw_json || "{}");
+    return raw && typeof raw === "object" ? raw : {};
+  } catch (error) {
+    return {};
+  }
+}
+
+async function refreshCanonicalFeeReceipts(force = false) {
+  if (!force && Array.isArray(canonicalFeeReceiptRows) && Date.now() - canonicalFeeReceiptsAt < 15000) return canonicalFeeReceiptRows;
+  if (!localStorage.getItem(BACKEND_TOKEN_KEY)) return canonicalFeeReceiptRows;
+  if (canonicalFeeReceiptsRefresh) return canonicalFeeReceiptsRefresh;
+  canonicalFeeReceiptsRefresh = (async () => {
+    try {
+      const response = await backendFetch(`/api/fees?v=${Date.now()}`, {
+        headers: backendHeaders(),
+        cache: "no-store"
+      });
+      if (!response.ok) return canonicalFeeReceiptRows;
+      const payload = await response.json();
+      if (Array.isArray(payload?.fees)) {
+        canonicalFeeReceiptRows = payload.fees;
+        canonicalFeeReceiptsAt = Date.now();
+      }
+    } catch (error) {
+      console.warn("Daily collection receipt table sync skipped.", error);
+    } finally {
+      canonicalFeeReceiptsRefresh = null;
+    }
+    return canonicalFeeReceiptRows;
+  })();
+  return canonicalFeeReceiptsRefresh;
+}
+
+function getDailyCollectionReportRowsFromReceiptTable(tableRows = []) {
+  const dailyMap = new Map();
+  const seenPaymentLines = new Set();
+  (Array.isArray(tableRows) ? tableRows : []).forEach(row => {
+    const receipt = String(row.receipt_no || row.receipt || "").trim();
+    if (!receipt || receipt === "-" || !/^ANPS\/\d{4}-\d+$/i.test(receipt)) return;
+    const raw = parseFeeReceiptRawJson(row);
+    const dateLabel = formatDateDDMMYYYY(row.payment_date || raw.date || "");
+    if (!dateLabel) return;
+    const dedupeKey = `${receipt.toLowerCase()}|${dateLabel}`;
+    if (seenPaymentLines.has(dedupeKey)) return;
+    seenPaymentLines.add(dedupeKey);
+    if (!dailyMap.has(dateLabel)) {
+      dailyMap.set(dateLabel, {
+        date: dateLabel,
+        receipts: new Set(),
+        students: new Set(),
+        roles: new Set(),
+        details: [],
+        bank: 0,
+        cash: 0,
+        fine: 0,
+        discount: 0,
+        total: 0
+      });
+    }
+    const reportRow = dailyMap.get(dateLabel);
+    const allocations = Array.isArray(raw.allocations) ? raw.allocations : [];
+    const discount = Number(row.discount || raw.discountAmount || 0);
+    const total = Number(row.net_paid != null ? row.net_paid : (raw.amount || 0));
+    const bank = Number(row.bank_amount != null ? row.bank_amount : (raw.bankAmount || 0));
+    const cash = Number(row.cash_amount != null ? row.cash_amount : (raw.cashAmount || 0));
+    const fine = Number(row.fine != null ? row.fine : allocations
+      .filter(allocation => ["Tuition Late Fine", "Transport Late Fine"].includes(allocation.head))
+      .reduce((sum, allocation) => sum + Number(allocation.amount || 0), 0));
+    const admissionNo = row.admission_no || raw.admissionNo || "";
+    const studentName = row.student_name || findStudentByAdmissionNo(admissionNo)?.name || "-";
+    const role = raw.by || raw.entryRole || raw.role || "-";
+    reportRow.receipts.add(receipt);
+    reportRow.students.add(studentName || admissionNo || "-");
+    reportRow.roles.add(role);
+    reportRow.details.push({
+      admissionNo,
+      studentName,
+      receipt,
+      role,
+      bank,
+      cash,
+      fine,
+      discount,
+      total,
+      remarks: raw.remarks || row.status || "-"
+    });
+    reportRow.bank += bank;
+    reportRow.cash += cash;
+    reportRow.fine += fine;
+    reportRow.discount += discount;
+    reportRow.total += total;
+  });
+  return [...dailyMap.values()].sort((a, b) => parseDateDDMMYYYY(b.date) - parseDateDDMMYYYY(a.date));
 }
 
 function mergeCollectedPayments(remoteCollected = {}, localCollected = {}, deletedMap = {}) {
@@ -4046,7 +4164,10 @@ function getDailyCollectionPaymentDedupeKey(admissionNo = "", payment = {}, date
 }
 
 function getDailyCollectionReportRows() {
-  const sessionPayments = collectedPayments[activeSession] || {};
+  if (Array.isArray(canonicalFeeReceiptRows) && canonicalFeeReceiptRows.length) {
+    return getDailyCollectionReportRowsFromReceiptTable(canonicalFeeReceiptRows);
+  }
+  const sessionPayments = getDailyCollectionSessionPayments();
   const dailyMap = new Map();
   const seenPaymentLines = new Set();
   Object.entries(sessionPayments).forEach(([admissionNo, payments]) => {
@@ -4731,6 +4852,18 @@ function renderDailyCashTrendChart() {
 }
 
 function renderDailyCollectionReport() {
+  const summary = document.getElementById("dailyCollectionSummary");
+  const rows = document.getElementById("dailyCollectionReportRows");
+  if (!summary || !rows) return;
+  refreshCanonicalFeeReceipts().then(() => {
+    if (document.querySelector(".view.active")?.id === "dailyCollectionReport") {
+      paintDailyCollectionReport();
+    }
+  });
+  paintDailyCollectionReport();
+}
+
+function paintDailyCollectionReport() {
   const summary = document.getElementById("dailyCollectionSummary");
   const rows = document.getElementById("dailyCollectionReportRows");
   if (!summary || !rows) return;
@@ -15021,6 +15154,7 @@ async function pullBackendStateIfChanged(showMessage = false) {
     const payload = await stateResponse.json();
     const backendState = payload?.state || {};
     if (!backendState || !Object.keys(backendState).length) return;
+    rememberServerCollectedPayments(backendState.collectedPayments || {});
     const localSnapshot = getAppStateSnapshot();
     const mergedState = mergeSetupSafeState(backendState, localSnapshot);
     backendHydrating = true;
@@ -15073,6 +15207,7 @@ async function initializeBackendSync() {
     const backendState = payload?.state || {};
     backendLastUpdatedAt = payload?.updated_at || "";
     if (!flushedPending && backendState && Object.keys(backendState).length) {
+      rememberServerCollectedPayments(backendState.collectedPayments || {});
       const localSnapshot = getAppStateSnapshot();
       const mergedState = mergeSetupSafeState(backendState, localSnapshot);
       backendHydrating = true;
