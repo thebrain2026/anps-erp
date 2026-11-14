@@ -9965,6 +9965,45 @@ function formatDashboardFeeHeadStudentMeta(head = "", amount = 0, studentCount =
   return studentLabel;
 }
 
+function getDashboardFeeMonthPayments(selected) {
+  const payments = [];
+  const seenPaymentLines = new Set();
+  const addPayment = (admissionNo, payment, dateLabel) => {
+    if (!selected || !isDailyCollectionReceiptBacked(payment)) return;
+    const paymentMonth = getDashboardCollectionMonthInfo(dateLabel || payment.date);
+    if (!paymentMonth || paymentMonth.key !== selected.key) return;
+    const dedupeKey = getDailyCollectionPaymentDedupeKey(admissionNo, payment, dateLabel || formatDateDDMMYYYY(payment.date));
+    if (seenPaymentLines.has(dedupeKey)) return;
+    seenPaymentLines.add(dedupeKey);
+    payments.push({admissionNo, payment, dateLabel: dateLabel || formatDateDDMMYYYY(payment.date)});
+  };
+  if (Array.isArray(canonicalFeeReceiptRows) && canonicalFeeReceiptRows.length) {
+    canonicalFeeReceiptRows.forEach(row => {
+      const raw = parseFeeReceiptRawJson(row);
+      const receipt = String(row.receipt_no || raw.receipt || "").trim();
+      const dateLabel = formatDateDDMMYYYY(row.payment_date || raw.date || "");
+      addPayment(row.admission_no || raw.admissionNo || "", {
+        receipt,
+        date: dateLabel,
+        amount: Number(row.net_paid != null ? row.net_paid : (raw.amount || 0)),
+        bankAmount: Number(row.bank_amount != null ? row.bank_amount : (raw.bankAmount || 0)),
+        cashAmount: Number(row.cash_amount != null ? row.cash_amount : (raw.cashAmount || 0)),
+        discountAmount: Number(row.discount || raw.discountAmount || 0),
+        allocations: Array.isArray(raw.allocations) ? raw.allocations : [],
+        by: raw.by || raw.entryRole || raw.role
+      }, dateLabel);
+    });
+    return payments;
+  }
+  Object.entries(getDailyCollectionSessionPayments()).forEach(([admissionNo, rows]) => {
+    (rows || []).forEach(payment => {
+      if (isPaymentReceiptDeleted(deletedPaymentReceipts, activeSession, admissionNo, payment.receipt)) return;
+      addPayment(admissionNo, payment, formatDateDDMMYYYY(payment.date));
+    });
+  });
+  return payments;
+}
+
 function getDashboardFeeMonthDetails(month = "") {
   const selected = parseDashboardFeeMonthKey(month);
   const selectedMonth = selected?.label || String(month || "").trim();
@@ -9980,39 +10019,34 @@ function getDashboardFeeMonthDetails(month = "") {
     heads: new Map()
   };
   if (!selected) return monthTotals;
-  const sessionPayments = collectedPayments[activeSession] || {};
-  Object.entries(sessionPayments).forEach(([admissionNo, payments]) => {
+  getDashboardFeeMonthPayments(selected).forEach(({admissionNo, payment}) => {
     const student = findStudentByAdmissionNo(admissionNo);
-    const studentKey = String(admissionNo || student?.admissionNo || student?.name || "").trim();
-    (payments || []).forEach(payment => {
-      const paymentMonth = getDashboardCollectionMonthInfo(payment.date);
-      if (!paymentMonth || paymentMonth.key !== selected.key) return;
-      const allocations = dedupePaymentAllocations(payment.allocations || []);
-      const grossTotal = allocations.length
-        ? allocations.reduce((sum, allocation) => sum + Number(allocation.amount || 0), 0)
-        : Number(payment.amount || 0);
-      const discount = Number(payment.discountAmount || 0);
-      const total = Math.max(grossTotal - discount, 0);
-      const split = getPaymentSplitForAmount(payment, total);
-      const fine = allocations
-        .filter(allocation => ["Tuition Late Fine", "Transport Late Fine"].includes(allocation.head))
-        .reduce((sum, allocation) => sum + Number(allocation.amount || 0), 0);
-      monthTotals.total += total;
-      monthTotals.bank += split.bank;
-      monthTotals.cash += split.cash;
-      monthTotals.fine += fine;
-      monthTotals.discount += discount;
-      if (payment.receipt) monthTotals.receipts.add(String(payment.receipt));
-      if (studentKey) monthTotals.students.add(studentKey);
-      if (!allocations.length) {
-        const fallbackHead = normalizePaymentFeeHead(payment.head || payment.feeHead || payment.fee_head || "Payment");
-        addDashboardFeeHeadAmount(monthTotals.heads, fallbackHead, total, studentKey);
-        return;
-      }
-      allocations.forEach(allocation => {
-        const head = normalizePaymentFeeHead(allocation.head || "Payment");
-        addDashboardFeeHeadAmount(monthTotals.heads, head, Number(allocation.amount || 0), studentKey);
-      });
+    const studentKey = normalizeAdmissionNo(admissionNo || student?.admissionNo || "") || String(student?.name || "").trim();
+    const allocations = dedupePaymentAllocations(payment.allocations || []);
+    const grossTotal = allocations.length
+      ? allocations.reduce((sum, allocation) => sum + Number(allocation.amount || 0), 0)
+      : Number(payment.amount || 0);
+    const discount = Number(payment.discountAmount || 0);
+    const total = Math.max(grossTotal - discount, 0);
+    const split = getPaymentSplitForAmount(payment, total);
+    const fine = allocations
+      .filter(allocation => ["Tuition Late Fine", "Transport Late Fine"].includes(allocation.head))
+      .reduce((sum, allocation) => sum + Number(allocation.amount || 0), 0);
+    monthTotals.total += total;
+    monthTotals.bank += split.bank;
+    monthTotals.cash += split.cash;
+    monthTotals.fine += fine;
+    monthTotals.discount += discount;
+    if (payment.receipt) monthTotals.receipts.add(String(payment.receipt));
+    if (studentKey) monthTotals.students.add(studentKey);
+    if (!allocations.length) {
+      const fallbackHead = normalizePaymentFeeHead(payment.head || payment.feeHead || payment.fee_head || "Payment");
+      addDashboardFeeHeadAmount(monthTotals.heads, fallbackHead, total, studentKey);
+      return;
+    }
+    allocations.forEach(allocation => {
+      const head = normalizePaymentFeeHead(allocation.head || "Payment");
+      addDashboardFeeHeadAmount(monthTotals.heads, head, Number(allocation.amount || 0), studentKey);
     });
   });
   return monthTotals;
