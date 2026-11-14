@@ -4029,13 +4029,25 @@ function renderStudentTeacherRatioReport() {
   }).join("") || `<tr><td colspan="4">No student teacher ratio report available yet.</td></tr>`;
 }
 
+function getDailyCollectionPaymentDedupeKey(admissionNo = "", payment = {}, dateLabel = "") {
+  const admissionKey = normalizeAdmissionNo(admissionNo) || String(admissionNo || "").trim().toLowerCase().replace(/\s+/g, "");
+  const receiptKey = String(payment.receipt || "").trim().toLowerCase();
+  const dayKey = String(dateLabel || formatDateDDMMYYYY(payment.date) || "").trim();
+  return `${admissionKey}|${receiptKey}|${dayKey}`;
+}
+
 function getDailyCollectionReportRows() {
   const sessionPayments = collectedPayments[activeSession] || {};
   const dailyMap = new Map();
+  const seenPaymentLines = new Set();
   Object.entries(sessionPayments).forEach(([admissionNo, payments]) => {
     const student = findStudentByAdmissionNo(admissionNo);
+    const displayAdmissionNo = student?.admissionNo || String(admissionNo || "").replace(/\s*\/\s*/g, "/");
     (payments || []).forEach(payment => {
       const dateLabel = formatDateDDMMYYYY(payment.date);
+      const dedupeKey = getDailyCollectionPaymentDedupeKey(admissionNo, payment, dateLabel);
+      if (seenPaymentLines.has(dedupeKey)) return;
+      seenPaymentLines.add(dedupeKey);
       if (!dailyMap.has(dateLabel)) {
         dailyMap.set(dateLabel, {
           date: dateLabel,
@@ -4062,10 +4074,10 @@ function getDailyCollectionReportRows() {
       const total = Math.max(grossTotal - discount, 0);
       const split = getPaymentSplitForAmount(payment, total);
       row.receipts.add(payment.receipt || "-");
-      row.students.add(student?.name || admissionNo || "-");
+      row.students.add(student?.name || displayAdmissionNo || "-");
       row.roles.add(payment.by || payment.entryRole || payment.role || "-");
       row.details.push({
-        admissionNo,
+        admissionNo: displayAdmissionNo,
         studentName: student?.name || "-",
         receipt: payment.receipt || "-",
         role: payment.by || payment.entryRole || payment.role || "-",
