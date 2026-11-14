@@ -4029,11 +4029,20 @@ function renderStudentTeacherRatioReport() {
   }).join("") || `<tr><td colspan="4">No student teacher ratio report available yet.</td></tr>`;
 }
 
+function getDailyCollectionReceiptKey(payment = {}) {
+  return String(payment.receipt || "").trim();
+}
+
+function isDailyCollectionReceiptBacked(payment = {}) {
+  const receipt = getDailyCollectionReceiptKey(payment);
+  if (!receipt || receipt === "-") return false;
+  return /^ANPS\/\d{4}-\d+$/i.test(receipt);
+}
+
 function getDailyCollectionPaymentDedupeKey(admissionNo = "", payment = {}, dateLabel = "") {
-  const admissionKey = normalizeAdmissionNo(admissionNo) || String(admissionNo || "").trim().toLowerCase().replace(/\s+/g, "");
-  const receiptKey = String(payment.receipt || "").trim().toLowerCase();
+  const receiptKey = getDailyCollectionReceiptKey(payment).toLowerCase();
   const dayKey = String(dateLabel || formatDateDDMMYYYY(payment.date) || "").trim();
-  return `${admissionKey}|${receiptKey}|${dayKey}`;
+  return `${receiptKey}|${dayKey}`;
 }
 
 function getDailyCollectionReportRows() {
@@ -4044,6 +4053,8 @@ function getDailyCollectionReportRows() {
     const student = findStudentByAdmissionNo(admissionNo);
     const displayAdmissionNo = student?.admissionNo || String(admissionNo || "").replace(/\s*\/\s*/g, "/");
     (payments || []).forEach(payment => {
+      if (!isDailyCollectionReceiptBacked(payment)) return;
+      if (isPaymentReceiptDeleted(deletedPaymentReceipts, activeSession, admissionNo, payment.receipt)) return;
       const dateLabel = formatDateDDMMYYYY(payment.date);
       const dedupeKey = getDailyCollectionPaymentDedupeKey(admissionNo, payment, dateLabel);
       if (seenPaymentLines.has(dedupeKey)) return;
