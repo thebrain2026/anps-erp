@@ -14,7 +14,7 @@
       location.replace("http://127.0.0.1:4174/anps-erp.html#dashboard");
     }
   </script>
-  <link rel="stylesheet" href="./new-school-os.css?v=20261028-legacy-home-roster" />
+  <link rel="stylesheet" href="./new-school-os.css?v=20261121-transport-month-extra" />
 </head>
 <body>
   <div class="shell">
@@ -4028,6 +4028,11 @@
           <label class="combined-remarks-field">Remarks
             <input name="remarks" type="text" placeholder="Optional note" />
           </label>
+          <label class="combined-remarks-field" id="transportExtraChargeField" hidden>
+            Extra transport (this month only)
+            <input name="transportExtraAmount" type="number" min="0" step="1" placeholder="0" />
+            <small>Standing transport fee stays the same. Extra is received as Transport Fees, not Fine or Advance.</small>
+          </label>
         </div>
         <div class="combined-fee-panel">
           <div class="combined-fee-head">
@@ -4078,6 +4083,6 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="./new-school-os.js?v=20261114-stop-fees-api-trim"></script>
+  <script src="./new-school-os.js?v=20261121-transport-month-extra"></script>
 </body>
 </html>

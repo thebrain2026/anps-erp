@@ -9240,6 +9240,16 @@ body.modal-open {
   text-transform: uppercase;
 }
 
+.combined-remarks-field small {
+  display: block;
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: .68rem;
+  font-weight: 700;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
 .combined-remarks-field input {
   width: 100%;
   min-height: 36px;

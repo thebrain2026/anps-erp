@@ -722,6 +722,7 @@ function mergeStudentRecord(existing = {}, incoming = {}) {
   }
   const enrollments = mergeSessionEnrollments(existing.sessionEnrollments, incoming.sessionEnrollments);
   if (Object.keys(enrollments).length) merged.sessionEnrollments = enrollments;
+  merged.transportMonthExtras = mergeTransportMonthExtras(existing.transportMonthExtras, incoming.transportMonthExtras);
   return merged;
 }
 
@@ -4998,9 +4999,9 @@ function getEntireSchoolFeesRows() {
         row.tuitionStudents += 1;
         row.tuition += Number(student.tuitionFee || 0);
       }
-      if (getSelectedMonths(student, "transportMonths").includes(month) && Number(student.transportFee || 0) > 0) {
+      if (getSelectedMonths(student, "transportMonths").includes(month) && getTransportMonthCharge(student, month) > 0) {
         row.transportStudents += 1;
-        row.transport += Number(student.transportFee || 0);
+        row.transport += getTransportMonthCharge(student, month);
       }
       if (getSelectedMonths(student, "dayBoardingMonths").includes(month)) {
         const dayBoardingAmount = Number(student.dayBoardingFee || 0) + Number(student.dayBoardingTransportFee || 0);
@@ -9446,13 +9447,16 @@ function dueFeesStudentMatchesSearch(student, query = "") {
 }
 
 function getMonthlyFeeHeadDueAmount(student, row, month) {
+  if (!student || !row || !month) return 0;
+  if (row.name === "Transport Fees") {
+    const monthlyAmount = getTransportMonthCharge(student, month);
+    if (monthlyAmount <= 0) return 0;
+    return Math.max(monthlyAmount - Number(getTransportMonthPaidInfo(student, row, month).transport || 0), 0);
+  }
   const monthlyAmount = Number(row?.monthlyAmount || 0);
-  if (!student || !row || !month || monthlyAmount <= 0) return 0;
+  if (monthlyAmount <= 0) return 0;
   if (row.name === "Tuition Fee") {
     return Math.max(monthlyAmount - Number(getTuitionMonthPaidInfo(student, row, month).tuition || 0), 0);
-  }
-  if (row.name === "Transport Fees") {
-    return Math.max(monthlyAmount - Number(getTransportMonthPaidInfo(student, row, month).transport || 0), 0);
   }
   const paid = Math.min(monthlyAmount, Number(getLedgerMonthFeePaidAmount(student, row, month) || 0));
   return Math.max(monthlyAmount - paid, 0);
@@ -10375,6 +10379,43 @@ function shouldWaiveRepeatFineAfterFinePaid(paid = {}, paidKey = "", monthlyAmou
   return (finePaid > 0 || hasAnyFinePaidForMonth(admissionNo, month)) && dueBalance > 0 && dueBalance <= MONTHLY_FINE_PAID_SMALL_DUE_LIMIT;
 }
 
+function mergeTransportMonthExtras(existing = {}, incoming = {}) {
+  const merged = {};
+  [existing, incoming].forEach(source => {
+    if (!source || typeof source !== "object") return;
+    Object.entries(source).forEach(([month, amount]) => {
+      const cleanMonth = normalizePaymentMonth(month) || String(month || "").trim();
+      const extra = Math.max(0, Number(amount || 0));
+      if (!cleanMonth || extra <= 0) return;
+      merged[cleanMonth] = Math.max(Number(merged[cleanMonth] || 0), extra);
+    });
+  });
+  return merged;
+}
+
+function getTransportMonthExtra(student = {}, month = "") {
+  const extras = student?.transportMonthExtras;
+  const cleanMonth = normalizePaymentMonth(month) || String(month || "").trim();
+  if (!extras || typeof extras !== "object" || !cleanMonth) return 0;
+  return Math.max(0, Number(extras[cleanMonth] || extras[month] || 0));
+}
+
+function getTransportMonthCharge(student = {}, month = "") {
+  return Math.max(0, Number(student.transportFee || 0) + getTransportMonthExtra(student, month));
+}
+
+function setTransportMonthExtra(student, month = "", amount = 0) {
+  if (!student) return 0;
+  const cleanMonth = normalizePaymentMonth(month) || String(month || "").trim();
+  if (!cleanMonth) return 0;
+  const extra = Math.max(0, Math.round(Number(amount || 0)));
+  if (!student.transportMonthExtras || typeof student.transportMonthExtras !== "object") student.transportMonthExtras = {};
+  if (extra > 0) student.transportMonthExtras[cleanMonth] = extra;
+  else delete student.transportMonthExtras[cleanMonth];
+  student.updatedAt = new Date().toISOString();
+  return extra;
+}
+
 function getTransportMonthPayments(admissionNo) {
   return getSessionPayments(admissionNo).reduce((months, payment) => {
     getPaymentAllocationsWithFallback(payment).forEach(allocation => {
@@ -10391,7 +10432,7 @@ function getTransportMonthPayments(admissionNo) {
 
 function getTransportMonthPaidInfo(student, row, month) {
   const paid = getTransportMonthPayments(student.admissionNo)[month] || {transport: 0, fine: 0};
-  const monthlyAmount = Number(row?.monthlyAmount || student.transportFee || 0);
+  const monthlyAmount = getTransportMonthCharge(student, month) || Number(row?.monthlyAmount || student.transportFee || 0);
   const transport = Math.max(Number(paid.transport || 0), getMonthlyFeePaidAmount(student, row, month));
   return {
     ...paid,
@@ -10438,7 +10479,7 @@ function getStudentFeeItems(student) {
   const roboticsMonths = getSelectedMonths(student, "roboticsMonths");
   const othersMonths = getSelectedMonths(student, "othersMonths");
   const tuition = Number(student.tuitionFee || 0) * feeMonths.length;
-  const transport = Number(student.transportFee || 0) * transportMonths.length;
+  const transport = transportMonths.reduce((sum, month) => sum + getTransportMonthCharge(student, month), 0);
   const dayBoardingMonthly = Number(student.dayBoardingFee || 0) + Number(student.dayBoardingTransportFee || 0);
   const dayBoarding = dayBoardingMonthly ? dayBoardingMonthly * dayBoardingMonths.length : 0;
   const robotics = Number(student.roboticsFee || 0) * roboticsMonths.length;
@@ -10954,11 +10995,11 @@ function getLedgerRowFineAmount(student, row) {
 }
 
 function getPaidLedgerMonths(student, row) {
-  if (!student || !row || !Array.isArray(row.months) || !row.months.length || !row.monthlyAmount) return new Set();
+  if (!student || !row || !Array.isArray(row.months) || !row.months.length) return new Set();
   const paidMonths = new Set();
-  const monthlyAmount = Number(row.monthlyAmount || 0);
   row.months.forEach(month => {
-    if (getExactMonthFeePaidAmount(student, row, month) >= monthlyAmount) paidMonths.add(month);
+    const monthlyAmount = row.name === "Transport Fees" ? getTransportMonthCharge(student, month) : Number(row.monthlyAmount || 0);
+    if (monthlyAmount > 0 && getExactMonthFeePaidAmount(student, row, month) >= monthlyAmount) paidMonths.add(month);
   });
   return paidMonths;
 }
@@ -10974,9 +11015,11 @@ function getLedgerMonthPaidAmount(student, row, month) {
 }
 
 function isLedgerMonthPartiallyPaid(student, row, month) {
-  if (!student || !row || !month || !row.monthlyAmount) return false;
+  if (!student || !row || !month) return false;
+  const monthlyAmount = row.name === "Transport Fees" ? getTransportMonthCharge(student, month) : Number(row.monthlyAmount || 0);
+  if (monthlyAmount <= 0) return false;
   const paid = getLedgerMonthPaidAmount(student, row, month);
-  return paid > 0 && paid < Number(row.monthlyAmount || 0);
+  return paid > 0 && paid < monthlyAmount;
 }
 
 function getLedgerMonthFeePaidAmount(student, row, month) {
@@ -11025,7 +11068,7 @@ function renderLedgerPeriodCell(student, row) {
         ${months.length ? `
           <div class="period-breakdown-head period-month-row"><span>Month</span><span>Amount</span><span>Partial Payment</span><span>Fine</span><span>Total</span><span></span></div>
           ${months.map(month => {
-            const monthAmount = Number(row.monthlyAmount || 0);
+            const monthAmount = row.name === "Transport Fees" ? getTransportMonthCharge(student, month) : Number(row.monthlyAmount || 0);
             const paidAmount = getLedgerMonthFeePaidAmount(student, row, month);
             const dueAmount = Math.max(monthAmount - Math.min(paidAmount, monthAmount), 0);
             const isPaid = monthAmount > 0 && dueAmount <= 0;
@@ -11034,7 +11077,7 @@ function renderLedgerPeriodCell(student, row) {
             const collectTotal = isPaid ? monthAmount + monthFine : dueAmount + monthFine;
             return `
             <div class="period-breakdown-row period-month-row ${isPaid ? "paid-month" : isPartial ? "partial-month" : ""}">
-              <span>${month}${isPaid ? " Paid" : isPartial ? " Part Paid" : ""}</span>
+              <span>${month}${row.name === "Transport Fees" && getTransportMonthExtra(student, month) > 0 ? ` +${getTransportMonthExtra(student, month)}` : ""}${isPaid ? " Paid" : isPartial ? " Part Paid" : ""}</span>
               <span>${renderLedgerMonthAmountCell(monthAmount, paidAmount)}</span>
               <span>${renderLedgerMonthPartialCell(monthAmount, paidAmount)}</span>
               <span>${formatRs(monthFine)}</span>
@@ -13113,7 +13156,7 @@ function getCombinedCollectionItems(student, month, paymentDate = new Date(), in
         : [month];
       return collectMonths.map(collectMonth => {
         const amount = getMonthlyFeeHeadDueAmount(student, row, collectMonth);
-        const monthlyAmount = Number(row.monthlyAmount || 0);
+        const monthlyAmount = row.name === "Transport Fees" ? getTransportMonthCharge(student, collectMonth) : Number(row.monthlyAmount || 0);
         const paidAmount = Math.max(monthlyAmount - amount, 0);
         const fine = row.name === "Tuition Fee"
           ? getTuitionMonthCollectFineDue(student, row, collectMonth, parseDateDDMMYYYY(paymentDate))
@@ -13154,18 +13197,63 @@ function renderCombinedCollectionItems() {
   const date = combinedCollectionForm.elements.date.value || new Date();
   const includePriorTuitionDue = combinedCollectionForm.dataset.includePriorTuitionDue === "1";
   const items = getCombinedCollectionItems(student, month, date, includePriorTuitionDue);
-  document.getElementById("combinedFeeItems").innerHTML = items.map((item, index) => `
+  document.getElementById("combinedFeeItems").innerHTML = items.map((item, index) => {
+    const extra = item.head === "Transport Fees" ? getTransportMonthExtra(student, item.month) : 0;
+    const extraLabel = extra > 0 ? ` + extra ${formatRs(extra)}` : "";
+    return `
     <div class="combined-fee-row ${item.partial ? "partial-fee-row" : ""}">
       <label>
         <input data-combined-fee type="checkbox" value="${index}" data-head="${escapeHtml(item.head)}" data-month="${escapeHtml(item.month)}" data-amount="${item.amount}" data-fine="${item.fine}" data-total="${item.total}" checked />
-        <span>${escapeHtml(item.head)}${item.month ? ` (${escapeHtml(item.month)})` : ""}</span>
+        <span>${escapeHtml(item.head)}${item.month ? ` (${escapeHtml(item.month)})` : ""}${extraLabel}</span>
       </label>
       <span>${formatRs(item.amount)}</span>
       <span data-combined-fine-display>${formatRs(item.fine)}</span>
       <strong data-combined-total-display>${formatRs(item.total)}</strong>
     </div>
-  `).join("") || `<div class="combined-fee-row"><span>No monthly dues found for ${escapeHtml(month)}.</span><span>-</span><span>-</span><strong>Rs. 0</strong></div>`;
+  `;
+  }).join("") || `<div class="combined-fee-row"><span>No monthly dues found for ${escapeHtml(month)}.</span><span>-</span><span>-</span><strong>Rs. 0</strong></div>`;
+  syncTransportExtraChargeField();
   updateCombinedCollectionTotals();
+}
+
+function syncTransportExtraChargeField() {
+  const field = document.getElementById("transportExtraChargeField");
+  const input = combinedCollectionForm?.elements?.transportExtraAmount;
+  if (!field || !input) return;
+  const student = findActiveStudentByAdmissionOrName(combinedCollectionForm.elements.admissionNo.value);
+  const month = combinedCollectionForm.elements.month.value;
+  const canShow = combinedCollectionForm.dataset.singleCollection !== "1"
+    && !combinedCollectionForm.dataset.editPaymentReceipt
+    && student
+    && month
+    && getSelectedMonths(student, "transportMonths").includes(month);
+  field.hidden = !canShow;
+  if (canShow && document.activeElement !== input) input.value = getTransportMonthExtra(student, month) || "";
+  if (!canShow) input.value = "";
+}
+
+function applyTransportExtraChargeFromForm() {
+  const student = findActiveStudentByAdmissionOrName(combinedCollectionForm.elements.admissionNo.value);
+  const month = combinedCollectionForm.elements.month.value;
+  if (!student || !month || combinedCollectionForm.dataset.singleCollection === "1" || combinedCollectionForm.dataset.editPaymentReceipt) return;
+  setTransportMonthExtra(student, month, combinedCollectionForm.elements.transportExtraAmount?.value);
+}
+
+function rememberTransportExtrasForCollection(student) {
+  combinedCollectionForm.dataset.transportExtraBackup = JSON.stringify(student?.transportMonthExtras || {});
+  delete combinedCollectionForm.dataset.transportExtraCommitted;
+}
+
+function restoreAbandonedTransportExtras() {
+  if (combinedCollectionForm.dataset.transportExtraCommitted === "1") return;
+  const student = findActiveStudentByAdmissionOrName(combinedCollectionForm.elements.admissionNo.value);
+  if (!student || !combinedCollectionForm.dataset.transportExtraBackup) return;
+  try {
+    const backup = JSON.parse(combinedCollectionForm.dataset.transportExtraBackup);
+    student.transportMonthExtras = backup && typeof backup === "object" ? backup : {};
+  } catch (error) {
+    student.transportMonthExtras = {};
+  }
 }
 
 function renderCombinedCollectionEditItems(payment) {
@@ -13209,6 +13297,7 @@ function renderCombinedCollectionEditItems(payment) {
       <strong data-combined-total-display>${formatRs(item.total)}</strong>
     </div>
   `).join("") || `<div class="combined-fee-row"><span>No payment rows found.</span><span>-</span><span>-</span><strong>Rs. 0</strong></div>`;
+  syncTransportExtraChargeField();
   updateCombinedCollectionTotals();
 }
 
@@ -13224,6 +13313,7 @@ function renderSingleCollectionItem(item) {
       <strong data-combined-total-display>${formatRs(item.total)}</strong>
     </div>
   `;
+  syncTransportExtraChargeField();
   updateCombinedCollectionTotals();
 }
 
@@ -13243,6 +13333,7 @@ function openCombinedCollectionPopup(admissionNo, month, options = {}) {
   combinedCollectionForm.elements.month.value = month;
   combinedCollectionForm.elements.date.value = formatDateDDMMYYYY(new Date());
   combinedCollectionForm.elements.receiptNo.value = getNextReceiptNo();
+  rememberTransportExtrasForCollection(student);
   document.getElementById("combinedAdmissionNo").textContent = student.admissionNo || "-";
   document.getElementById("combinedStudentName").textContent = student.name || "-";
   document.getElementById("combinedStudentClass").textContent = student.klass || "-";
@@ -13312,6 +13403,7 @@ function openCombinedCollectionEditPopup(student, payment) {
 }
 
 function closeCombinedCollectionPopup() {
+  restoreAbandonedTransportExtras();
   combinedCollectionModal.setAttribute("aria-hidden", "true");
   closeDatePickerPopover();
   delete combinedCollectionForm.dataset.editPaymentReceipt;
@@ -18010,6 +18102,10 @@ document.addEventListener("change", event => {
 
 combinedCollectionForm.addEventListener("input", event => {
   if (["bankAmount", "cashAmount", "discountAmount"].includes(event.target.name)) updateCombinedCollectionTotals();
+  if (event.target.name === "transportExtraAmount") {
+    applyTransportExtraChargeFromForm();
+    renderCombinedCollectionItems();
+  }
 });
 
 receiptPreviewBody.addEventListener("change", event => {
@@ -18133,6 +18229,10 @@ combinedCollectionForm.addEventListener("submit", async event => {
     return;
   }
   const student = findActiveStudentByAdmissionOrName(form.elements.admissionNo.value);
+  applyTransportExtraChargeFromForm();
+  if (student && form.dataset.singleCollection !== "1" && !form.dataset.editPaymentReceipt) {
+    renderCombinedCollectionItems();
+  }
   const selected = [...form.querySelectorAll("[data-combined-fee]:checked")].map(input => {
     const appliedDate = formatDateDDMMYYYY(form.elements.date.value || new Date());
     return {
@@ -18222,6 +18322,7 @@ combinedCollectionForm.addEventListener("submit", async event => {
       saveAppState();
       showToast(`Combined receipt ${payment.receipt} ${editingReceipt ? "updated" : "saved"}.`);
     }
+    combinedCollectionForm.dataset.transportExtraCommitted = "1";
     renderFeeBook(student.admissionNo);
     renderStudentFeeCounter(student.admissionNo);
     renderDueFeesSearch();
