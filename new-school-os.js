@@ -10432,12 +10432,15 @@ function getTransportMonthPayments(admissionNo) {
 
 function getTransportMonthPaidInfo(student, row, month) {
   const paid = getTransportMonthPayments(student.admissionNo)[month] || {transport: 0, fine: 0};
-  const monthlyAmount = getTransportMonthCharge(student, month) || Number(row?.monthlyAmount || student.transportFee || 0);
+  const standingAmount = Math.max(0, Number(student.transportFee || row?.monthlyAmount || 0));
+  const monthlyAmount = getTransportMonthCharge(student, month) || standingAmount;
   const transport = Math.max(Number(paid.transport || 0), getMonthlyFeePaidAmount(student, row, month));
   return {
     ...paid,
     transport,
+    standingAmount,
     monthlyAmount,
+    isStandingSettled: standingAmount > 0 && transport >= standingAmount,
     isSettled: monthlyAmount > 0 && transport >= monthlyAmount
   };
 }
@@ -10458,15 +10461,15 @@ function getTuitionMonthCollectFineDue(student, row, month, paymentDate = new Da
 
 function getTransportMonthFineDue(student, row, month, paymentDate = new Date()) {
   const paid = getTransportMonthPaidInfo(student, row, month);
-  if (paid.isSettled) return 0;
-  if (shouldWaiveRepeatFineAfterFinePaid(paid, "transport", paid.monthlyAmount, student.admissionNo, month)) return 0;
+  if (paid.isSettled || paid.isStandingSettled) return 0;
+  if (shouldWaiveRepeatFineAfterFinePaid(paid, "transport", paid.standingAmount || paid.monthlyAmount, student.admissionNo, month)) return 0;
   return Math.max(calculateTransportFineForMonth(month, paymentDate) - Number(paid.fine || 0), 0);
 }
 
 function getTransportMonthCollectFineDue(student, row, month, paymentDate = new Date()) {
   const paid = getTransportMonthPaidInfo(student, row, month);
-  if (paid.isSettled) return 0;
-  if (shouldWaiveRepeatFineAfterFinePaid(paid, "transport", paid.monthlyAmount, student.admissionNo, month)) return 0;
+  if (paid.isSettled || paid.isStandingSettled) return 0;
+  if (shouldWaiveRepeatFineAfterFinePaid(paid, "transport", paid.standingAmount || paid.monthlyAmount, student.admissionNo, month)) return 0;
   return Math.max(calculateTransportFineForMonth(month, paymentDate) - Number(paid.fine || 0), 0);
 }
 
@@ -11078,7 +11081,7 @@ function renderLedgerPeriodCell(student, row) {
             return `
             <div class="period-breakdown-row period-month-row ${isPaid ? "paid-month" : isPartial ? "partial-month" : ""}">
               <span>${month}${row.name === "Transport Fees" && getTransportMonthExtra(student, month) > 0 ? ` +${getTransportMonthExtra(student, month)}` : ""}${isPaid ? " Paid" : isPartial ? " Part Paid" : ""}</span>
-              <span>${renderLedgerMonthAmountCell(monthAmount, paidAmount)}</span>
+              <span>${row.name === "Transport Fees" && getTransportMonthExtra(student, month) > 0 ? formatRs(monthAmount) : renderLedgerMonthAmountCell(monthAmount, paidAmount)}</span>
               <span>${renderLedgerMonthPartialCell(monthAmount, paidAmount)}</span>
               <span>${formatRs(monthFine)}</span>
               <span>${formatRs(collectTotal)}</span>
@@ -11371,8 +11374,8 @@ function openCombinedReceiptPreview(student, payment, selectedItems = []) {
           <strong>${formatRs(paidNow)}</strong>
         </div>
         <div class="${dueBalance > 0 ? "receipt-due-balance" : "receipt-clear-balance"}">
-          <span>Due Balance</span>
-          <strong>${formatRs(dueBalance)}</strong>
+          <span>${dueBalance > 0 ? "Due Balance" : "Balance"}</span>
+          <strong>${dueBalance > 0 ? formatRs(dueBalance) : "Nil"}</strong>
         </div>
       </div>
     </article>
@@ -13190,20 +13193,30 @@ function updateCombinedCollectionTotals() {
   document.getElementById("combinedBalance").textContent = formatRs(Math.max(payable - paidNow, 0));
 }
 
-function renderCombinedCollectionItems() {
+function renderCombinedCollectionItems(options = {}) {
   const admissionNo = combinedCollectionForm.elements.admissionNo.value;
   const month = combinedCollectionForm.elements.month.value;
   const student = findActiveStudentByAdmissionOrName(admissionNo);
   const date = combinedCollectionForm.elements.date.value || new Date();
   const includePriorTuitionDue = combinedCollectionForm.dataset.includePriorTuitionDue === "1";
+  const previousSelection = {};
+  if (options.preserveSelection) {
+    combinedCollectionForm.querySelectorAll("[data-combined-fee]").forEach(input => {
+      previousSelection[`${input.dataset.head}__${input.dataset.month}`] = input.checked;
+    });
+  }
   const items = getCombinedCollectionItems(student, month, date, includePriorTuitionDue);
   document.getElementById("combinedFeeItems").innerHTML = items.map((item, index) => {
     const extra = item.head === "Transport Fees" ? getTransportMonthExtra(student, item.month) : 0;
     const extraLabel = extra > 0 ? ` + extra ${formatRs(extra)}` : "";
+    const selectionKey = `${item.head}__${item.month}`;
+    const checked = options.preserveSelection && Object.prototype.hasOwnProperty.call(previousSelection, selectionKey)
+      ? previousSelection[selectionKey]
+      : true;
     return `
     <div class="combined-fee-row ${item.partial ? "partial-fee-row" : ""}">
       <label>
-        <input data-combined-fee type="checkbox" value="${index}" data-head="${escapeHtml(item.head)}" data-month="${escapeHtml(item.month)}" data-amount="${item.amount}" data-fine="${item.fine}" data-total="${item.total}" checked />
+        <input data-combined-fee type="checkbox" value="${index}" data-head="${escapeHtml(item.head)}" data-month="${escapeHtml(item.month)}" data-amount="${item.amount}" data-fine="${item.fine}" data-total="${item.total}" ${checked ? "checked" : ""} />
         <span>${escapeHtml(item.head)}${item.month ? ` (${escapeHtml(item.month)})` : ""}${extraLabel}</span>
       </label>
       <span>${formatRs(item.amount)}</span>
@@ -18104,7 +18117,7 @@ combinedCollectionForm.addEventListener("input", event => {
   if (["bankAmount", "cashAmount", "discountAmount"].includes(event.target.name)) updateCombinedCollectionTotals();
   if (event.target.name === "transportExtraAmount") {
     applyTransportExtraChargeFromForm();
-    renderCombinedCollectionItems();
+    renderCombinedCollectionItems({preserveSelection: true});
   }
 });
 
@@ -18231,7 +18244,7 @@ combinedCollectionForm.addEventListener("submit", async event => {
   const student = findActiveStudentByAdmissionOrName(form.elements.admissionNo.value);
   applyTransportExtraChargeFromForm();
   if (student && form.dataset.singleCollection !== "1" && !form.dataset.editPaymentReceipt) {
-    renderCombinedCollectionItems();
+    renderCombinedCollectionItems({preserveSelection: true});
   }
   const selected = [...form.querySelectorAll("[data-combined-fee]:checked")].map(input => {
     const appliedDate = formatDateDDMMYYYY(form.elements.date.value || new Date());
