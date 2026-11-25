@@ -97,6 +97,40 @@ const financeSessions = {
 };
 
 let activeSession = "2026-27";
+let activeSessionTouchedAt = "";
+
+function commitActiveSession(session) {
+  const next = String(session || "").trim();
+  if (!next) return;
+  activeSession = next;
+  activeSessionTouchedAt = new Date().toISOString();
+}
+
+function activeSessionChoice(primary = {}, secondary = {}) {
+  const primaryTouch = String(primary.activeSessionTouchedAt || "");
+  const secondaryTouch = String(secondary.activeSessionTouchedAt || "");
+  const primarySession = String(primary.activeSession || "").trim();
+  const secondarySession = String(secondary.activeSession || "").trim();
+  if (primaryTouch && primaryTouch >= secondaryTouch && primarySession) {
+    return {activeSession: primarySession, activeSessionTouchedAt: primaryTouch};
+  }
+  if (secondarySession) {
+    return {activeSession: secondarySession, activeSessionTouchedAt: secondaryTouch};
+  }
+  if (primarySession) {
+    return {activeSession: primarySession, activeSessionTouchedAt: primaryTouch};
+  }
+  return {activeSession: "", activeSessionTouchedAt: ""};
+}
+
+function pickActiveSessionFields(primary = {}, secondary = {}) {
+  const choice = activeSessionChoice(primary, secondary);
+  if (!choice.activeSession) return {};
+  return {
+    activeSession: choice.activeSession,
+    activeSessionTouchedAt: choice.activeSessionTouchedAt || ""
+  };
+}
 let activeSchoolId = "anps";
 let activeSchoolName = "Alfred Nobel Public School";
 let activeFeeStudentAdmissionNo = "";
@@ -498,6 +532,7 @@ function getAppStateSnapshot() {
     students,
     financeSessions,
     activeSession,
+    activeSessionTouchedAt,
     collectedPayments,
     deletedPaymentReceipts,
     deletedStudents,
@@ -1365,6 +1400,7 @@ function mergeStateSnapshots(remoteState = {}, localState = {}) {
   merged.deletedPaymentReceipts = getDeletedPaymentReceiptMap(remoteState.deletedPaymentReceipts, localState.deletedPaymentReceipts);
   merged.collectedPayments = mergeCollectedPayments(remoteState.collectedPayments || {}, localState.collectedPayments || {}, merged.deletedPaymentReceipts);
   merged.financeSessions = mergeFinanceSessions(remoteState.financeSessions || {}, localState.financeSessions || {});
+  Object.assign(merged, pickActiveSessionFields(localState, remoteState));
   return merged;
 }
 
@@ -1432,7 +1468,8 @@ function mergeSetupSafeState(backendState = {}, localSnapshot = {}) {
     financeSessions: mergeFinanceSessions(backendState.financeSessions || {}, localSnapshot.financeSessions || {}),
     deletedPaymentReceipts: deletedMap,
     collectedPayments: mergeCollectedPayments(backendState.collectedPayments || {}, localSnapshot.collectedPayments || {}, deletedMap),
-    receiptSerial: Math.max(Number(backendState.receiptSerial || 0), Number(localSnapshot.receiptSerial || 0))
+    receiptSerial: Math.max(Number(backendState.receiptSerial || 0), Number(localSnapshot.receiptSerial || 0)),
+    ...pickActiveSessionFields(localSnapshot, backendState)
   };
 }
 
@@ -1920,8 +1957,13 @@ function applySavedState(saved = {}) {
     if (saved.tuitionFineSetup && typeof saved.tuitionFineSetup === "object") {
       Object.assign(tuitionFineSetup, DEFAULT_TUITION_FINE_SETUP, saved.tuitionFineSetup);
     }
-    if (saved.activeSession && financeSessions[saved.activeSession]) {
-      activeSession = saved.activeSession;
+    const sessionChoice = activeSessionChoice(
+      {activeSession, activeSessionTouchedAt},
+      {activeSession: saved.activeSession, activeSessionTouchedAt: saved.activeSessionTouchedAt}
+    );
+    if (sessionChoice.activeSession && financeSessions[sessionChoice.activeSession]) {
+      activeSession = sessionChoice.activeSession;
+      activeSessionTouchedAt = sessionChoice.activeSessionTouchedAt || "";
     }
     if (saved.transportVillageDistances && typeof saved.transportVillageDistances === "object") {
       Object.assign(transportVillageDistances, saved.transportVillageDistances);
@@ -15823,7 +15865,7 @@ document.getElementById("routePickupStudentDetails")?.addEventListener("click", 
 });
 
 sessionSelect.addEventListener("change", () => {
-  activeSession = sessionSelect.value;
+  commitActiveSession(sessionSelect.value);
   saveAppState();
   setNextReceiptNo();
   renderFinanceSession();
@@ -15838,7 +15880,7 @@ document.getElementById("addSession").addEventListener("click", () => {
   const cleanName = newSessionInput.value.trim();
   if (!cleanName) return;
   if (financeSessions[cleanName]) {
-    activeSession = cleanName;
+    commitActiveSession(cleanName);
     saveAppState();
     setNextReceiptNo();
     renderSessions();
@@ -15860,7 +15902,7 @@ document.getElementById("addSession").addEventListener("click", () => {
     feeGroups: [],
     dues: []
   };
-  activeSession = cleanName;
+  commitActiveSession(cleanName);
   saveAppState();
   setNextReceiptNo();
   renderSessions();

@@ -2250,6 +2250,34 @@ def merge_finance_sessions(server_sessions, incoming_sessions):
     return merged
 
 
+def prefer_explicit_active_session(server_state, incoming_state, merged):
+    """Keep the academic session from the latest explicit dropdown change.
+
+    Ordinary saves, and browsers that do not send activeSessionTouchedAt, must
+    not write activeSession. That field used to flip back to 2027-28 whenever
+    another open screen saved fees or any other data.
+    """
+    if not isinstance(merged, dict):
+        return merged
+    server_state = server_state if isinstance(server_state, dict) else {}
+    incoming_state = incoming_state if isinstance(incoming_state, dict) else {}
+    server_session = str(server_state.get("activeSession") or "").strip()
+    incoming_session = str(incoming_state.get("activeSession") or "").strip()
+    server_touch = str(server_state.get("activeSessionTouchedAt") or "").strip()
+    incoming_touch = str(incoming_state.get("activeSessionTouchedAt") or "").strip()
+    if incoming_touch and incoming_touch >= server_touch and incoming_session:
+        merged["activeSession"] = incoming_session
+        merged["activeSessionTouchedAt"] = incoming_touch
+        return merged
+    if server_session:
+        merged["activeSession"] = server_session
+    if server_touch:
+        merged["activeSessionTouchedAt"] = server_touch
+    elif not incoming_touch:
+        merged.pop("activeSessionTouchedAt", None)
+    return merged
+
+
 def merge_state_without_losing_receipts(server_state, incoming_state):
     if not isinstance(server_state, dict):
         server_state = {}
@@ -2404,6 +2432,7 @@ def merge_state_without_losing_receipts(server_state, incoming_state):
         if token:
             push_tokens[token] = {**push_tokens.get(token, {}), **item}
     merged["mobilePushTokens"] = list(push_tokens.values())[:5000]
+    prefer_explicit_active_session(server_state, incoming_state, merged)
     return merged
 
 
