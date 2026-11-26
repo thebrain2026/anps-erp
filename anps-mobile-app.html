@@ -1724,7 +1724,7 @@
 
     .drawer {
       position: fixed;
-      z-index: 36;
+      z-index: 96;
       top: 0;
       bottom: 0;
       left: max(0px, calc(50% - 260px));
@@ -1738,10 +1738,19 @@
       box-shadow: 24px 0 52px rgba(15,23,42,.22);
       transform: translateX(-105%);
       transition: .23s ease;
-      overflow: auto;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
       overscroll-behavior: contain;
     }
+    #drawerLinks {
+      min-height: 0;
+      flex: 1;
+      overflow: auto;
+    }
+    .drawer-logout { flex: none; }
 
+    .drawer-backdrop { z-index: 95; }
     .drawer-open .drawer-backdrop { opacity: 1; pointer-events: auto; }
     .drawer-open .drawer { transform: translateX(0); }
     body.student-theme .drawer {
@@ -2073,6 +2082,12 @@
       box-shadow: 0 12px 26px rgba(36,107,254,.2);
     }
 
+    .due-access-logout {
+      grid-column: 1 / -1;
+      color: #a92727;
+      background: rgba(226,80,80,.12);
+    }
+
     @media (max-width: 380px) {
       .module-grid { grid-template-columns: repeat(3, 1fr); }
       .metrics { grid-template-columns: 1fr 1fr; }
@@ -2167,8 +2182,8 @@
           <button class="profile-link" type="button" data-nav="profile">View Profile</button>
         </div>
         <div class="drawer-list" id="drawerLinks"></div>
-        <div class="drawer-list">
-          <button class="drawer-link danger" id="logoutBtn">Logout</button>
+        <div class="drawer-list drawer-logout">
+          <button class="drawer-link danger" id="logoutBtn" type="button">Logout</button>
         </div>
       </aside>
 
@@ -2368,6 +2383,7 @@
       <div class="due-access-actions" id="dueAccessActions">
         <button class="due-access-later" id="dueAccessLaterBtn" type="button">Later</button>
         <button class="due-access-pay" id="dueAccessPayBtn" type="button">View Fees</button>
+        <button class="due-access-logout" id="dueAccessLogoutBtn" type="button">Logout</button>
       </div>
     </article>
   </div>
@@ -2408,6 +2424,7 @@
     let activeReminderId = "";
     let activeViewId = "dashboard";
     let activeScreenName = "landing";
+    let authEpoch = 0;
     let liveSyncTimer = null;
     let liveSyncInFlight = false;
     let lastNoticeSignature = "";
@@ -5078,6 +5095,7 @@
     async function restoreSavedLogin() {
       const session = savedSession();
       if (!session) return;
+      const epoch = authEpoch;
       try {
         localStorage.setItem(AppConfig.tokenKey, session.token);
         localStorage.setItem(AppConfig.roleKey, session.role);
@@ -5090,8 +5108,10 @@
           role: session.role === "student" ? "Student" : "Staff"
         }, session.role);
         await enterApp(session.role, state.user, { restored: true });
+        if (epoch !== authEpoch) return;
         toast("Welcome back");
       } catch (error) {
+        if (epoch !== authEpoch) return;
         console.warn("Saved login restore failed.", error);
         clearSavedSession();
         state = { role: null, user: null, workspace: null, attendanceClass: "", teacherTimetableClass: "", language: "en" };
@@ -6151,10 +6171,13 @@
     }
 
     async function enterApp(role, user, options = {}) {
+      const epoch = authEpoch;
+      const workspace = await AppApi.workspace(role, user.id);
+      if (epoch !== authEpoch) return;
       state.role = role;
       state.user = user;
+      state.workspace = workspace;
       duePopupOpenOnceShown = false;
-      state.workspace = await AppApi.workspace(role, user.id);
       document.body.classList.toggle("student-theme", role === "student");
       document.body.classList.toggle("teacher-theme", role === "teacher");
       localStorage.setItem(AppConfig.roleKey, role);
@@ -6169,7 +6192,26 @@
       startLiveWorkspaceSync();
       if (role === "student") startStudentActivityTracking();
       await registerCurrentPushToken();
+      if (epoch !== authEpoch) return;
       showBirthdayGreeting();
+    }
+
+    function logoutMobileApp() {
+      authEpoch += 1;
+      clearInterval(activitySession.timer);
+      activitySession = { startedAt: "", lastSavedAt: 0, timer: null };
+      stopLiveWorkspaceSync();
+      clearDueAccessTimer();
+      hideDueAccessPopup();
+      clearInterval(reminderTimer);
+      hideReminderPopup();
+      $("#birthdayModal")?.classList.add("hidden");
+      duePopupOpenOnceShown = false;
+      clearSavedSession();
+      state = { role: null, user: null, workspace: null, attendanceClass: "", teacherTimetableClass: "", language: "en" };
+      activeViewId = "dashboard";
+      document.body.classList.remove("drawer-open", "student-theme", "teacher-theme");
+      showScreen("landing");
     }
 
     document.querySelectorAll("[data-select-role]").forEach(btn => btn.addEventListener("click", () => setupLogin(btn.dataset.selectRole)));
@@ -6218,19 +6260,13 @@
       if (state.role === "student" && !dueAccessLocked()) hideDueAccessPopup();
       toast("Synced");
     });
-    $("#logoutBtn").addEventListener("click", async () => {
-      await stopStudentActivityTracking();
-      stopLiveWorkspaceSync();
-      clearDueAccessTimer();
-      hideDueAccessPopup();
-      clearInterval(reminderTimer);
-      hideReminderPopup();
-      duePopupOpenOnceShown = false;
-      clearSavedSession();
-      state = { role: null, user: null, workspace: null, attendanceClass: "", teacherTimetableClass: "", language: "en" };
-      activeViewId = "dashboard";
-      document.body.classList.remove("drawer-open", "student-theme", "teacher-theme");
-      showScreen("landing");
+    $("#logoutBtn").addEventListener("click", event => {
+      event.preventDefault();
+      logoutMobileApp();
+    });
+    $("#dueAccessLogoutBtn")?.addEventListener("click", event => {
+      event.preventDefault();
+      logoutMobileApp();
     });
     document.addEventListener("visibilitychange", () => {
       if (!state.user || state.role !== "student") return;
