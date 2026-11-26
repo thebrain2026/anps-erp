@@ -63,6 +63,7 @@
             <button data-view="bankReconciliation" type="button">Bank Reconciliation</button>
             <button data-view="dueFeesSearch" type="button">Search Due Fees</button>
             <button data-view="dayBoarders" type="button">Deboarders</button>
+            <button data-view="roboticsStudents" type="button">Robotics</button>
             <button data-view="upiPaymentVerification" type="button">UPI Verification</button>
             <button data-view="feeMaster" type="button">Fee Master</button>
             <button data-view="feeGroup" type="button">Fee Group</button>
@@ -1015,6 +1016,44 @@
             </table>
           </div>
           <p class="transport-fee-summary" id="dayBoarderSummary">Day boarders: 0</p>
+        </div>
+      </section>
+
+      <section class="view" id="roboticsStudents">
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Fees collection</p>
+              <h2>Robotics</h2>
+              <small>Students who have taken robotics in this session.</small>
+            </div>
+          </div>
+          <div class="fee-filter-bar">
+            <label>Search
+              <input id="roboticsStudentSearch" type="search" placeholder="Name or admission no." />
+            </label>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Admission No.</th>
+                  <th>Student</th>
+                  <th>Class</th>
+                  <th>Section</th>
+                  <th>Robotics Fee</th>
+                  <th>Months</th>
+                  <th>Session Total</th>
+                  <th>Paid</th>
+                  <th>Due</th>
+                </tr>
+              </thead>
+              <tbody id="roboticsStudentRows">
+                <tr><td colspan="9">No robotics students in this session.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="transport-fee-summary" id="roboticsStudentSummary">Robotics students: 0</p>
         </div>
       </section>
 
@@ -4123,6 +4162,6 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="./new-school-os.js?v=20261126-deboarders"></script>
+  <script src="./new-school-os.js?v=20261126-robotics"></script>
 </body>
 </html>

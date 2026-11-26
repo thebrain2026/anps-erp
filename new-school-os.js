@@ -348,6 +348,7 @@ const titleMap = {
   bankReconciliation: "Bank Reconciliation",
   dueFeesSearch: "Search Due Fees",
   dayBoarders: "Deboarders",
+  roboticsStudents: "Robotics",
   upiPaymentVerification: "UPI Verification",
   feeMaster: "Fee Master",
   feeGroup: "Fee Group",
@@ -417,7 +418,7 @@ const ACCESS_PERMISSION_GROUPS = [
   {name: "Dashboard", modules: ["dashboard", "dashboardFeesCollection"]},
   {name: "Front Office", modules: ["admissionEnquiry", "complaintRegister", "complaintsDesk"]},
   {name: "Student Information", modules: ["students", "studentAdmission", "promoteStudents", "disableStudent", "bulkDeleteStudent", "studentAbsence"]},
-  {name: "Fees Collection", modules: ["finance", "feeBook", "bankBook", "bankReconciliation", "dueFeesSearch", "dayBoarders", "upiPaymentVerification", "feeMaster", "feeGroup", "addClassSection", "tuitionFineSetup", "feeReminder"]},
+  {name: "Fees Collection", modules: ["finance", "feeBook", "bankBook", "bankReconciliation", "dueFeesSearch", "dayBoarders", "roboticsStudents", "upiPaymentVerification", "feeMaster", "feeGroup", "addClassSection", "tuitionFineSetup", "feeReminder"]},
   {name: "Human Resources", modules: ["staffDetails", "staffAttendance", "applyLeave", "leaveType", "approveLeave", "teachersRating", "teacherAdvisory", "department", "designation", "disabledStaff"]},
   {name: "Communication", modules: ["noticeBoard", "teacherNoticeRequests", "sendSms"]},
   {name: "Homework", modules: ["addHomework", "teacherHomework", "homeworkDoubts", "dailyAssignment"]},
@@ -2522,6 +2523,7 @@ function renderActiveView(viewName = document.querySelector(".view.active")?.id 
   if (viewName === "bankReconciliation") renderBankReconciliation([]);
   if (viewName === "dueFeesSearch") renderDueFeesSearch();
   if (viewName === "dayBoarders") renderDayBoarders();
+  if (viewName === "roboticsStudents") renderRoboticsStudents();
   if (viewName === "upiPaymentVerification") renderUpiPaymentVerification();
   if (viewName === "feeMaster") renderFeeMaster();
   if (viewName === "feeGroup") renderFeeGroups();
@@ -8403,7 +8405,7 @@ function normalizeRolePermission(roleName = "") {
     const isNewModule = !rolePermissions[cleanRole][moduleId];
     if (isNewModule) rolePermissions[cleanRole][moduleId] = {};
     ACCESS_ACTIONS.forEach(action => {
-      if (isNewModule && moduleId === "dayBoarders" && action === "view") {
+      if (isNewModule && (moduleId === "dayBoarders" || moduleId === "roboticsStudents") && action === "view") {
         rolePermissions[cleanRole][moduleId][action] = true;
         return;
       }
@@ -12649,6 +12651,66 @@ function renderDayBoarders() {
     const monthlyTotal = dayBoarders.reduce((sum, item) => sum + item.fees.monthly, 0);
     const sessionTotal = dayBoarders.reduce((sum, item) => sum + item.fees.sessionTotal, 0);
     summary.textContent = `Day boarders: ${dayBoarders.length} | Monthly fees: ${formatRs(monthlyTotal)} | Session total: ${formatRs(sessionTotal)}`;
+  }
+}
+
+function studentTakesRobotics(student = {}) {
+  const services = Array.isArray(student.otherServices) ? student.otherServices : [];
+  if (services.some(item => String(item || "").trim().toLowerCase() === "robotics")) return true;
+  return Number(student.roboticsFee || 0) > 0;
+}
+
+function getRoboticsFeeDetails(student = {}) {
+  const months = getSelectedMonths(student, "roboticsMonths");
+  const monthly = Number(student.roboticsFee || 0);
+  const sessionTotal = monthly * months.length;
+  const paidRaw = Number(getPaymentAllocationTotals(student.admissionNo || "")["Robotics Fees"] || 0);
+  const paid = Math.min(sessionTotal, Math.max(paidRaw, 0));
+  return {
+    months,
+    monthly,
+    sessionTotal,
+    paid,
+    due: Math.max(sessionTotal - paid, 0)
+  };
+}
+
+function renderRoboticsStudents() {
+  const rows = document.getElementById("roboticsStudentRows");
+  if (!rows) return;
+  const search = String(document.getElementById("roboticsStudentSearch")?.value || "").trim().toLowerCase();
+  const roboticsStudents = getActiveStudents()
+    .filter(student => studentTakesRobotics(student))
+    .filter(student => {
+      if (!search) return true;
+      const classInfo = splitStudentClassSection(student.klass || "");
+      return [student.admissionNo, student.name, classInfo.klass, classInfo.section].join(" ").toLowerCase().includes(search);
+    })
+    .sort((a, b) =>
+      String(a.klass || "").localeCompare(String(b.klass || ""), undefined, {numeric: true}) ||
+      String(a.name || "").localeCompare(String(b.name || ""), undefined, {numeric: true})
+    )
+    .map(student => ({student, classInfo: splitStudentClassSection(student.klass || ""), fees: getRoboticsFeeDetails(student)}));
+  rows.innerHTML = roboticsStudents.map(({student, classInfo, fees}) => {
+    return `
+      <tr>
+        <td><strong>${escapeHtml(student.admissionNo || "-")}</strong></td>
+        <td><button class="student-name-link" type="button" data-open-fee-book="${escapeHtml(student.admissionNo || "")}"><strong>${escapeHtml(student.name || "-")}</strong></button></td>
+        <td>${escapeHtml(classInfo.klass || "-")}</td>
+        <td>${escapeHtml(classInfo.section || "-")}</td>
+        <td>${formatRs(fees.monthly)}</td>
+        <td>${escapeHtml(formatMonthPeriod(fees.months))}</td>
+        <td><strong>${formatRs(fees.sessionTotal)}</strong></td>
+        <td>${formatRs(fees.paid)}</td>
+        <td>${formatRs(fees.due)}</td>
+      </tr>
+    `;
+  }).join("") || `<tr><td colspan="9">No robotics students in this session.</td></tr>`;
+  const summary = document.getElementById("roboticsStudentSummary");
+  if (summary) {
+    const monthlyTotal = roboticsStudents.reduce((sum, item) => sum + item.fees.monthly, 0);
+    const sessionTotal = roboticsStudents.reduce((sum, item) => sum + item.fees.sessionTotal, 0);
+    summary.textContent = `Robotics students: ${roboticsStudents.length} | Monthly fees: ${formatRs(monthlyTotal)} | Session total: ${formatRs(sessionTotal)}`;
   }
 }
 
@@ -17557,6 +17619,7 @@ document.getElementById("bankBookClearFilters")?.addEventListener("click", () =>
 });
 
 document.getElementById("dayBoarderSearch")?.addEventListener("input", renderDayBoarders);
+document.getElementById("roboticsStudentSearch")?.addEventListener("input", renderRoboticsStudents);
 document.getElementById("cashBookDateFilter")?.addEventListener("change", renderCashBook);
 document.getElementById("cashBookFeeHeadFilter")?.addEventListener("change", renderCashBook);
 document.getElementById("cashBookSearchInput")?.addEventListener("input", renderCashBook);
