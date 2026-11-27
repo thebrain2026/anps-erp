@@ -1694,12 +1694,19 @@
 
       <section class="view" id="disabledStaff">
         <div class="panel">
-          <div class="panel-head"><div><p class="eyebrow">Human resources</p><h2>Disabled Staff</h2></div><button class="ghost-action" type="button">Restore Selected</button></div>
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Human resources</p>
+              <h2>Disabled Staff</h2>
+              <small>Enable a staff member here to send them back to Staff Details.</small>
+            </div>
+            <small id="disabledStaffSummary">0 disabled staff</small>
+          </div>
           <div class="table-wrap">
             <table>
-              <thead><tr><th>Staff</th><th>Department</th><th>Disabled On</th><th>Reason</th><th>Status</th></tr></thead>
-              <tbody>
-                <tr><td colspan="5">No disabled staff records entered yet.</td></tr>
+              <thead><tr><th>Staff ID</th><th>Name</th><th>Role</th><th>Designation</th><th>Department</th><th>Phone</th><th>Disabled On</th><th>Status</th><th>Action</th></tr></thead>
+              <tbody id="disabledStaffRows">
+                <tr><td colspan="9">No disabled staff yet.</td></tr>
               </tbody>
             </table>
           </div>
@@ -4162,6 +4169,6 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="./new-school-os.js?v=20261126-robotics"></script>
+  <script src="./new-school-os.js?v=20261127-staff-disable"></script>
 </body>
 </html>

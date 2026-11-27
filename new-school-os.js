@@ -2540,6 +2540,7 @@ function renderActiveView(viewName = document.querySelector(".view.active")?.id 
   if (viewName === "nonTransportStudents") renderNonTransportStudents();
   if (viewName === "smartBusTracking") renderSmartBusTracking();
   if (viewName === "staffDetails") renderStaffDetails();
+  if (viewName === "disabledStaff") renderDisabledStaff();
   if (viewName === "department") renderHrSetup();
   if (viewName === "staffAttendance") renderStaffAttendance();
   if (viewName === "approveLeave") renderLeaveApprovalRequests();
@@ -8248,12 +8249,17 @@ function renderStaffDetailsFormOptions() {
   }
 }
 
+function isStaffDisabled(staff = {}) {
+  return String(staff.status || "").trim().toLowerCase() === "disabled";
+}
+
 function renderStaffDetails() {
   const rows = document.getElementById("staffDetailsRows");
   const summary = document.getElementById("staffSummary");
   renderStaffDetailsFormOptions();
   if (!rows) return;
-  rows.innerHTML = staffMembers.map(staff => `
+  const activeStaff = staffMembers.filter(staff => !isStaffDisabled(staff));
+  rows.innerHTML = activeStaff.map(staff => `
     <tr>
       <td><strong>${escapeHtml(staff.staffId || "-")}</strong>${staff.biometricId ? `<br><small>Bio: ${escapeHtml(staff.biometricId)}</small>` : ""}</td>
       <td>
@@ -8283,8 +8289,29 @@ function renderStaffDetails() {
         </div>
       </td>
     </tr>
-  `).join("") || `<tr><td colspan="10">No staff details entered yet.</td></tr>`;
-  if (summary) summary.textContent = `${staffMembers.length} staff saved`;
+  `).join("") || `<tr><td colspan="10">No active staff in Staff Details.</td></tr>`;
+  if (summary) summary.textContent = `${activeStaff.length} active staff`;
+}
+
+function renderDisabledStaff() {
+  const rows = document.getElementById("disabledStaffRows");
+  const summary = document.getElementById("disabledStaffSummary");
+  if (!rows) return;
+  const disabledStaff = staffMembers.filter(isStaffDisabled);
+  rows.innerHTML = disabledStaff.map(staff => `
+    <tr>
+      <td><strong>${escapeHtml(staff.staffId || "-")}</strong></td>
+      <td><strong>${escapeHtml(staff.name || "-")}</strong></td>
+      <td>${escapeHtml(staff.role || "-")}</td>
+      <td>${escapeHtml(staff.designation || "-")}</td>
+      <td>${escapeHtml(staff.department || "-")}</td>
+      <td>${escapeHtml(staff.phone || "-")}</td>
+      <td>${escapeHtml(staff.disabledAt ? formatDateDDMMYYYY(staff.disabledAt) : "-")}</td>
+      <td><span class="badge red">Disabled</span></td>
+      <td><button class="mini enable-student-action" type="button" data-enable-staff="${escapeHtml(staff.staffId || "")}">Enable</button></td>
+    </tr>
+  `).join("") || `<tr><td colspan="9">No disabled staff yet.</td></tr>`;
+  if (summary) summary.textContent = `${disabledStaff.length} disabled staff`;
 }
 
 function renderHrSetup() {
@@ -16932,6 +16959,7 @@ staffDetailsForm.addEventListener("submit", event => {
   const existingIndex = staffMembers.findIndex(item => item.staffId.toLowerCase() === staff.staffId.toLowerCase());
   const existingStaff = existingIndex >= 0 ? staffMembers[existingIndex] : {};
   staff.status = existingStaff.status || "Active";
+  if (isStaffDisabled(staff) && existingStaff.disabledAt) staff.disabledAt = existingStaff.disabledAt;
   staff.biometricId = staff.biometricId || existingStaff.biometricId || "";
   staff.assignedClass = existingStaff.assignedClass || "";
   staff.assignedClassName = existingStaff.assignedClassName || "";
@@ -19043,6 +19071,7 @@ document.body.addEventListener("click", event => {
   const deleteFeeGroup = event.target.closest("[data-delete-fee-group]");
   const editStaff = event.target.closest("[data-edit-staff]");
   const disableStaff = event.target.closest("[data-disable-staff]");
+  const enableStaff = event.target.closest("[data-enable-staff]");
   const deleteStaff = event.target.closest("[data-delete-staff]");
   const editDepartment = event.target.closest("[data-edit-department]");
   const editRole = event.target.closest("[data-edit-role]");
@@ -19115,14 +19144,32 @@ document.body.addEventListener("click", event => {
   }
   if (disableStaff) {
     const staff = staffMembers.find(item => item.staffId === disableStaff.dataset.disableStaff);
-    if (staff) {
-      staff.status = staff.status === "Disabled" ? "Active" : "Disabled";
-      saveAppState();
+    if (staff && !isStaffDisabled(staff)) {
+      staff.status = "Disabled";
+      staff.disabledAt = new Date().toISOString();
+      if (!saveAppState()) return;
       renderStaffDetails();
+      renderDisabledStaff();
       renderHrSetup();
       renderTeacherIdCardModule();
       renderUserAccessSettings();
-      showToast(`${staff.name} ${staff.status === "Disabled" ? "disabled" : "enabled"}.`);
+      setView("disabledStaff");
+      showToast(`${staff.name} moved to Disabled Staff.`);
+    }
+  }
+  if (enableStaff) {
+    const staff = staffMembers.find(item => item.staffId === enableStaff.dataset.enableStaff);
+    if (staff && isStaffDisabled(staff)) {
+      staff.status = "Active";
+      delete staff.disabledAt;
+      if (!saveAppState()) return;
+      renderStaffDetails();
+      renderDisabledStaff();
+      renderHrSetup();
+      renderTeacherIdCardModule();
+      renderUserAccessSettings();
+      setView("staffDetails");
+      showToast(`${staff.name} is back in Staff Details.`);
     }
   }
   if (deleteStaff) {
