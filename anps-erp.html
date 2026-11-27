@@ -64,6 +64,8 @@
             <button data-view="dueFeesSearch" type="button">Search Due Fees</button>
             <button data-view="dayBoarders" type="button">Deboarders</button>
             <button data-view="roboticsStudents" type="button">Robotics</button>
+            <button data-view="tuitionFeeStudents" type="button">Tuition Fees</button>
+            <button data-view="transportFeeStudents" type="button">Transport Fees</button>
             <button data-view="upiPaymentVerification" type="button">UPI Verification</button>
             <button data-view="feeMaster" type="button">Fee Master</button>
             <button data-view="feeGroup" type="button">Fee Group</button>
@@ -1054,6 +1056,83 @@
             </table>
           </div>
           <p class="transport-fee-summary" id="roboticsStudentSummary">Robotics students: 0</p>
+        </div>
+      </section>
+
+      <section class="view" id="tuitionFeeStudents">
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Fees collection</p>
+              <h2>Tuition Fees</h2>
+              <small>Students with a tuition fee in this session.</small>
+            </div>
+          </div>
+          <div class="fee-filter-bar">
+            <label>Search
+              <input id="tuitionFeeStudentSearch" type="search" placeholder="Name or admission no." />
+            </label>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Admission No.</th>
+                  <th>Student</th>
+                  <th>Class</th>
+                  <th>Section</th>
+                  <th>Tuition Fee</th>
+                  <th>Months</th>
+                  <th>Session Total</th>
+                  <th>Paid</th>
+                  <th>Due</th>
+                </tr>
+              </thead>
+              <tbody id="tuitionFeeStudentRows">
+                <tr><td colspan="9">No tuition fee students in this session.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="transport-fee-summary" id="tuitionFeeStudentSummary">Tuition students: 0</p>
+        </div>
+      </section>
+
+      <section class="view" id="transportFeeStudents">
+        <div class="panel">
+          <div class="panel-head">
+            <div>
+              <p class="eyebrow">Fees collection</p>
+              <h2>Transport Fees</h2>
+              <small>Students who have taken transport in this session.</small>
+            </div>
+          </div>
+          <div class="fee-filter-bar">
+            <label>Search
+              <input id="transportFeeStudentSearch" type="search" placeholder="Name or admission no." />
+            </label>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>Admission No.</th>
+                  <th>Student</th>
+                  <th>Class</th>
+                  <th>Section</th>
+                  <th>Transport Fee</th>
+                  <th>Extra</th>
+                  <th>Months</th>
+                  <th>Session Total</th>
+                  <th>Paid</th>
+                  <th>Due</th>
+                </tr>
+              </thead>
+              <tbody id="transportFeeStudentRows">
+                <tr><td colspan="10">No transport students in this session.</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="transport-fee-summary" id="transportFeeStudentSummary">Transport students: 0</p>
         </div>
       </section>
 
@@ -4169,6 +4248,6 @@
   </div>
 
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
-  <script src="./new-school-os.js?v=20261127-staff-disable"></script>
+  <script src="./new-school-os.js?v=20261127-fee-lists"></script>
 </body>
 </html>
